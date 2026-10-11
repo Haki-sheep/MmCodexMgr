@@ -1,0 +1,74 @@
+using System.IO.Pipes;
+using System.Text;
+
+namespace CodexInstanceManager;
+
+public static class Program
+{
+    private static readonly string PipeName = "CodexInstanceManager-" + Environment.UserName;
+
+    [STAThread]
+    public static void Main(string[] ArgumentList)
+    {
+        ApplicationConfiguration.Initialize();
+        try
+        {
+            if (ArgumentList.Length == 2 && ArgumentList[0] == "--render-preview")
+            {
+                using var Preview = new MainForm(SettingsStore.Load(), true);
+                Preview.Show();
+                Application.DoEvents();
+                using var Bitmap = new Bitmap(Preview.Width, Preview.Height);
+                Preview.DrawToBitmap(Bitmap, new Rectangle(0, 0, Preview.Width, Preview.Height));
+                Bitmap.Save(ArgumentList[1]);
+                File.WriteAllText(ArgumentList[1] + ".json", System.Text.Json.JsonSerializer.Serialize(new { Preview.DeviceDpi, Preview.CurrentAutoScaleDimensions, Preview.AutoScaleDimensions, FontHeight = Preview.Font.Height, Controls = DescribeLayout(Preview) }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+                return;
+            }
+            string Command = ArgumentList.Length == 2 && ArgumentList[0] == "--launch" ? ArgumentList[1] : "show";
+            using var Mutex = new Mutex(true, "Local\\" + PipeName, out bool Created);
+            if (!Created)
+            {
+                using var Client = new NamedPipeClientStream(".", PipeName, PipeDirection.Out);
+                Client.Connect(4000);
+                using var Writer = new StreamWriter(Client, new UTF8Encoding(false)) { AutoFlush = true };
+                Writer.WriteLine(Command);
+                return;
+            }
+            using var Form = new MainForm(SettingsStore.Load());
+            using var Cancellation = new CancellationTokenSource();
+            Form.Shown += async (_, _) =>
+            {
+                if (Command != "show") { Form.Hide(); await Form.HandleCommandAsync(Command); }
+            };
+            _ = ListenAsync(Form, Cancellation.Token);
+            Application.Run(Form);
+            Cancellation.Cancel();
+        }
+        catch (Exception Error) { LogError(Error); MessageBox.Show(Error.Message, "Codex 实例管理器", MessageBoxButtons.OK, MessageBoxIcon.Error); Environment.ExitCode = 1; }
+    }
+
+    private static async Task ListenAsync(MainForm Form, CancellationToken Cancellation)
+    {
+        while (!Cancellation.IsCancellationRequested)
+        {
+            try
+            {
+                await using var Server = new NamedPipeServerStream(PipeName, PipeDirection.In, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+                await Server.WaitForConnectionAsync(Cancellation);
+                using var Reader = new StreamReader(Server, Encoding.UTF8);
+                string? Command = await Reader.ReadLineAsync(Cancellation);
+                if (Command is not null) Form.BeginInvoke(async () => { try { await Form.HandleCommandAsync(Command); } catch (Exception Error) { LogError(Error); MessageBox.Show(Form, Error.Message, "实例操作失败"); } });
+            }
+            catch (OperationCanceledException) when (Cancellation.IsCancellationRequested) { return; }
+            catch (Exception Error) { LogError(Error); return; }
+        }
+    }
+
+    public static void LogError(Exception Error)
+    {
+        Directory.CreateDirectory(ManagerPaths.Root);
+        File.AppendAllText(Path.Combine(ManagerPaths.Root, "errors.log"), DateTime.Now.ToString("O") + Environment.NewLine + Error + Environment.NewLine);
+    }
+
+    private static object[] DescribeLayout(Control Parent) => Parent.Controls.Cast<Control>().Select(Control => new { Type = Control.GetType().Name, Control.Text, Bounds = Control.Bounds.ToString(), Control.PreferredSize, Font = Control.Font.ToString(), Control.Visible, Children = DescribeLayout(Control) }).Cast<object>().ToArray();
+}
