@@ -27,7 +27,8 @@ public static class InstanceService
                 try
                 {
                     using var RunningProcess = Process.GetProcessById(ProcessId);
-                    ResultList.Add(new RunningInstance(ProcessId, Command, RunningProcess.MainWindowHandle));
+                    if (!RunningProcess.HasExited)
+                        ResultList.Add(new RunningInstance(ProcessId, Command, InstanceWindowService.FindMainWindow(ProcessId, "Chrome_WidgetWin_1")));
                 }
                 catch (ArgumentException) { }
             }
@@ -76,7 +77,7 @@ public static class InstanceService
         var Existing = Find(Profile, ListRunning());
         if (Existing is not null)
         {
-            if (Existing.Window != IntPtr.Zero) { ShowWindow(Existing.Window, 9); SetForegroundWindow(Existing.Window); }
+            InstanceWindowService.ShowMainWindow(Existing.ProcessId, Existing.Window);
             return Existing.ProcessId;
         }
         Directory.CreateDirectory(Profile.HomePath);
@@ -93,6 +94,19 @@ public static class InstanceService
         }
         using var DesktopProcess = Process.Start(Info) ?? throw new IOException("Codex 桌面应用启动失败");
         return DesktopProcess.Id;
+    }
+
+    /// <summary>
+    /// 结束所选实例及其子进程 仅由用户确认后的结束操作调用
+    /// </summary>
+    public static async Task StopAsync(InstanceProfile Profile, int ExpectedProcessId)
+    {
+        var Existing = Find(Profile, ListRunning());
+        if (Existing is null || Existing.ProcessId != ExpectedProcessId)
+            throw new InvalidOperationException("所选实例进程已变化 请刷新后重试");
+        using var RunningProcess = Process.GetProcessById(Existing.ProcessId);
+        RunningProcess.Kill(true);
+        await RunningProcess.WaitForExitAsync();
     }
 
     public static string CreateShortcut(InstanceProfile Profile)
@@ -119,8 +133,6 @@ public static class InstanceService
     }
 
     private static string SafeFileName(string Value) => string.Concat(Value.Select(Character => Path.GetInvalidFileNameChars().Contains(Character) ? '-' : Character));
-    [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr Window);
-    [DllImport("user32.dll")] private static extern bool ShowWindow(IntPtr Window, int Command);
     #endregion
 
     #region CC Switch

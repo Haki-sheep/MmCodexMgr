@@ -10,12 +10,27 @@ public static class Program
     [STAThread]
     public static void Main(string[] ArgumentList)
     {
+        if (ArgumentList.Length == 2 && ArgumentList[0] == "--relay-mcp")
+        {
+            try { RelayMcp.RunAsync(ArgumentList[1], Console.OpenStandardInput(), Console.OpenStandardOutput(), CancellationToken.None).GetAwaiter().GetResult(); }
+            catch (Exception Error) { Console.Error.WriteLine(Error); Environment.ExitCode = 1; }
+            return;
+        }
+        RunDesktop(ArgumentList);
+    }
+
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static void RunDesktop(string[] ArgumentList)
+    {
         ApplicationConfiguration.Initialize();
         try
         {
-            if (ArgumentList.Length == 2 && ArgumentList[0] == "--render-preview")
+            if (ArgumentList.Length == 2 && ArgumentList[0] is "--render-preview" or "--render-relay-preview")
             {
-                using var Preview = new MainForm(SettingsStore.Load(), true);
+                var PreviewStore = new RelayStore(Path.Combine(Path.GetTempPath(), "CodexManagerRelayPreview-" + Guid.NewGuid().ToString("N")));
+                using var PreviewCoordinator = new RelayCoordinator(PreviewStore, new DesktopRelayBridge());
+                using var Preview = new MainForm(SettingsStore.Load(), true, PreviewStore, PreviewCoordinator);
+                if (ArgumentList[0] == "--render-relay-preview") Preview.ShowRelayPage();
                 Preview.Show();
                 Application.DoEvents();
                 using var Bitmap = new Bitmap(Preview.Width, Preview.Height);
@@ -24,7 +39,7 @@ public static class Program
                 File.WriteAllText(ArgumentList[1] + ".json", System.Text.Json.JsonSerializer.Serialize(new { Preview.DeviceDpi, Preview.CurrentAutoScaleDimensions, Preview.AutoScaleDimensions, FontHeight = Preview.Font.Height, Controls = DescribeLayout(Preview) }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
                 return;
             }
-            string Command = ArgumentList.Length == 2 && ArgumentList[0] == "--launch" ? ArgumentList[1] : "show";
+            string Command = ArgumentList.Length == 2 && ArgumentList[0] == "--launch" ? ArgumentList[1] : ArgumentList.Contains("--relay") ? "relay" : "show";
             using var Mutex = new Mutex(true, "Local\\" + PipeName, out bool Created);
             if (!Created)
             {
@@ -34,7 +49,20 @@ public static class Program
                 Writer.WriteLine(Command);
                 return;
             }
-            using var Form = new MainForm(SettingsStore.Load());
+            var TaskStore = new RelayStore(RelayLimits.Root);
+            string CliPath = AgentCliDeployment.LoadPath();
+            var Channel = TaskStore.LoadChannel();
+            if (Channel is not null && Channel.CallbackCliPath.Length != 0 && !ManagerPaths.Same(Channel.CallbackCliPath, CliPath))
+            {
+                Channel.CallbackCliPath = CliPath;
+                TaskStore.SaveChannel(Channel);
+            }
+            using var DesktopBridge = new DesktopRelayBridge();
+            using var Coordinator = new RelayCoordinator(TaskStore, DesktopBridge);
+            using var Form = new MainForm(SettingsStore.Load(), false, TaskStore, Coordinator);
+            var AgentService = new AgentManagementService(TaskStore, Coordinator, new AgentCatalog(), CliPath);
+            using var Relay = new RelayHost(Coordinator, AgentService: AgentService);
+            Relay.Failed += Error => { if (!Form.IsDisposed && Form.IsHandleCreated) Form.BeginInvoke(() => MessageBox.Show(Form, Error.Message, "联调服务不可用")); };
             using var Cancellation = new CancellationTokenSource();
             Form.Shown += async (_, _) =>
             {

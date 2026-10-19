@@ -21,6 +21,7 @@ public sealed class ManagerSettings
 {
     public List<InstanceProfile> InstanceList { get; set; } = new();
     public string SelectedId { get; set; } = "primary";
+    public bool DarkMode { get; set; } = true;
 }
 
 public static class ManagerPaths

@@ -2,7 +2,7 @@ namespace CodexInstanceManager;
 
 public sealed class ConversationImportDialog : Form
 {
-    private readonly ComboBox SourceInput = new() { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
+    private readonly ThemeComboBox SourceInput = new() { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
     private readonly TextBox PreviewText = new() { Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Both, WordWrap = false, Dock = DockStyle.Fill, BackColor = Color.White };
     private readonly Label Summary = new() { Dock = DockStyle.Fill, AutoEllipsis = true, TextAlign = ContentAlignment.MiddleLeft };
     private readonly Button PreviewButton;

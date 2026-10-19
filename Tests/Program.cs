@@ -13,7 +13,16 @@ internal static class Tests
     private static int Main(string[] ArgumentList)
     {
         if (ArgumentList.Contains("--memory-probe")) return MemoryTests.Run();
+        if (ArgumentList.Contains("--relay-live")) return RelayTests.LiveProbe();
+        if (ArgumentList.Contains("--agents-live")) return AgentManagementTests.LiveProbe();
+        if (ArgumentList.Contains("--agents")) { AgentManagementTests.Run(); return 0; }
+        if (ArgumentList.Length == 2 && ArgumentList[0] == "--relay-render") return RelayTests.Render(ArgumentList[1]);
+        if (ArgumentList.Length == 2 && ArgumentList[0] == "--relay-render-light") return RelayTests.Render(ArgumentList[1], false);
+        if (ArgumentList.Contains("--relay")) { RelayTests.Run(); return 0; }
         if (ArgumentList.Contains("--conversation-import")) return ConversationImportTests.Run();
+        if (ArgumentList.Contains("--conversation-cleanup")) return ConversationCleanupTests.Run();
+        if (ArgumentList.Contains("--cleanup-ui")) return ConversationCleanupUiTests.Run();
+        if (ArgumentList.Contains("--restore-second")) return WindowTests.RestoreSecond();
         if (ArgumentList.Contains("--live-icons"))
         {
             var Instances = InstanceService.ListRunning().Where(Item => Item.Window != IntPtr.Zero).ToList();
@@ -26,7 +35,13 @@ internal static class Tests
         Directory.CreateDirectory(Root);
         try
         {
-            TestConfig(); TestCopy(); TestRollback(); TestCc(); TestDetection(); TestBranding();
+            TestConfig(); TestCopy(); TestSyncIsolation(); TestRollback();
+            if (ArgumentList.Contains("--config-sync"))
+            {
+                Console.WriteLine("PASS config sync " + Count + " assertions; fixture=" + Root);
+                return 0;
+            }
+            TestCc(); TestDetection(); WindowTests.Run(); TestBranding(); RelayTests.Run(); AgentManagementTests.Run();
             Console.WriteLine("PASS " + Count + " assertions; fixture=" + Root);
             return 0;
         }
@@ -87,6 +102,45 @@ internal static class Tests
         bool OverlapRejected = false; try { ConfigSync.Preview(new() { HomePath = Source }, new() { HomePath = Path.Combine(Source, "child") }, new()); } catch (InvalidOperationException) { OverlapRejected = true; }
         Check(OverlapRejected, "overlapping directories rejected");
     }
+    private static void TestSyncIsolation()
+    {
+        string Source = Path.Combine(Root, "scope-source");
+        string Target = Path.Combine(Root, "scope-target");
+        var ToolFileList = new[] { "skills/mine/SKILL.md", "AGENTS.md", "rules/default.rules", "plugins/cache/fixture/plugin.json" };
+        var ProtectedFileList = new[] { "auth.json", "sessions/fixture.jsonl", "archived_sessions/fixture.jsonl", "history.jsonl", "session_index.jsonl", "state_5.sqlite", "thread_history_1.sqlite", "sqlite/codex-dev.db", ".codex-global-state.json" };
+        foreach (string Relative in ToolFileList)
+        {
+            string FilePath = Path.Combine(Source, Relative);
+            Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
+            File.WriteAllText(FilePath, "source tool " + Relative);
+        }
+        foreach (string Relative in ProtectedFileList)
+        {
+            foreach (string Home in new[] { Source, Target })
+            {
+                string FilePath = Path.Combine(Home, Relative);
+                Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
+                File.WriteAllText(FilePath, Home + " protected " + Relative);
+            }
+        }
+        File.WriteAllText(Path.Combine(Source, "sessions", "source-only.jsonl"), "source conversation");
+        File.WriteAllText(Path.Combine(Source, "config.toml"), "model='source-model'\n[mcp_servers.fixture]\ncommand='fixture'\n[projects.'C:/source-project']\ntrust_level='trusted'\n");
+        File.WriteAllText(Path.Combine(Target, "config.toml"), "model='target-model'\n[projects.'C:/target-project']\ntrust_level='untrusted'\n");
+        var SourceHashDict = ProtectedFileList.ToDictionary(Relative => Relative, Relative => SettingsStore.FileHash(Path.Combine(Source, Relative)));
+        var TargetHashDict = ProtectedFileList.ToDictionary(Relative => Relative, Relative => SettingsStore.FileHash(Path.Combine(Target, Relative)));
+        var Plan = ConfigSync.Preview(new() { HomePath = Source }, new() { HomePath = Target }, new() { Skills = true, Mcp = true, Instructions = true, Plugins = true });
+        var PlannedRelativeHashList = Plan.FileList.Select(File => Path.GetRelativePath(Target, File.Destination).Replace('\\', '/')).ToHashSet();
+        Check(PlannedRelativeHashList.SetEquals(ToolFileList.Append("config.toml")), "all sync options preview only selected tools and configuration");
+        Check(ProtectedFileList.All(Relative => SettingsStore.FileHash(Path.Combine(Target, Relative)) == TargetHashDict[Relative]), "sync preview leaves destination conversation and project data unchanged");
+        ConfigSync.Apply(Plan, Path.Combine(Root, "scope-backups"));
+        Check(ToolFileList.All(Relative => File.ReadAllText(Path.Combine(Target, Relative)) == "source tool " + Relative), "all selected tool categories synchronize successfully");
+        Check(ProtectedFileList.All(Relative => SettingsStore.FileHash(Path.Combine(Target, Relative)) == TargetHashDict[Relative]), "sync execution preserves destination auth conversation databases history and sidebar state byte for byte");
+        Check(ProtectedFileList.All(Relative => SettingsStore.FileHash(Path.Combine(Source, Relative)) == SourceHashDict[Relative]), "sync leaves source conversation and project data unchanged");
+        Check(!File.Exists(Path.Combine(Target, "sessions", "source-only.jsonl")), "source-only conversations are not imported by configuration sync");
+        var Config = Toml.ToModel(File.ReadAllText(Path.Combine(Target, "config.toml")));
+        Check((string)Config["model"] == "target-model" && ((TomlTable)Config["projects"]).Keys.SequenceEqual(new[] { "C:/target-project" }), "configuration sync preserves destination model and project registration");
+    }
+
     private static void TestRollback()
     {
         string Target = Path.Combine(Root, "rollback"); Directory.CreateDirectory(Target);

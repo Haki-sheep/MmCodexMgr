@@ -2,7 +2,7 @@ namespace CodexInstanceManager;
 
 public sealed class SyncDialog : Form
 {
-    private readonly ComboBox SourceInput = new() { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
+    private readonly ThemeComboBox SourceInput = new() { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
     private readonly CheckBox SkillsOption = new() { Text = "用户 Skills", Checked = true, AutoSize = true };
     private readonly CheckBox McpOption = new() { Text = "MCP 配置", Checked = true, AutoSize = true };
     private readonly CheckBox RulesOption = new() { Text = "AGENTS.md 与 rules", Checked = true, AutoSize = true };
@@ -20,7 +20,7 @@ public sealed class SyncDialog : Form
         this.Destination = Destination;
         AutoScaleDimensions = new SizeF(96, 96);
         AutoScaleMode = AutoScaleMode.Dpi;
-        Text = "同步到 " + Destination.Name;
+        Text = "同步 Skills / MCP 配置 → " + Destination.Name;
         Font = new Font("Microsoft YaHei UI", 10);
         ClientSize = new Size(760, 550);
         MinimumSize = new Size(720, 520);
@@ -29,7 +29,7 @@ public sealed class SyncDialog : Form
         Root.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
         Root.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
         Root.RowStyles.Add(new RowStyle(SizeType.Absolute, 60));
-        Root.RowStyles.Add(new RowStyle(SizeType.Absolute, 50));
+        Root.RowStyles.Add(new RowStyle(SizeType.Absolute, 72));
         Root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         Root.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
         Root.RowStyles.Add(new RowStyle(SizeType.Absolute, 45));
@@ -41,11 +41,11 @@ public sealed class SyncDialog : Form
         var Options = new FlowLayoutPanel { Dock = DockStyle.Fill };
         Options.Controls.AddRange(new Control[] { SkillsOption, McpOption, RulesOption, PluginsOption });
         Root.Controls.Add(Options);
-        Root.Controls.Add(new Label { Dock = DockStyle.Fill, Text = "同名条目以来源为准，目标独有条目保留；覆盖前备份。\n模型与账号配置、auth.json、会话、MCP OAuth 凭据均不复制。", ForeColor = Color.DimGray });
+        Root.Controls.Add(new Label { Dock = DockStyle.Fill, Text = "同名配置以来源为准，目标独有配置保留；覆盖前备份。\n对话、项目、置顶和排序请使用“导入对话与项目”。\n目标账号与模型保留，MCP OAuth 可能需要重新授权。", ForeColor = Color.DimGray });
         Root.Controls.Add(PreviewText);
         Root.Controls.Add(Summary);
         var Actions = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft };
-        ApplyButton = MainForm.MakeButton("执行同步", async (_, _) => await ApplyAsync(), true);
+        ApplyButton = MainForm.MakeButton("同步所选配置", async (_, _) => await ApplyAsync(), true);
         ApplyButton.Enabled = false;
         PreviewButton = MainForm.MakeButton("生成预览", async (_, _) => await PreviewAsync());
         Actions.Controls.Add(ApplyButton);
