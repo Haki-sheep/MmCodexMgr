@@ -80,6 +80,17 @@ public sealed class DesktopRelayBridge : IRelayBridge, IRelayProcessEvents, IDis
         await CallAsync(Instance, ThreadId, "send_message_to_thread", Arguments, Cancellation);
     }
 
+    public static async Task<List<string>> ProbeAsync(InstanceProfile Instance, CancellationToken Cancellation)
+    {
+        using var Timeout = CancellationTokenSource.CreateLinkedTokenSource(Cancellation);
+        Timeout.CancelAfter(TimeSpan.FromSeconds(RelayLimits.RequestTimeoutSeconds));
+        using var Client = await ConnectAsync(Instance, Timeout.Token);
+        await RelayWire.WriteAsync(Client, new { jsonrpc = "2.0", id = "manager-health", method = "tools/list", @params = new { threadStartKind = "all" } }, RelayLimits.MaxDesktopFrameBytes, Timeout.Token);
+        var Response = await RelayWire.ReadAsync(Client, RelayLimits.MaxDesktopFrameBytes, Timeout.Token);
+        if (Response.TryGetProperty("error", out var Error)) throw new IOException("桥接能力检查失败 " + Error.GetRawText());
+        return Response.GetProperty("result").GetProperty("tools").EnumerateArray().Select(Tool => Tool.GetProperty("name").GetString()!).ToList();
+    }
+
     public static async Task<JsonElement> CallAsync(InstanceProfile Instance, string CallerThreadId, string Tool, object Arguments, CancellationToken Cancellation)
     {
         using var Timeout = CancellationTokenSource.CreateLinkedTokenSource(Cancellation);
@@ -97,7 +108,7 @@ public sealed class DesktopRelayBridge : IRelayBridge, IRelayProcessEvents, IDis
         var TextList = Result.GetProperty("contentItems").EnumerateArray().Where(Item => Item.GetProperty("type").GetString() == "inputText").Select(Item => Item.GetProperty("text").GetString());
         string Text = string.Join("\n", TextList);
         if (!Result.GetProperty("success").GetBoolean()) throw new IOException("桌面拒绝操作 " + Text);
-        if (Tool == "send_message_to_thread") return Result.Clone();
+        if (Tool is not ("list_threads" or "list_projects" or "read_thread" or "create_thread")) return Result.Clone();
         using var Document = JsonDocument.Parse(Text);
         return Document.RootElement.Clone();
     }

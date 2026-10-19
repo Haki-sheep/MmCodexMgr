@@ -3,7 +3,7 @@ using Microsoft.Data.Sqlite;
 
 namespace CodexInstanceManager;
 
-public sealed class RelayStore
+public sealed partial class RelayStore
 {
     private static readonly string BlockingPredicate = "state IN (" + string.Join(",", new[] { eRelayState.Sending, eRelayState.Running, eRelayState.Returning, eRelayState.DispatchUncertain, eRelayState.ReturnUncertain }.Select(State => (int)State)) + ")";
     private readonly string Root;

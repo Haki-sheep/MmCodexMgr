@@ -17,6 +17,7 @@ public sealed class RelayChannel
     public string CallbackCliPath { get; set; } = "";
     public string ProjectId { get; set; } = "";
     public string CreateTitle { get; set; } = "";
+    public RelayTreeBudget TreeBudget { get; set; } = new();
 }
 
 public sealed class RelayTask
@@ -39,7 +40,31 @@ public sealed class RelayTask
     public int SubagentMax { get; set; }
     public int CrossAgentMax { get; set; } = 1;
     public RelayAgentLimits WorkerLimits { get; set; } = new();
+    public string TreeRootId { get; set; } = "";
+    public int TreeDepth { get; set; } = 1;
+    public RelayTreeBudget TreeBudget { get; set; } = new();
+    public RelayWorkspace Workspace { get; set; } = new();
+    public string ProgressStage { get; set; } = "";
+    public string ProgressMessage { get; set; } = "";
+    public DateTimeOffset? ProgressAt { get; set; }
+    public DateTimeOffset? DeadlineAt { get; set; }
 }
+
+public sealed class RelayTreeBudget
+{
+    public int MaxSessions { get; set; } = RelayLimits.DefaultTreeSessionMax;
+    public int MaxDepth { get; set; } = RelayLimits.DefaultTreeMaxDepth;
+}
+
+public sealed class RelayWorkspace
+{
+    public string Access { get; set; } = "unspecified";
+    public List<string> WritePathList { get; set; } = new();
+}
+
+public sealed record RelayReservation(string Id, string ParentTaskId, string TreeRootId, int TreeDepth, RelayTreeBudget Budget, string MainInstanceId, string MainThreadId, string WorkerInstanceId, string WorkerThreadId, RelayWorkspace Workspace);
+public sealed record RelayTreeEntry(string Id, string Title, eRelayState State, string Outcome, string ParentTaskId, int ChildCount, string MainName, string WorkerName, string ProgressStage, string ProgressMessage, DateTimeOffset? ProgressAt);
+public sealed record RelayVisibleRow(RelayTreeEntry Entry, int Depth, bool More = false);
 
 public sealed class RelayAgentLimits
 {
@@ -58,6 +83,9 @@ public sealed record RelayThread(string Id, string Title, string Status)
 public static class RelayLimits
 {
     public const int PageSize = 40;
+    public const int DefaultTreeSessionMax = 8;
+    public const int DefaultTreeMaxDepth = 3;
+    public const int MaxTreeDepth = 32;
     public const int MaxTextLength = 16000;
     public const int MaxFrameBytes = 256 * 1024;
     public const int MaxDesktopFrameBytes = 8 * 1024 * 1024;
@@ -93,4 +121,11 @@ public static class RelayLimits
         eRelayState.DispatchUncertain or eRelayState.ReturnUncertain or eRelayState.TimedOut or eRelayState.Interrupted => "已阻塞",
         _ => throw new ArgumentOutOfRangeException(nameof(State))
     };
+
+    public static string ProgressStateText(eRelayState State, string Outcome, string Stage) => State == eRelayState.Running
+        ? Stage switch { "" => "未开始", "blocked" => "已阻塞", _ => "子Agent正在执行" }
+        : DisplayStateText(State, Outcome);
+
+    public static string StageText(string Stage) => Stage switch { "" => "等待执行方确认开始", "started" => "已确认开始", "progress" => "阶段进展", "blocked" => "执行方报告阻塞", _ => throw new InvalidDataException("未知进度阶段 " + Stage) };
+    public static string WorkspaceText(string Access) => Access switch { "unspecified" => "未声明 当前任务未校验写入冲突", "read_only" => "只读", "write" => "限定范围写入", _ => throw new InvalidDataException("未知工作区类型 " + Access) };
 }

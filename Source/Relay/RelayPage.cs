@@ -5,10 +5,11 @@ public sealed class RelayPage : UserControl
     private readonly RelayStore Store;
     private readonly RelayCoordinator Coordinator;
     private readonly AppTheme Theme;
+    private readonly ManagerSettings Settings;
     private readonly DataGridView TaskGrid = new();
     private readonly Label Status = new() { Dock = DockStyle.Fill, AutoSize = true, AutoEllipsis = true, Tag = eThemeRole.Muted, Visible = false };
     private readonly Label PageLabel = new() { AutoSize = true, Margin = new Padding(8, 10, 8, 0) };
-    private List<RelayTaskSummary> SummaryList = new();
+    private readonly RelayTreeView TreeView;
     private int Offset;
     private bool Busy;
 
@@ -21,6 +22,8 @@ public sealed class RelayPage : UserControl
         this.Store = Store;
         this.Coordinator = Coordinator;
         this.Theme = Theme;
+        this.Settings = Settings;
+        TreeView = new(Store);
         Tag = eThemeRole.Background;
         Dock = DockStyle.Fill;
         Padding = new Padding(24, 16, 24, 16);
@@ -29,13 +32,15 @@ public sealed class RelayPage : UserControl
         Root.RowStyles.Add(new RowStyle(SizeType.Absolute, 170));
         Root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         Root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        var Header = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Margin = Padding.Empty };
+        var Header = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, Margin = Padding.Empty };
         Header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        Header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         Header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         Header.Controls.Add(new Label { Text = "跨Agent管理", Font = new Font(Font.FontFamily, 17, FontStyle.Bold), AutoSize = true });
         var ThemeButton = MainForm.MakeButton(Theme.IsDark ? "☀ 日间" : "☾ 夜间", (_, _) => ToggleTheme());
         ThemeButton.Name = AppTheme.ToggleButtonName;
         ThemeButton.Margin = new Padding(0, 0, 0, 4);
+        Header.Controls.Add(MainForm.MakeButton("健康检查", async (_, _) => await RunAsync(ShowDoctorAsync)));
         Header.Controls.Add(ThemeButton);
         Root.Controls.Add(Header);
         Root.Controls.Add(new RelayChannelEditor(Settings, Coordinator, SetStatus) { Dock = DockStyle.Fill, Tag = eThemeRole.Surface });
@@ -62,21 +67,24 @@ public sealed class RelayPage : UserControl
         TaskGrid.Columns.Add(new DataGridViewButtonColumn { HeaderText = "操作", FillWeight = 15, FlatStyle = FlatStyle.Flat });
         TaskGrid.CellValueNeeded += (_, Event) =>
         {
-            if (Event.RowIndex < 0 || Event.RowIndex >= SummaryList.Count) return;
-            var Item = SummaryList[Event.RowIndex];
+            if (Event.RowIndex < 0 || Event.RowIndex >= TreeView.RowList.Count) return;
+            var Row = TreeView.RowList[Event.RowIndex];
+            var Item = Row.Entry;
+            string Prefix = new string(' ', Row.Depth * 3);
             Event.Value = Event.ColumnIndex switch
             {
-                0 => (object)(Offset + Event.RowIndex + 1), 1 => Item.Title,
-                2 => RelayLimits.DisplayStateText(Item.State, Item.Outcome),
-                3 => Item.State is eRelayState.Accepted or eRelayState.Cancelled ? "删除" : "中断任务",
+                0 => Row.More ? "" : (object)(Offset + Event.RowIndex + 1),
+                1 => Prefix + (Row.More ? "加载更多下级…" : (Item.ChildCount == 0 ? "  " : TreeView.IsExpanded(Item.Id) ? "▼ " : "▶ ") + Item.Title),
+                2 => Row.More ? "" : RelayLimits.ProgressStateText(Item.State, Item.Outcome, Item.ProgressStage),
+                3 => Row.More ? "" : Item.State is eRelayState.Accepted or eRelayState.Cancelled ? "删除" : "中断任务",
                 _ => throw new ArgumentOutOfRangeException(nameof(Event.ColumnIndex))
             };
         };
         TaskGrid.CellFormatting += (_, Event) =>
         {
-            if (Event.ColumnIndex != 2 || Event.RowIndex < 0 || Event.RowIndex >= SummaryList.Count) return;
-            var Item = SummaryList[Event.RowIndex];
-            Event.CellStyle!.ForeColor = Item.State switch
+            if (Event.ColumnIndex != 2 || Event.RowIndex < 0 || Event.RowIndex >= TreeView.RowList.Count) return;
+            var Item = TreeView.RowList[Event.RowIndex].Entry;
+            Event.CellStyle!.ForeColor = Item.State == eRelayState.Running && Item.ProgressStage == "blocked" ? Theme.Palette.Warning : Item.State switch
             {
                 eRelayState.Accepted => Theme.Palette.Success, eRelayState.Cancelled => Theme.Palette.Muted,
                 eRelayState.DispatchUncertain or eRelayState.ReturnUncertain or eRelayState.TimedOut or eRelayState.Interrupted => Theme.Palette.Warning,
@@ -86,15 +94,34 @@ public sealed class RelayPage : UserControl
         };
         TaskGrid.CellContentClick += async (_, Event) =>
         {
-            if (Event.ColumnIndex != 3 || Event.RowIndex < 0 || Event.RowIndex >= SummaryList.Count) return;
-            var Item = SummaryList[Event.RowIndex];
-            await RunAsync(() => Item.State is eRelayState.Accepted or eRelayState.Cancelled ? DeleteHistoryAsync(Item) : CancelAsync(Item.Id));
+            if (Event.RowIndex < 0 || Event.RowIndex >= TreeView.RowList.Count) return;
+            var Row = TreeView.RowList[Event.RowIndex];
+            var Item = Row.Entry;
+            if (Event.ColumnIndex == 1)
+            {
+                if (Row.More) TreeView.LoadMore(Item.Id);
+                else if (Item.ChildCount > 0) TreeView.Toggle(Item.Id);
+                RefreshTasks();
+            }
+            if (Event.ColumnIndex == 3 && !Row.More) await RunAsync(() => Item.State is eRelayState.Accepted or eRelayState.Cancelled ? DeleteHistoryAsync(new(Item.Id, Item.Title, Item.State, DateTimeOffset.UtcNow, Item.Outcome)) : CancelAsync(Item.Id));
+        };
+        TaskGrid.CellDoubleClick += async (_, Event) =>
+        {
+            if (Event.ColumnIndex == 3 || Event.RowIndex < 0 || Event.RowIndex >= TreeView.RowList.Count) return;
+            var Row = TreeView.RowList[Event.RowIndex];
+            if (!Row.More) await RunAsync(() => { using var Dialog = new RelayTaskDialog(Store, Coordinator, Row.Entry.Id, Theme); Dialog.ShowDialog(this); return Task.CompletedTask; });
+        };
+        TaskGrid.CellToolTipTextNeeded += (_, Event) =>
+        {
+            if (Event.RowIndex < 0 || Event.RowIndex >= TreeView.RowList.Count) return;
+            var Item = TreeView.RowList[Event.RowIndex].Entry;
+            Event.ToolTipText = $"{Item.Title}\n{Item.MainName} → {Item.WorkerName}\n{(Item.ProgressStage.Length == 0 ? "等待执行方开始确认" : Item.ProgressMessage)}\n单击任务名展开下级 双击查看详情与异常恢复";
         };
         ListPanel.Controls.Add(TaskGrid);
         var Pages = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false };
-        Pages.Controls.Add(MainForm.MakeButton("上一页", (_, _) => { if (Offset > 0) { Offset -= RelayLimits.PageSize; RefreshTasks(); } }));
+        Pages.Controls.Add(MainForm.MakeButton("上一页", (_, _) => { if (Offset > 0) { Offset -= RelayLimits.PageSize; TreeView.CollapseAll(); RefreshTasks(); } }));
         Pages.Controls.Add(PageLabel);
-        Pages.Controls.Add(MainForm.MakeButton("下一页", (_, _) => { if (SummaryList.Count == RelayLimits.PageSize) { Offset += RelayLimits.PageSize; RefreshTasks(); } }));
+        Pages.Controls.Add(MainForm.MakeButton("下一页", (_, _) => { if (TreeView.RootPageCount == RelayLimits.PageSize) { Offset += RelayLimits.PageSize; TreeView.CollapseAll(); RefreshTasks(); } }));
         var Footer = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Margin = Padding.Empty };
         Footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         Footer.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
@@ -139,16 +166,19 @@ public sealed class RelayPage : UserControl
 
     private void RefreshTasks()
     {
-        SummaryList = Store.List(Offset);
-        if (SummaryList.Count == 0 && Offset > 0)
+        string? SelectedId = TaskGrid.CurrentCell is null || TaskGrid.CurrentCell.RowIndex >= TreeView.RowList.Count ? null : TreeView.RowList[TaskGrid.CurrentCell.RowIndex].Entry.Id;
+        TreeView.Refresh(Offset);
+        if (TreeView.RootPageCount == 0 && Offset > 0)
         {
-            int TaskCount = Store.Count();
+            int TaskCount = Store.RootCount();
             Offset = TaskCount == 0 ? 0 : (TaskCount - 1) / RelayLimits.PageSize * RelayLimits.PageSize;
-            SummaryList = Store.List(Offset);
+            TreeView.Refresh(Offset);
         }
-        TaskGrid.RowCount = SummaryList.Count;
+        TaskGrid.RowCount = TreeView.RowList.Count;
+        int SelectedIndex = TreeView.RowList.FindIndex(Row => !Row.More && Row.Entry.Id == SelectedId);
+        if (SelectedIndex >= 0) TaskGrid.CurrentCell = TaskGrid.Rows[SelectedIndex].Cells[1];
         TaskGrid.Invalidate();
-        PageLabel.Text = "第 " + (Offset / RelayLimits.PageSize + 1) + " 页";
+        PageLabel.Text = "第 " + (Offset / RelayLimits.PageSize + 1) + " 页" + (TreeView.Limited ? " · 显示达上限 请收起其他分支" : "");
     }
 
     private void SetStatus(string Text)
@@ -160,6 +190,29 @@ public sealed class RelayPage : UserControl
     #endregion
 
     #region Actions
+    private Task ShowDoctorAsync()
+    {
+        using var Dialog = new Form { Text = "健康检查 · " + Settings.InstanceList.First(Item => Item.Id == Settings.SelectedId).Name, Font = Font, ClientSize = new Size(760, 420), StartPosition = FormStartPosition.CenterParent };
+        using var Cancellation = new CancellationTokenSource();
+        var Body = new TextBox { Dock = DockStyle.Fill, Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical, Text = "正在检查 CLI MCP Skill 路径与桌面桥接…" };
+        Dialog.Controls.Add(Body);
+        Dialog.Shown += async (_, _) =>
+        {
+            try
+            {
+                var Report = await AgentDoctor.RunAsync(Settings, AgentCliDeployment.LoadPath(), Settings.SelectedId, Cancellation.Token);
+                if (!Dialog.IsDisposed) { Body.Text = string.Join("\r\n\r\n", Report.CheckList.Select(Check => (Check.Passed ? "✓ " : "× ") + Check.Name + "\r\n" + Check.Detail)); Body.Select(0, 0); }
+            }
+            catch (OperationCanceledException) when (Cancellation.IsCancellationRequested) { }
+            catch (Exception Error) { Program.LogError(Error); if (!Dialog.IsDisposed) Body.Text = Error.Message; }
+        };
+        Dialog.FormClosed += (_, _) => Cancellation.Cancel();
+        Theme.Apply(Dialog);
+        Dialog.HandleCreated += (_, _) => Theme.ApplyTitleBar(Dialog);
+        Dialog.ShowDialog(this);
+        return Task.CompletedTask;
+    }
+
     private async Task DeleteHistoryAsync(RelayTaskSummary Item)
     {
         if (MessageBox.Show(this, "删除任务记录「" + Item.Title + "」？\n对应的 Codex 对话和项目文件会保留", "删除任务记录", MessageBoxButtons.OKCancel, MessageBoxIcon.Warning) != DialogResult.OK) return;

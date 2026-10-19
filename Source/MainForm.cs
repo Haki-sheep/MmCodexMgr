@@ -18,7 +18,8 @@ public sealed class MainForm : Form
     private readonly Button ConversationButton = new();
     private readonly NotifyIcon TrayIcon = new();
     private readonly BrandingService Branding = new();
-    private readonly System.Windows.Forms.Timer PollTimer = new() { Interval = 3000 };
+    private readonly System.Windows.Forms.Timer RefreshDelay = new() { Interval = 150 };
+    private readonly InstanceActivityMonitor ActivityMonitor = new();
     private readonly ThemeTabControl MainTabs = new() { Dock = DockStyle.Fill };
     private readonly TabPage RelayTab = new("跨Agent管理");
     private readonly Button ThemeButton = new();
@@ -28,6 +29,7 @@ public sealed class MainForm : Form
     private readonly RelayCoordinator? TaskCoordinator;
     private List<RunningInstance> RunningList = new();
     private bool Polling;
+    private bool RefreshAgain;
     private bool AllowExit;
     private bool CleaningConversations;
     private string CurrentColor = "#6470EE";
@@ -99,10 +101,10 @@ public sealed class MainForm : Form
         Left.Controls.Add(MakeButton("从列表移除", (_, _) => RemoveInstance()), 0, 2);
         Root.Controls.Add(Left, 0, 1);
 
-        var RightScroll = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
-        var Right = new TableLayoutPanel { Dock = DockStyle.Top, Height = 874, ColumnCount = 1, RowCount = 5 };
+        var RightScroll = new WheelScrollPanel { Dock = DockStyle.Fill, AutoScroll = true };
+        var Right = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, ColumnCount = 1, RowCount = 5 };
         Right.RowStyles.Add(new RowStyle(SizeType.Absolute, 280));
-        Right.RowStyles.Add(new RowStyle(SizeType.Absolute, 164));
+        Right.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         Right.RowStyles.Add(new RowStyle(SizeType.Absolute, 138));
         Right.RowStyles.Add(new RowStyle(SizeType.Absolute, 144));
         Right.RowStyles.Add(new RowStyle(SizeType.Absolute, 148));
@@ -142,7 +144,9 @@ public sealed class MainForm : Form
         Right.Controls.Add(ProfileCard, 0, 0);
 
         var LaunchCard = MakeCard("启动与识别", 8);
-        var LaunchBody = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false };
+        LaunchCard.AutoSize = true;
+        LaunchCard.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        var LaunchBody = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, FlowDirection = FlowDirection.TopDown, WrapContents = false };
         var LaunchActions = new FlowLayoutPanel { AutoSize = true, WrapContents = false };
         LaunchActions.Controls.Add(MakeButton("▶ 启动 / 显示", async (_, _) => await LaunchSelectedAsync(), true));
         LaunchActions.Controls.Add(MakeButton("生成桌面快捷方式", (_, _) => SafeAction(() => { SaveSelected(); string PathValue = InstanceService.CreateShortcut(Selected!); SetStatus("已生成 " + PathValue); })));
@@ -153,7 +157,9 @@ public sealed class MainForm : Form
         RunningActions.Controls.Add(MakeButton("结束所选实例", async (_, _) => await StopSelectedAsync()));
         RunningActions.Controls.Add(MakeButton("清空所有项目和会话", async (_, _) => await ClearConversationsAsync(true)));
         LaunchBody.Controls.Add(RunningActions);
-        LaunchBody.Controls.Add(new Label { AutoSize = true, ForeColor = Color.DimGray, Text = "显示后可从任务栏切换实例  ·  结束进程需确认所选名称与进程 ID" });
+        var LaunchHint = new Label { AutoSize = true, ForeColor = Color.DimGray, Text = "显示后可从任务栏切换实例  ·  结束进程需确认所选名称与进程 ID" };
+        LaunchBody.SizeChanged += (_, _) => LaunchHint.MaximumSize = new Size(LaunchBody.ClientSize.Width - LaunchHint.Margin.Horizontal, 0);
+        LaunchBody.Controls.Add(LaunchHint);
         LaunchCard.Controls.Add(LaunchBody);
         Right.Controls.Add(LaunchCard, 0, 1);
 
@@ -200,20 +206,23 @@ public sealed class MainForm : Form
         Root.SetColumnSpan(StatusLabel, 2);
         var TrayMenu = new ContextMenuStrip();
         TrayMenu.Items.Add("显示管理器", null, (_, _) => ShowManager());
+        TrayMenu.Items.Add("刷新实例状态", null, async (_, _) => await RefreshRunningAsync());
         TrayMenu.Items.Add("退出管理器", null, (_, _) => { AllowExit = true; Close(); });
         TrayIcon.Icon = Icon;
         TrayIcon.Text = "Codex 实例管理器";
         TrayIcon.ContextMenuStrip = TrayMenu;
         TrayIcon.Visible = !PreviewOnly;
         TrayIcon.DoubleClick += (_, _) => ShowManager();
-        PollTimer.Tick += async (_, _) => await RefreshRunningAsync();
+        RefreshDelay.Tick += async (_, _) => { RefreshDelay.Stop(); await RefreshRunningAsync(); };
+        ActivityMonitor.Changed += QueueInstanceRefresh;
+        Activated += (_, _) => { if (!PreviewOnly) QueueInstanceRefresh(); };
         FormClosing += (_, Event) =>
         {
             if (CleaningConversations) { Event.Cancel = true; return; }
             if (!AllowExit && Event.CloseReason == CloseReason.UserClosing) { Event.Cancel = true; Hide(); }
         };
-        FormClosed += (_, _) => { PollTimer.Stop(); Branding.Dispose(); TrayIcon.Dispose(); IconPreview.Image?.Dispose(); };
-        if (!PreviewOnly) Shown += async (_, _) => { await RefreshRunningAsync(); PollTimer.Start(); };
+        FormClosed += (_, _) => { RefreshDelay.Stop(); RefreshDelay.Dispose(); ActivityMonitor.Changed -= QueueInstanceRefresh; ActivityMonitor.Dispose(); Branding.Dispose(); TrayIcon.Dispose(); IconPreview.Image?.Dispose(); };
+        if (!PreviewOnly) Shown += async (_, _) => { SafeAction(ActivityMonitor.Enable); await RefreshRunningAsync(); };
         RefreshInstances();
         RefreshCcLabel();
         AutoScaleDimensions = new SizeF(96, 96);
@@ -539,20 +548,34 @@ public sealed class MainForm : Form
     private void SetStatus(string Value) => StatusLabel.Text = Value;
     private async Task RefreshRunningAsync()
     {
-        if (Polling) return;
+        if (Polling) { RefreshAgain = true; return; }
         Polling = true;
         try
         {
             RunningList = await Task.Run(InstanceService.ListRunning);
+            if (IsDisposed || Disposing) return;
+            if (!PreviewOnly && !IsDisposed) ActivityMonitor.Track(RunningList);
             foreach (var Profile in Settings.InstanceList)
             {
                 var Running = InstanceService.Find(Profile, RunningList);
                 if (Running is not null) Branding.Apply(Profile, Running.Window);
             }
-            InstanceList.Invalidate();
+            if (Visible && WindowState != FormWindowState.Minimized) InstanceList.Invalidate();
         }
         catch (Exception Error) { SetStatus("读取实例状态失败 " + Error.Message); Program.LogError(Error); }
-        finally { Polling = false; }
+        finally { Polling = false; if (RefreshAgain) { RefreshAgain = false; QueueInstanceRefresh(); } }
+    }
+    private void QueueInstanceRefresh()
+    {
+        if (PreviewOnly || IsDisposed || !IsHandleCreated) return;
+        if (InvokeRequired)
+        {
+            try { BeginInvoke(QueueInstanceRefresh); }
+            catch (InvalidOperationException) when (IsDisposed || Disposing || !IsHandleCreated) { }
+            return;
+        }
+        RefreshDelay.Stop();
+        RefreshDelay.Start();
     }
     private void SafeAction(Action Action)
     {

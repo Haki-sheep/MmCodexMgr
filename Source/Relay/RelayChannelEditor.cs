@@ -7,6 +7,8 @@ public sealed class RelayChannelEditor : UserControl
     private readonly ThemeComboBox MainThreadInput = new() { Dock = DockStyle.Fill };
     private readonly ThemeComboBox WorkerThreadInput = new() { Dock = DockStyle.Fill };
     private readonly NumericUpDown TimeoutInput = new() { Dock = DockStyle.Fill, Minimum = 1, Maximum = 1440, Value = 60 };
+    private readonly NumericUpDown TreeMaxInput = new() { Width = 64, Minimum = 1, Maximum = int.MaxValue, Value = RelayLimits.DefaultTreeSessionMax, Margin = new Padding(0, 7, 0, 0) };
+    private readonly NumericUpDown DepthInput = new() { Width = 48, Minimum = 1, Maximum = RelayLimits.MaxTreeDepth, Value = RelayLimits.DefaultTreeMaxDepth, Margin = new Padding(0, 7, 0, 0) };
     private readonly RelayCoordinator Coordinator;
     private readonly Action<string> SetStatus;
 
@@ -40,6 +42,10 @@ public sealed class RelayChannelEditor : UserControl
         TimeoutInput.Width = 76;
         TimeoutInput.Margin = new Padding(0, 7, 0, 0);
         Actions.Controls.Add(TimeoutInput);
+        Actions.Controls.Add(new Label { Text = "总会话上限", AutoSize = true, Margin = new Padding(12, 8, 4, 0) });
+        Actions.Controls.Add(TreeMaxInput);
+        Actions.Controls.Add(new Label { Text = "最大层数", AutoSize = true, Margin = new Padding(12, 8, 4, 0) });
+        Actions.Controls.Add(DepthInput);
         Table.Controls.Add(Actions, 0, 3);
         Table.SetColumnSpan(Actions, 4);
         Controls.Add(Table);
@@ -56,6 +62,8 @@ public sealed class RelayChannelEditor : UserControl
             WorkerThreadInput.Items.Add(new RelayThread(Channel.WorkerThreadId, Channel.WorkerTitle, "已绑定"));
             WorkerThreadInput.SelectedIndex = 0;
             TimeoutInput.Value = Channel.TimeoutMinutes;
+            TreeMaxInput.Value = Channel.TreeBudget.MaxSessions;
+            DepthInput.Value = Channel.TreeBudget.MaxDepth;
         }
     }
 
@@ -99,7 +107,8 @@ public sealed class RelayChannelEditor : UserControl
             WorkerInstance = WorkerInstanceInput.SelectedItem as InstanceProfile ?? throw new InvalidOperationException("请选择执行实例"),
             MainThreadId = MainId, MainTitle = (MainThreadInput.SelectedItem as RelayThread)?.Title ?? MainId,
             WorkerThreadId = WorkerId, WorkerTitle = (WorkerThreadInput.SelectedItem as RelayThread)?.Title ?? WorkerId,
-            TimeoutMinutes = (int)TimeoutInput.Value, CallbackCliPath = AgentCliDeployment.LoadPath()
+            TimeoutMinutes = (int)TimeoutInput.Value, CallbackCliPath = AgentCliDeployment.LoadPath(),
+            TreeBudget = new() { MaxSessions = (int)TreeMaxInput.Value, MaxDepth = (int)DepthInput.Value }
         });
         SetStatus("通道已保存");
     }

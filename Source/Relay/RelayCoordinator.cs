@@ -2,7 +2,7 @@ using System.Text.Json;
 
 namespace CodexInstanceManager;
 
-public sealed class RelayCoordinator : IDisposable
+public sealed partial class RelayCoordinator : IDisposable
 {
     private readonly RelayStore Store;
     private readonly IRelayBridge Bridge;
@@ -58,12 +58,13 @@ public sealed class RelayCoordinator : IDisposable
     #endregion
 
     #region Commands
-    public async Task<RelayTask> DispatchAsync(string InstanceId, string ThreadId, string RequestKey, string Title, string Instructions, string Acceptance, RelayChannel? Route = null, int SessionMax = 1, int SubagentMax = 0, Func<RelayTask, Task<RelayThread>>? CreateAsync = null, int CrossAgentMax = 1, RelayAgentLimits? WorkerLimits = null)
+    public async Task<RelayTask> DispatchAsync(string InstanceId, string ThreadId, string RequestKey, string Title, string Instructions, string Acceptance, RelayChannel? Route = null, int SessionMax = 1, int SubagentMax = 0, Func<RelayTask, Task<RelayThread>>? CreateAsync = null, int CrossAgentMax = 1, RelayAgentLimits? WorkerLimits = null, RelayTreeBudget? TreeBudget = null, RelayWorkspace? Workspace = null)
     {
         await Gate.WaitAsync(Lifetime.Token);
         try
         {
             var Current = Route ?? Channel ?? throw new InvalidOperationException("请先在跨Agent管理页保存通道");
+            if (Route is null) TreeBudget ??= Current.TreeBudget;
             WorkerLimits ??= new() { SubagentMax = SubagentMax, SessionMax = SessionMax, CrossAgentMax = CrossAgentMax };
             RequireCaller(Current.MainInstance.Id, Current.MainThreadId, InstanceId, ThreadId);
             ValidateText(RequestKey, "请求标识", 256);
@@ -75,7 +76,9 @@ public sealed class RelayCoordinator : IDisposable
                     Existing.Channel.CreateTitle != Current.CreateTitle || Existing.Channel.TimeoutMinutes != Current.TimeoutMinutes ||
                     Current.CreateTitle.Length == 0 && Existing.Channel.WorkerThreadId != Current.WorkerThreadId ||
                     Existing.SessionMax != SessionMax || Existing.SubagentMax != SubagentMax || Existing.CrossAgentMax != CrossAgentMax ||
-                    JsonSerializer.Serialize(Existing.WorkerLimits) != JsonSerializer.Serialize(WorkerLimits))
+                    JsonSerializer.Serialize(Existing.WorkerLimits) != JsonSerializer.Serialize(WorkerLimits) ||
+                    TreeBudget is not null && JsonSerializer.Serialize(Existing.TreeBudget) != JsonSerializer.Serialize(TreeBudget) ||
+                    JsonSerializer.Serialize(Existing.Workspace) != JsonSerializer.Serialize(RelayPolicy.NormalizeWorkspace(Workspace ?? new())))
                     throw new InvalidOperationException("同一请求标识对应的任务内容或目标发生变化 请保留原任务并使用新的请求标识");
                 return Existing;
             }
@@ -96,6 +99,8 @@ public sealed class RelayCoordinator : IDisposable
             ValidateText(Instructions, "执行要求", RelayLimits.MaxTextLength);
             ValidateText(Acceptance, "验收标准", RelayLimits.MaxTextLength);
             var Item = new RelayTask { Channel = JsonSerializer.Deserialize<RelayChannel>(JsonSerializer.Serialize(Current))!, RequestKey = RequestKey, ParentTaskId = Incoming?.Id ?? "", Title = Title, Instructions = Instructions, Acceptance = Acceptance, SessionMax = SessionMax, SubagentMax = SubagentMax, CrossAgentMax = CrossAgentMax, WorkerLimits = WorkerLimits };
+            new RelayPolicy(Store).Apply(Item, Incoming, TreeBudget, Workspace);
+            Item.DeadlineAt = Item.CreatedAt.AddMinutes(Current.TimeoutMinutes);
             Change(Item, eRelayState.Sending, "主会话已交接 正在发送到执行会话");
             try
             {
@@ -235,10 +240,12 @@ public sealed class RelayCoordinator : IDisposable
 
     public static string BuildWorkerPrompt(RelayTask Item)
     {
+        string Policy = $"整棵任务树 tree_session_max={Item.TreeBudget.MaxSessions} max_depth={Item.TreeBudget.MaxDepth} 当前执行层级={Item.TreeDepth} 初始主会话层级为 0 下级继承预算 不得提高\n规划时给需要继续分工的下级预留槽位 额度不足时由当前 Agent 直接完成范围内工作 或回报 needs_decision 不得所有层级占着槽位互相等待\n写入声明 {Item.Workspace.Access}\n写入路径\n{string.Join("\n", Item.Workspace.WritePathList)}\n继续分工时必须声明 workspace.access=read_only 或 write 与 write_paths 同一写入范围交给下级期间由下级独占 当前 Agent 等待验收后整合 历史任务若未声明范围则尚未启用冲突检查";
+        string Progress = Item.Channel.CallbackCliPath.Length == 0 ? "调用 relay_progress" : "通过回调 CLI 的 progress --json-file <绝对路径> 命令";
         string Callback = Item.Channel.CallbackCliPath.Length == 0
             ? $"调用 relay_report task_id={Item.Id} outcome=completed|needs_decision|failed 并提交结果摘要与产物绝对路径"
             : $"将 UTF-8 JSON 写入临时文件 内容为 {{\"task_id\":\"{Item.Id}\",\"outcome\":\"completed|needs_decision|failed\",\"summary\":\"结果摘要\",\"artifacts\":[\"产物绝对路径\"]}} 然后在 PowerShell 执行 & '{Item.Channel.CallbackCliPath.Replace("'", "''")}' report --json-file <该文件绝对路径> CLI 从当前 CODEX_HOME 和 CODEX_THREAD_ID 核对身份 不要伪造身份";
-        return $"[MmCodexMgr 联调任务]\n用户已授权将本任务交给此会话 并将结果回传原主会话\n任务 ID {Item.Id}\n任务 {Item.Title}\n\n执行要求\n{Item.Instructions}\n\n验收标准\n{Item.Acceptance}\n\n本执行会话可组合使用 Subagent 同实例 Session 和跨实例协作 预算 subagent_max={Item.WorkerLimits.SubagentMax} session_max={Item.WorkerLimits.SessionMax} cross_agent_max={Item.WorkerLimits.CrossAgentMax} Subagent 仍受宿主工具上限约束\n如需继续分工 先整理目的 协作方式与数量 任务边界 验收规范 下级预算不得超过本层 分派范围仅限完成此任务所需的部分 不得召回正在等待本任务的上级 所有下级完成并验收后再向上级回报\n遵守当前工程规则 不得扩大执行范围 遇到需要重新判断的异常停止该批次并回报\n结束前必须{Callback}\n报告后结束回合 不要轮询主会话 仅结束回合不等于任务完成";
+        return $"[MmCodexMgr 联调任务]\n用户已授权将本任务交给此会话 并将结果回传原主会话\n任务 ID {Item.Id}\n任务 {Item.Title}\n\n执行要求\n{Item.Instructions}\n\n验收标准\n{Item.Acceptance}\n\n本执行会话可组合使用 Subagent 同实例 Session 和跨实例协作 预算 subagent_max={Item.WorkerLimits.SubagentMax} session_max={Item.WorkerLimits.SessionMax} cross_agent_max={Item.WorkerLimits.CrossAgentMax} Subagent 仍受宿主工具上限约束\n{Policy}\n如需继续分工 先整理目的 协作方式与数量 任务边界 验收规范 下级预算不得超过本层 分派范围仅限完成此任务所需的部分 不得召回正在等待本任务的上级 所有下级完成并验收后再向上级回报\n开始工作先{Progress} 主动上报 {{\"task_id\":\"{Item.Id}\",\"stage\":\"started\",\"message\":\"开始执行的摘要\"}} 重要阶段完成时 stage=progress 遇到阻塞 stage=blocked 进度只更新管理器 不唤醒主会话 不发送定时心跳\n遵守当前工程规则 不得扩大执行范围 遇到需要重新判断的异常停止该批次并回报\n结束前必须{Callback}\n报告后结束回合 不要轮询主会话 仅结束回合不等于任务完成";
     }
 
     private static void RequireAcyclic(List<RelaySlot> SlotList, string InstanceId, string ThreadId, string WorkerInstanceId, string WorkerThreadId)
@@ -267,7 +274,7 @@ public sealed class RelayCoordinator : IDisposable
         lock (DeadlineGate)
         {
             if (Lifetime.IsCancellationRequested) return;
-            var Remaining = Item.CreatedAt.AddMinutes(Item.Channel.TimeoutMinutes) - DateTimeOffset.UtcNow;
+            var Remaining = (Item.DeadlineAt ?? Item.CreatedAt.AddMinutes(Item.Channel.TimeoutMinutes)) - DateTimeOffset.UtcNow;
             var Timer = new System.Threading.Timer(State => { _ = ExpireAsync(Item.Id); }, null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
             if (!DeadlineDict.TryAdd(Item.Id, Timer)) { Timer.Dispose(); throw new InvalidOperationException("任务计时器已存在 " + Item.Id); }
             Timer.Change(Remaining > TimeSpan.Zero ? Remaining : TimeSpan.Zero, Timeout.InfiniteTimeSpan);

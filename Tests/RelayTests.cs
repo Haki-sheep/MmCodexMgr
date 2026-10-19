@@ -38,7 +38,7 @@ internal static class RelayTests
             ("校验提取结果", eRelayState.Returned, "completed"), ("核对异常文件", eRelayState.ReturnUncertain, "needs_decision"),
             ("整理已验收资源", eRelayState.Accepted, "completed")
         };
-        foreach (var Preview in PreviewList) Store.Save(new RelayTask { RequestKey = Preview.Item1, Channel = Channel, Title = Preview.Item1, State = Preview.Item2, Outcome = Preview.Item3 });
+        foreach (var Preview in PreviewList) Store.Save(new RelayTask { RequestKey = Preview.Item1, Channel = Channel, Title = Preview.Item1, State = Preview.Item2, Outcome = Preview.Item3, ProgressStage = Preview.Item2 == eRelayState.Running ? "started" : "" });
         var Settings = new ManagerSettings { InstanceList = new() { Channel.MainInstance, Channel.WorkerInstance }, SelectedId = Channel.MainInstance.Id, DarkMode = DarkMode };
         using var Form = new MainForm(Settings, true, Store, Coordinator);
         Form.ShowRelayPage();
@@ -226,7 +226,8 @@ internal static class RelayTests
         using var Initialize = JsonDocument.Parse(ResponseList[0]);
         using var Catalog = JsonDocument.Parse(ResponseList[1]);
         Require(ResponseList.Length == 2 && Initialize.RootElement.GetProperty("result").GetProperty("protocolVersion").GetString() == "2025-06-18", "MCP handshake handles notifications without bogus responses");
-        Require(Catalog.RootElement.GetProperty("result").GetProperty("tools").GetArrayLength() == 4, "MCP exposes dispatch report and acceptance contracts");
+        var ToolList = Catalog.RootElement.GetProperty("result").GetProperty("tools");
+        Require(ToolList.GetArrayLength() == 15 && ToolList.EnumerateArray().Any(Item => Item.GetProperty("name").GetString() == "agent_start") && ToolList.EnumerateArray().Any(Item => Item.GetProperty("name").GetString() == "relay_progress"), "MCP exposes routed startup progress recovery and legacy contracts together");
         using var Metadata = JsonDocument.Parse("{\"x-codex-turn-metadata\":\"{\\\"thread_id\\\":\\\"bound-thread\\\"}\"}");
         Require(RelayMcp.ReadThreadId(Metadata.RootElement) == "bound-thread", "thread ownership comes from Codex executor metadata");
     }
@@ -264,7 +265,7 @@ internal static class RelayTests
         string Request = JsonSerializer.Serialize(new { jsonrpc = "2.0", id = 1, method = "tools/call", @params = new { name = Tool, arguments = Arguments, _meta = new Dictionary<string, string> { ["openai/threadId"] = ThreadId } } }) + "\n";
         using var Input = new MemoryStream(Encoding.UTF8.GetBytes(Request));
         using var Output = new MemoryStream();
-        await RelayMcp.RunAsync(InstanceId, Input, Output, CancellationToken.None, PipeName);
+        await RelayMcp.RunAsync(InstanceId, Input, Output, CancellationToken.None, PipeName, Path.Combine(Path.GetTempPath(), "CodexRelayTestOutbox", PipeName));
         using var Response = JsonDocument.Parse(Output.ToArray());
         var Result = Response.RootElement.GetProperty("result");
         if (Result.GetProperty("isError").GetBoolean()) throw new Exception("MCP fixture failed " + Result.GetRawText());

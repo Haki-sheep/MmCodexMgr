@@ -6,7 +6,7 @@ namespace CodexInstanceManager;
 public static class RelayMcp
 {
     #region Protocol
-    public static async Task RunAsync(string InstanceId, Stream Input, Stream Output, CancellationToken Cancellation, string? PipeName = null)
+    public static async Task RunAsync(string InstanceId, Stream Input, Stream Output, CancellationToken Cancellation, string? PipeName = null, string? OutboxRoot = null)
     {
         using var Reader = new BufferedStream(Input);
         using var Writer = new StreamWriter(Output, new UTF8Encoding(false), 4096, true) { AutoFlush = true };
@@ -21,10 +21,10 @@ public static class RelayMcp
             {
                 object Result = Message.GetProperty("method").GetString() switch
                 {
-                    "initialize" => new { protocolVersion = Message.GetProperty("params").GetProperty("protocolVersion").GetString(), capabilities = new { tools = new { } }, serverInfo = new { name = RelayLimits.McpName, version = "1.0.0" } },
+                    "initialize" => new { protocolVersion = Message.GetProperty("params").GetProperty("protocolVersion").GetString(), capabilities = new { tools = new { } }, serverInfo = new { name = RelayLimits.McpName, version = "1.1.0" } },
                     "ping" => new { },
                     "tools/list" => new { tools = ToolList() },
-                    "tools/call" => await CallAsync(InstanceId, Message.GetProperty("params"), Cancellation, PipeName),
+                    "tools/call" => await CallAsync(InstanceId, Message.GetProperty("params"), Cancellation, PipeName, OutboxRoot),
                     _ => throw new InvalidOperationException("不支持的 MCP 方法")
                 };
                 Response = new { jsonrpc = "2.0", id = Id, result = Result };
@@ -37,12 +37,13 @@ public static class RelayMcp
         }
     }
 
-    private static async Task<object> CallAsync(string InstanceId, JsonElement Parameters, CancellationToken Cancellation, string? PipeName)
+    private static async Task<object> CallAsync(string InstanceId, JsonElement Parameters, CancellationToken Cancellation, string? PipeName, string? OutboxRoot)
     {
         try
         {
             string ThreadId = ReadThreadId(Parameters.GetProperty("_meta"));
-            var Response = await RelayHost.RequestAsync(new(InstanceId, ThreadId, Parameters.GetProperty("name").GetString()!, Parameters.GetProperty("arguments").Clone()), Cancellation, PipeName);
+            var Request = new RelayRequest(InstanceId, ThreadId, Parameters.GetProperty("name").GetString()!, Parameters.GetProperty("arguments").Clone());
+            var Response = Request.Command == "relay_report" ? await RelayOutbox.DeliverAsync(Request, Cancellation, PipeName, OutboxRoot) : await RelayHost.RequestAsync(Request, Cancellation, PipeName);
             return new { content = new[] { new { type = "text", text = Response.GetRawText() } }, isError = false };
         }
         catch (Exception Error)
@@ -66,7 +67,9 @@ public static class RelayMcp
     #endregion
 
     #region Tools
-    private static object[] ToolList() => new object[]
+    private static object[] ToolList() => LegacyTools().Concat(AgentToolCatalog.Tools()).ToArray();
+
+    private static object[] LegacyTools() => new object[]
     {
         Tool("relay_channel", "读取用户在 MmCodexMgr 中绑定的跨实例联调通道 仅使用该通道派发与回传 不得自行更换会话", new { }, Array.Empty<string>()),
         Tool("relay_dispatch", "主会话向用户已绑定的执行会话派发明确任务 用户启用通道即授权本任务交接及其结果回传 request_id 为本次业务请求的唯一标识 重试必须保持不变 成功后结束当前回合 由管理器事件唤醒 不要轮询", new { request_id = Text(128), title = Text(120), instructions = Text(RelayLimits.MaxTextLength), acceptance = Text(RelayLimits.MaxTextLength) }, new[] { "request_id", "title", "instructions", "acceptance" }),

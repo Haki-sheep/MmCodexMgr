@@ -23,6 +23,8 @@ public sealed class AgentManagementService
     {
         var Settings = LoadSettings();
         var Caller = ResolveInstance(Settings, Request.InstanceId);
+        if (Request.Command == "agent_ping") return new { ready = true };
+        if (Request.Command == "agent_doctor") return await AgentDoctor.RunAsync(Settings, CliPath, Request.Arguments.TryGetProperty("instance", out var DoctorInstance) ? DoctorInstance.GetString() : Caller.Id, Cancellation);
         Catalog.Session(Caller, Request.ThreadId);
         var Arguments = Request.Arguments;
         switch (Request.Command)
@@ -40,12 +42,32 @@ public sealed class AgentManagementService
             case "agent_start": return await StartAsync(Settings, Caller, Request.ThreadId, Arguments, Cancellation);
             case "agent_task":
             case "agent_cancel":
+            case "agent_tree":
+            case "agent_retry_return":
+            case "agent_reconcile":
             {
                 var Item = Store.Get(Text(Arguments, "task_id"));
                 bool Main = Item.Channel.MainInstance.Id == Caller.Id && Item.Channel.MainThreadId == Request.ThreadId;
                 bool Worker = Item.Channel.WorkerInstance.Id == Caller.Id && Item.Channel.WorkerThreadId == Request.ThreadId;
-                if (!Main && !Worker || Request.Command == "agent_cancel" && !Main) throw new InvalidOperationException("当前会话无权操作该任务");
+                if (!Main && !Worker || Request.Command is "agent_cancel" or "agent_retry_return" or "agent_reconcile" && !Main) throw new InvalidOperationException("当前会话无权操作该任务");
                 if (Request.Command == "agent_cancel") await Coordinator.CancelAsync(Item.Id);
+                if (Request.Command == "agent_tree") return Store.TreePage(Item.Id, Number(Arguments, "offset", 0)).Select(Entry => new { task_id = Entry.Id, parent_task_id = Entry.ParentTaskId, title = Entry.Title, state = RelayLimits.StateText(Entry.State), children = Entry.ChildCount, main_instance = Entry.MainName, worker_instance = Entry.WorkerName, progress_at = Entry.ProgressAt }).ToArray();
+                if (Request.Command is "agent_retry_return" or "agent_reconcile")
+                {
+                    if (!Arguments.TryGetProperty("confirmed", out var Confirmation) || !Confirmation.GetBoolean()) throw new InvalidOperationException("请先核对目标会话 再提供 confirmed=true");
+                    if (Request.Command == "agent_retry_return") await Coordinator.RetryReturnAsync(Item.Id);
+                    else
+                    {
+                        var Session = Catalog.Session(Item.Channel.WorkerInstance, Text(Arguments, "session_id"));
+                        if (Item.Channel.ProjectId.Length != 0)
+                        {
+                            var Project = await ResolveProjectAsync(Item.Channel.WorkerInstance, Item.Channel.ProjectId, Cancellation);
+                            if (Session.ProjectId.Length != 0 ? Session.ProjectId != Project.Id : AgentCatalog.NormalizePath(Session.Cwd) != AgentCatalog.NormalizePath(Project.Path)) throw new InvalidOperationException("核对的会话不属于原目标项目");
+                        }
+                        else if (Item.Channel.WorkerThreadId.Length == 0) throw new InvalidOperationException("历史任务缺少原目标项目 无法确认创建结果");
+                        await Coordinator.ReconcileAsync(Caller.Id, Request.ThreadId, Item.Id, Session.Id, Session.Title);
+                    }
+                }
                 return Describe(Store.Get(Item.Id));
             }
             default: throw new InvalidOperationException("未知跨Agent命令 " + Request.Command);
@@ -56,6 +78,8 @@ public sealed class AgentManagementService
     {
         string Key = Caller.Id + "/" + ThreadId + "/" + Text(Arguments, "request_id");
         var Existing = Store.FindRequest(Key);
+        var Workspace = ReadWorkspace(Arguments);
+        if (Existing is null && Workspace is null) throw new InvalidOperationException("新任务必须声明 workspace.access 只读任务填 read_only 写入任务同时提供 write_paths");
         var Target = ResolveInstance(Settings, Text(Arguments, "instance"));
         var Project = await ResolveProjectAsync(Target, Text(Arguments, "project"), Cancellation);
         string? CreateTitle = OptionalText(Arguments, "create_title");
@@ -76,14 +100,24 @@ public sealed class AgentManagementService
         var Item = await Coordinator.DispatchAsync(Caller.Id, ThreadId, Key, Text(Arguments, "title"), Text(Arguments, "instructions"), Text(Arguments, "acceptance"), Route,
             Number(Arguments, "session_max", 1), Number(Arguments, "subagent_max", 0),
             CreateTitle is null ? null : TaskItem => Catalog.CreateAsync(Target, Project, CreateTitle, RelayCoordinator.BuildWorkerPrompt(TaskItem), Cancellation),
-            Number(Arguments, "cross_agent_max", 1), ReadWorkerLimits(Arguments));
+            Number(Arguments, "cross_agent_max", 1), ReadWorkerLimits(Arguments), ReadTreeBudget(Arguments), Workspace);
         string Instruction = Item.State switch
         {
             eRelayState.Running => "结束当前回合 等待执行会话主动回传 不要轮询",
             eRelayState.DispatchUncertain or eRelayState.ReturnUncertain => "投递状态待核对 请查看任务记录与目标对话 不得自动重复创建或发送",
             _ => "按已保存的任务状态继续处理 不得重新执行已完成或终止的任务"
         };
-        return new { task_id = Item.Id, state = RelayLimits.StateText(Item.State), instance_id = Target.Id, project_id = Project.Id, thread_id = Item.Channel.WorkerThreadId, session_max = Item.SessionMax, subagent_max = Item.SubagentMax, cross_agent_max = Item.CrossAgentMax, worker_limits = Item.WorkerLimits, instruction = Instruction };
+        return new { task_id = Item.Id, state = RelayLimits.StateText(Item.State), instance_id = Target.Id, project_id = Project.Id, thread_id = Item.Channel.WorkerThreadId, session_max = Item.SessionMax, subagent_max = Item.SubagentMax, cross_agent_max = Item.CrossAgentMax, worker_limits = Item.WorkerLimits, tree_budget = Item.TreeBudget, tree_depth = Item.TreeDepth, workspace = Item.Workspace, instruction = Instruction };
+    }
+
+    private static RelayTreeBudget? ReadTreeBudget(JsonElement Arguments) => Arguments.TryGetProperty("tree_session_max", out _) || Arguments.TryGetProperty("max_depth", out _) ? new() { MaxSessions = Number(Arguments, "tree_session_max", RelayLimits.DefaultTreeSessionMax), MaxDepth = Number(Arguments, "max_depth", RelayLimits.DefaultTreeMaxDepth) } : null;
+
+    private static RelayWorkspace? ReadWorkspace(JsonElement Arguments)
+    {
+        if (!Arguments.TryGetProperty("workspace", out var Value)) return null;
+        foreach (var Property in Value.EnumerateObject())
+            if (Property.Name is not ("access" or "write_paths")) throw new InvalidOperationException("未知工作区参数 " + Property.Name);
+        return new() { Access = Text(Value, "access"), WritePathList = Value.TryGetProperty("write_paths", out var Paths) ? Paths.EnumerateArray().Select(PathValue => PathValue.GetString()!).ToList() : new() };
     }
 
     private static RelayAgentLimits? ReadWorkerLimits(JsonElement Arguments)
@@ -97,11 +131,14 @@ public sealed class AgentManagementService
     private static object Describe(RelayTask Item) => new
     {
         task_id = Item.Id, parent_task_id = Item.ParentTaskId, title = Item.Title,
-        state = RelayLimits.StateText(Item.State), display_state = RelayLimits.DisplayStateText(Item.State, Item.Outcome),
+        state = RelayLimits.StateText(Item.State), display_state = RelayLimits.ProgressStateText(Item.State, Item.Outcome, Item.ProgressStage),
         outcome = Item.Outcome, summary = Item.Result, artifacts = Item.ArtifactList,
         main = new { instance_id = Item.Channel.MainInstance.Id, thread_id = Item.Channel.MainThreadId },
         worker = new { instance_id = Item.Channel.WorkerInstance.Id, thread_id = Item.Channel.WorkerThreadId, project_id = Item.Channel.ProjectId, create_title = Item.Channel.CreateTitle },
         worker_limits = Item.WorkerLimits,
+        tree_budget = Item.TreeBudget, tree_root_id = Item.TreeRootId, tree_depth = Item.TreeDepth,
+        workspace = new { access = Item.Workspace.Access, write_path_count = Item.Workspace.WritePathList.Count },
+        progress_stage = Item.ProgressStage, progress = Item.ProgressMessage, progress_at = Item.ProgressAt,
         recent_event_excerpts = Item.EventList.TakeLast(2).Select(Text => Text.Length > 512 ? Text[..512] + "…" : Text).ToArray()
     };
 

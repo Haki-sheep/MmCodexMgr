@@ -67,6 +67,7 @@ public static class Program
             Form.Shown += async (_, _) =>
             {
                 if (Command != "show") { Form.Hide(); await Form.HandleCommandAsync(Command); }
+                _ = RecoverReportsAsync(Coordinator, Form, Cancellation.Token);
             };
             _ = ListenAsync(Form, Cancellation.Token);
             Application.Run(Form);
@@ -96,6 +97,18 @@ public static class Program
     {
         Directory.CreateDirectory(ManagerPaths.Root);
         File.AppendAllText(Path.Combine(ManagerPaths.Root, "errors.log"), DateTime.Now.ToString("O") + Environment.NewLine + Error + Environment.NewLine);
+    }
+
+    private static async Task RecoverReportsAsync(RelayCoordinator Coordinator, MainForm Form, CancellationToken Cancellation)
+    {
+        try
+        {
+            var Result = await RelayOutbox.ReplayOnceAsync(Coordinator, Cancellation);
+            if (Result.Recovered + Result.Failed > 0 && !Form.IsDisposed)
+                Form.BeginInvoke(() => MessageBox.Show(Form, "已恢复 " + Result.Recovered + " 条本地回报\n待核对 " + Result.Failed + " 条 详情保留在发件箱和错误日志中", "联调结果恢复"));
+        }
+        catch (OperationCanceledException) when (Cancellation.IsCancellationRequested) { }
+        catch (Exception Error) { LogError(Error); if (!Form.IsDisposed) Form.BeginInvoke(() => MessageBox.Show(Form, Error.Message, "发件箱恢复失败")); }
     }
 
     private static object[] DescribeLayout(Control Parent) => Parent.Controls.Cast<Control>().Select(Control => new { Type = Control.GetType().Name, Control.Text, Bounds = Control.Bounds.ToString(), Control.PreferredSize, Font = Control.Font.ToString(), Control.Visible, Children = DescribeLayout(Control) }).Cast<object>().ToArray();

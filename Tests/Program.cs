@@ -16,6 +16,11 @@ internal static class Tests
         if (ArgumentList.Contains("--relay-live")) return RelayTests.LiveProbe();
         if (ArgumentList.Contains("--agents-live")) return AgentManagementTests.LiveProbe();
         if (ArgumentList.Contains("--agents")) { AgentManagementTests.Run(); return 0; }
+        if (ArgumentList.Contains("--collaboration")) { CollaborationTests.Run(); return 0; }
+        if (ArgumentList.Contains("--events-live")) return CollaborationTests.EventProbe();
+        if (ArgumentList.Contains("--instance-ui")) return InstancePageUiTests.Run();
+        if (ArgumentList.Length == 2 && ArgumentList[0] == "--collaboration-render") return CollaborationTests.Render(ArgumentList[1], true);
+        if (ArgumentList.Length == 2 && ArgumentList[0] == "--collaboration-render-light") return CollaborationTests.Render(ArgumentList[1], false);
         if (ArgumentList.Length == 2 && ArgumentList[0] == "--relay-render") return RelayTests.Render(ArgumentList[1]);
         if (ArgumentList.Length == 2 && ArgumentList[0] == "--relay-render-light") return RelayTests.Render(ArgumentList[1], false);
         if (ArgumentList.Contains("--relay")) { RelayTests.Run(); return 0; }
@@ -41,7 +46,7 @@ internal static class Tests
                 Console.WriteLine("PASS config sync " + Count + " assertions; fixture=" + Root);
                 return 0;
             }
-            TestCc(); TestDetection(); WindowTests.Run(); TestBranding(); RelayTests.Run(); AgentManagementTests.Run();
+            TestCc(); TestDetection(); WindowTests.Run(); TestBranding(); RelayTests.Run(); AgentManagementTests.Run(); CollaborationTests.Run();
             Console.WriteLine("PASS " + Count + " assertions; fixture=" + Root);
             return 0;
         }

@@ -142,7 +142,7 @@ internal static class AgentManagementTests
     {
         ["request_id"] = Key, ["instance"] = Instance, ["project"] = "项目 有空格", ["session"] = Session!,
         ["title"] = "资源处理", ["instructions"] = "目的：提取资源\n任务分析：仅写输出目录", ["acceptance"] = "按清单验证",
-        ["session_max"] = 1, ["subagent_max"] = 2, ["cross_agent_max"] = 1
+        ["session_max"] = 1, ["subagent_max"] = 2, ["cross_agent_max"] = 1, ["workspace"] = new { access = "read_only" }
     };
 
     private static async Task<JsonElement> StartAsync(Dictionary<string, object> Request, string Root, string PipeName, ManagerSettings Settings, string CallerThread = "main-thread")
@@ -157,7 +157,7 @@ internal static class AgentManagementTests
         using var Input = new MemoryStream();
         using var Output = new MemoryStream();
         using var Error = new StringWriter();
-        int Exit = await AgentCli.RunAsync(Arguments.Concat(new[] { "--caller-instance", "main", "--caller-thread", CallerThread }).ToArray(), Input, Output, Error, Environment.ProcessPath!, CancellationToken.None, PipeName, () => Settings);
+        int Exit = await AgentCli.RunAsync(Arguments.Concat(new[] { "--caller-instance", "main", "--caller-thread", CallerThread }).ToArray(), Input, Output, Error, Environment.ProcessPath!, CancellationToken.None, PipeName, () => Settings, Path.Combine(Root, "outbox"));
         if (Exit != 0) throw new InvalidOperationException("CLI exit=" + Exit + " " + Error);
         using var Result = JsonDocument.Parse(Output.ToArray());
         return Result.RootElement.Clone();
