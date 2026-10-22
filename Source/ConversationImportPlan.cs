@@ -10,6 +10,7 @@ public sealed class ConversationImportPlan : IDisposable
     public string StageRoot { get; init; } = "";
     public string? Model { get; init; }
     public string Provider { get; init; } = "";
+    public bool ProjectsOnly { get; init; }
     public List<ImportedConversation> ConversationList { get; } = new();
     public List<string> SkippedList { get; } = new();
     public List<ImportFile> FileList { get; } = new();
@@ -17,6 +18,7 @@ public sealed class ConversationImportPlan : IDisposable
     public int ExistingCount { get; set; }
     public int TargetCount { get; set; }
     public int ProjectCount { get; set; }
+    public int ExistingProjectCount { get; set; }
     public long TotalBytes { get; set; }
 
     public void Dispose()

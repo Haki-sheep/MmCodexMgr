@@ -74,6 +74,7 @@ public static class InstanceService
 
     public static int Launch(InstanceProfile Profile)
     {
+        ResponsesCompatProfile.EnsureRunning(Profile, AgentCliDeployment.LoadPath());
         var Existing = Find(Profile, ListRunning());
         if (Existing is not null)
         {

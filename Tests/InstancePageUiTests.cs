@@ -34,6 +34,11 @@ internal static class InstancePageUiTests
         Require(Hint.Height >= Hint.GetPreferredSize(new Size(Hint.Width, 0)).Height, "launch hint displays all wrapped lines");
         foreach (var Button in Descendants(Body).OfType<Button>())
             Require(Button.Parent!.ClientRectangle.Contains(Button.Bounds), "launch button is fully visible: " + Button.Text);
+        var ProjectButton = Descendants(Form).OfType<Button>().Single(Button => Button.Text == "一键同步工程");
+        Require(ProjectButton.Parent!.ClientRectangle.Contains(ProjectButton.Bounds), "project sync action fits beside conversation import");
+        Require(ProjectButton.Parent.Parent!.ClientRectangle.Contains(ProjectButton.Parent.Bounds), "project actions fit inside the import card content");
+        Require(ProjectButton.Parent.Parent.Parent!.ClientRectangle.Contains(ProjectButton.Parent.Parent.Bounds), "import card content is fully visible");
+        Require(ProjectButton.Enabled, "secondary instance exposes project synchronization");
 
         var FocusTarget = Descendants(Form).OfType<ListBox>().Single();
         FocusTarget.Focus();
@@ -90,7 +95,31 @@ internal static class InstancePageUiTests
             string PathValue = Path.Combine(AppContext.BaseDirectory, DarkMode ? "instance-ui-dark.png" : "instance-ui-light.png");
             Image.Save(PathValue);
             Console.WriteLine("instance UI render=" + PathValue);
+            Scroll.ScrollControlIntoView(ProjectButton);
+            Application.DoEvents();
+            using var ProjectImage = new Bitmap(Form.Width, Form.Height);
+            Form.DrawToBitmap(ProjectImage, new Rectangle(Point.Empty, ProjectImage.Size));
+            ProjectImage.Save(Path.Combine(AppContext.BaseDirectory, DarkMode ? "project-sync-entry-dark.png" : "project-sync-entry-light.png"));
         }
+        VerifyProjectDialog(Profile, DarkMode);
+    }
+
+    private static void VerifyProjectDialog(InstanceProfile Target, bool DarkMode)
+    {
+        var Source = new InstanceProfile { Id = "primary", Name = "主实例", IsPrimary = true };
+        using var Dialog = new ProjectSyncDialog(new() { Target, Source }, Target);
+        new AppTheme(DarkMode).Apply(Dialog);
+        Dialog.Show();
+        Application.DoEvents();
+        var Input = Descendants(Dialog).OfType<ComboBox>().Single();
+        Require(Input.Items.Count == 1 && ReferenceEquals(Input.SelectedItem, Source), "project sync selects the primary source and excludes its destination");
+        var Hint = Descendants(Dialog).OfType<Label>().Single(Label => Label.Text.StartsWith("将来源实例", StringComparison.Ordinal));
+        Require(Hint.Height >= Hint.GetPreferredSize(new Size(Hint.Width, 0)).Height, "project-only explanation displays all lines");
+        foreach (var Control in Descendants(Dialog).Where(Control => Control is Button or ComboBox or Label))
+            Require(Control.Parent!.ClientRectangle.Contains(Control.Bounds), "project sync control fits: " + Control.GetType().Name);
+        using var Image = new Bitmap(Dialog.Width, Dialog.Height);
+        Dialog.DrawToBitmap(Image, new Rectangle(Point.Empty, Image.Size));
+        Image.Save(Path.Combine(AppContext.BaseDirectory, DarkMode ? "project-sync-dark.png" : "project-sync-light.png"));
     }
 
     private static void Wheel(Control FocusTarget, Point ScreenPoint, int Delta)

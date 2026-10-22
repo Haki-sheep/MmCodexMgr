@@ -31,6 +31,8 @@ public static class AgentCli
         doctor [--instance <实例>]  无需会话身份 不启动模型
         install --instance <实例> [--skill <Skill目录>]
           CLI 与实例管理器放在同一目录 目录迁移后重新运行 install 更新 Skill 与 MCP 路径
+        compat-install --instance <实例>  安装 OpenCode Go 联调输入适配 保留模型与密钥 重新加载目标实例后生效
+        compat-remove --instance <实例>  恢复原服务商地址 保留其余配置 重新加载目标实例后生效
         mcp --instance <实例ID>
         调用方默认取 CODEX_HOME 与 CODEX_THREAD_ID
         在 Codex 外使用时显式提供 --caller-instance <实例> --caller-thread <会话ID>
@@ -43,12 +45,33 @@ public static class AgentCli
         using var Writer = new StreamWriter(Output, new UTF8Encoding(false), 4096, true) { AutoFlush = true };
         try
         {
+            if (ArgumentList.Length == 3 && ArgumentList[0] == "compat-server" && ArgumentList[1] == "--profile")
+            {
+                await ResponsesCompatServer.RunProfileAsync(ArgumentList[2], Cancellation);
+                return 0;
+            }
             var Call = Parse(ArgumentList);
             if (Call.Command == "help") { await Writer.WriteLineAsync(Help); return 0; }
             var Settings = (LoadSettings ?? SettingsStore.Load)();
+            if (Call.Command is "compat-install" or "compat-remove")
+            {
+                var Instance = AgentManagementService.ResolveInstance(Settings, Required(Call, "instance"));
+                if (Call.Command == "compat-install")
+                {
+                    var Profile = ResponsesCompatProfile.Install(Instance, ExecutablePath);
+                    await Writer.WriteLineAsync(JsonSerializer.Serialize(new { installed = true, instance_id = Instance.Id, provider = Profile.Provider, local_url = Profile.LocalUrl, upstream_url = Profile.UpstreamUrl, backup = Profile.BackupPath, reload = "重新加载目标实例后生效 不修改会话历史" }));
+                }
+                else
+                {
+                    ResponsesCompatProfile.Remove(Instance);
+                    await Writer.WriteLineAsync(JsonSerializer.Serialize(new { removed = true, instance_id = Instance.Id, reload = "重新加载目标实例后生效" }));
+                }
+                return 0;
+            }
             if (Call.Command == "mcp")
             {
                 var Instance = AgentManagementService.ResolveInstance(Settings, Required(Call, "instance"));
+                ResponsesCompatProfile.EnsureRunning(Instance, ExecutablePath);
                 await RelayMcp.RunAsync(Instance.Id, Input, Output, Cancellation, PipeName, OutboxRoot);
                 return 0;
             }
@@ -122,6 +145,7 @@ public static class AgentCli
             "reconcile" => new[] { "task-id", "session-id", "confirmed" },
             "status" or "cancel" or "accept" => new[] { "task-id" },
             "install" => new[] { "instance", "skill" },
+            "compat-install" or "compat-remove" => new[] { "instance" },
             "mcp" => new[] { "instance" },
             _ => throw new InvalidOperationException("未知命令 " + Command + " 请执行 help")
         };

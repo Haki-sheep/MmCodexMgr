@@ -16,6 +16,7 @@ public sealed class MainForm : Form
     private readonly Button ColorButton = new();
     private readonly Button SyncButton = new();
     private readonly Button ConversationButton = new();
+    private readonly Button ProjectButton = new();
     private readonly NotifyIcon TrayIcon = new();
     private readonly BrandingService Branding = new();
     private readonly System.Windows.Forms.Timer RefreshDelay = new() { Interval = 150 };
@@ -187,14 +188,20 @@ public sealed class MainForm : Form
         SyncCard.Controls.Add(SyncBody);
         Right.Controls.Add(SyncCard, 0, 3);
 
-        var ConversationCard = MakeCard("导入对话与项目", 8);
+        var ConversationCard = MakeCard("同步工程 / 导入对话", 8);
         var ConversationBody = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false };
-        ConversationBody.Controls.Add(new Label { Text = "单向导入本地历史、项目、置顶和排序", AutoSize = true });
+        ConversationBody.Controls.Add(new Label { Text = "工程可单独同步，也可导入历史对话与项目", AutoSize = true });
         ConversationBody.Controls.Add(new Label { Text = "目标已有对话保留  ·  导入前备份  ·  请先退出目标实例", ForeColor = Color.DimGray, AutoSize = true });
         ConversationButton.Text = "选择来源并预览对话";
         StyleButton(ConversationButton, true);
         ConversationButton.Click += (_, _) => SafeAction(() => { SaveSelected(); if (Selected is not null) using (var Dialog = new ConversationImportDialog(Settings.InstanceList, Selected)) ShowThemedDialog(Dialog); });
-        ConversationBody.Controls.Add(ConversationButton);
+        var ImportActions = new FlowLayoutPanel { AutoSize = true, WrapContents = false };
+        ProjectButton.Text = "一键同步工程";
+        StyleButton(ProjectButton, true);
+        ProjectButton.Click += (_, _) => SafeAction(() => { SaveSelected(); if (Selected is not null) using (var Dialog = new ProjectSyncDialog(Settings.InstanceList, Selected)) ShowThemedDialog(Dialog); });
+        ImportActions.Controls.Add(ProjectButton);
+        ImportActions.Controls.Add(ConversationButton);
+        ConversationBody.Controls.Add(ImportActions);
         ConversationCard.Controls.Add(ConversationBody);
         Right.Controls.Add(ConversationCard, 0, 2);
 
@@ -328,6 +335,7 @@ public sealed class MainForm : Form
         CurrentIcon = Selected.IconPath;
         Settings.SelectedId = Selected.Id;
         SyncButton.Enabled = !Selected.IsPrimary;
+        ProjectButton.Enabled = !Selected.IsPrimary;
         ConversationButton.Enabled = !Selected.IsPrimary;
         UpdatePreview();
     }

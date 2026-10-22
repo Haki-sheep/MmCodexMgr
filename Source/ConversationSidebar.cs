@@ -27,7 +27,7 @@ internal sealed class ConversationSidebar
             ProjectIdDict[Project.Id] = TargetId;
             ProjectIdDict[Project.LegacyId] = TargetId;
             LegacyIdDict[Project.LegacyId] = TargetLegacyId;
-            if (Existing is not null) continue;
+            if (Existing is not null) { Plan.ExistingProjectCount++; continue; }
             NewProjectList.Add(Project);
             TargetProjectList.Add(Project);
             if (ConversationDatabase.Scalar(Database, "SELECT id FROM source.projects WHERE id=$id", ("$id", Project.Id)) is null)
@@ -35,7 +35,7 @@ internal sealed class ConversationSidebar
         }
         Plan.ProjectCount = NewProjectList.Count;
         MergeProjects(Source, Plan);
-        MergeThreads(Source, Plan);
+        if (!Plan.ProjectsOnly) MergeThreads(Source, Plan);
     }
 
     private static List<SidebarProject> ReadProjects(SqliteConnection Database, string Schema, JsonObject State, string Home)
@@ -84,7 +84,7 @@ internal sealed class ConversationSidebar
         {
             Migration["version"] = 1;
             Migration["projectsMigrated"] = true;
-            Migration["threadAssignmentsMigrated"] = true;
+            if (!Plan.ProjectsOnly) Migration["threadAssignmentsMigrated"] = true;
         }
     }
 

@@ -16,6 +16,19 @@ public static class AgentDoctor
     {
         var Instance = AgentManagementService.ResolveInstance(Settings, Selector ?? Settings.SelectedId);
         var CheckList = new List<AgentHealthCheck>();
+        if (File.Exists(Path.Combine(Instance.HomePath, ResponsesCompatProfile.FileName)))
+        {
+            try
+            {
+                ResponsesCompatProfile.Probe(Instance);
+                CheckList.Add(new("Responses 协议适配", true, "本机服务与服务商地址一致"));
+            }
+            catch (Exception Error) when (Error is IOException or InvalidOperationException or JsonException or TomlException or KeyNotFoundException or HttpRequestException or TaskCanceledException)
+            {
+                if (Cancellation.IsCancellationRequested) throw;
+                CheckList.Add(new("Responses 协议适配", false, Error.Message));
+            }
+        }
         CheckList.Add(new("CLI", File.Exists(CliPath), CliPath));
         CheckList.Add(new("会话数据库", File.Exists(Path.Combine(Instance.HomePath, "state_5.sqlite")), Instance.HomePath));
         try

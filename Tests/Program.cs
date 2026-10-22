@@ -12,6 +12,8 @@ internal static class Tests
     [STAThread]
     private static int Main(string[] ArgumentList)
     {
+        if (ArgumentList.Contains("--responses-compat")) return ResponsesCompatTests.Run();
+        if (ArgumentList.Length == 2 && ArgumentList[0] == "--responses-compat-install") return ResponsesCompatTests.VerifyInstallation(ArgumentList[1]);
         if (ArgumentList.Contains("--memory-probe")) return MemoryTests.Run();
         if (ArgumentList.Contains("--relay-live")) return RelayTests.LiveProbe();
         if (ArgumentList.Contains("--agents-live")) return AgentManagementTests.LiveProbe();
@@ -25,6 +27,7 @@ internal static class Tests
         if (ArgumentList.Length == 2 && ArgumentList[0] == "--relay-render-light") return RelayTests.Render(ArgumentList[1], false);
         if (ArgumentList.Contains("--relay")) { RelayTests.Run(); return 0; }
         if (ArgumentList.Contains("--conversation-import")) return ConversationImportTests.Run();
+        if (ArgumentList.Contains("--project-sync")) return ProjectSyncTests.Run();
         if (ArgumentList.Contains("--conversation-cleanup")) return ConversationCleanupTests.Run();
         if (ArgumentList.Contains("--cleanup-ui")) return ConversationCleanupUiTests.Run();
         if (ArgumentList.Contains("--restore-second")) return WindowTests.RestoreSecond();

@@ -93,6 +93,7 @@ public sealed class DesktopRelayBridge : IRelayBridge, IRelayProcessEvents, IDis
 
     public static async Task<JsonElement> CallAsync(InstanceProfile Instance, string CallerThreadId, string Tool, object Arguments, CancellationToken Cancellation)
     {
+        await Task.Run(() => ResponsesCompatProfile.EnsureRunning(Instance, AgentCliDeployment.LoadPath()), Cancellation);
         using var Timeout = CancellationTokenSource.CreateLinkedTokenSource(Cancellation);
         Timeout.CancelAfter(TimeSpan.FromSeconds(RelayLimits.RequestTimeoutSeconds));
         using var Client = await ConnectAsync(Instance, Timeout.Token);

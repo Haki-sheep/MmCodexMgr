@@ -95,7 +95,7 @@ public static class ConversationImportService
     public static void EnsureStopped(InstanceProfile Destination)
     {
         if (InstanceService.Find(Destination, InstanceService.ListRunning()) is not null)
-            throw new InvalidOperationException("请先完成任务并退出目标 Codex 实例 再预览或导入对话");
+            throw new InvalidOperationException("请先完成任务并退出目标 Codex 实例 再同步工程或导入对话");
     }
 
     private static void ValidateProfiles(InstanceProfile Source, InstanceProfile Destination)
@@ -194,7 +194,7 @@ public static class ConversationImportService
         EnsureStopped(Plan.Destination);
         using var Lease = new ConversationImportLease(Plan.Destination.HomePath);
         ValidateGuards(Plan);
-        string Backup = Path.Combine(BackupRoot, "conversations-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N")[..6]);
+        string Backup = Path.Combine(BackupRoot, (Plan.ProjectsOnly ? "projects-" : "conversations-") + DateTime.Now.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N")[..6]);
         Directory.CreateDirectory(Backup);
         var AppliedList = new List<(string Destination, string Backup, bool Existed)>();
         var OriginalDict = new Dictionary<string, bool>();
