@@ -6,6 +6,8 @@ namespace CodexInstanceManager;
 public sealed class ResponsesCompatServer : IDisposable
 {
     private const int MaxRequestBytes = 64 * 1024 * 1024;
+    private const int ClientConnectionDeletedError = 64;
+    private const int InvalidClientConnectionError = 1229;
     private readonly HttpListener Listener = new();
     private readonly HttpClient Client;
     private readonly ResponsesCompatProfile Profile;
@@ -17,7 +19,7 @@ public sealed class ResponsesCompatServer : IDisposable
         var LogGate = new object();
         void Log(Exception Error)
         {
-            lock (LogGate) File.AppendAllText(LogPath, DateTimeOffset.Now.ToString("O") + " " + Error.GetType().Name + " " + Error.Message + Environment.NewLine);
+            lock (LogGate) File.AppendAllText(LogPath, DateTimeOffset.Now.ToString("O") + " PID=" + Environment.ProcessId + " " + Error + Environment.NewLine);
         }
         try
         {
@@ -30,6 +32,7 @@ public sealed class ResponsesCompatServer : IDisposable
             using var Server = new ResponsesCompatServer(Profile, Log);
             File.AppendAllText(LogPath, DateTimeOffset.Now.ToString("O") + " 启动协议适配 " + Profile.LocalUrl + Environment.NewLine);
             await Server.RunAsync(Lifetime.Token);
+            File.AppendAllText(LogPath, DateTimeOffset.Now.ToString("O") + " PID=" + Environment.ProcessId + " 协议适配已停止 cancellation=" + Lifetime.IsCancellationRequested + Environment.NewLine);
         }
         catch (Exception Error) { Log(Error); throw; }
     }
@@ -51,17 +54,33 @@ public sealed class ResponsesCompatServer : IDisposable
         {
             while (!Cancellation.IsCancellationRequested)
             {
-                var Context = await Listener.GetContextAsync();
+                HttpListenerContext Context;
+                try { Context = await Listener.GetContextAsync(); }
+                catch (HttpListenerException Error) when (!Cancellation.IsCancellationRequested && Error.NativeErrorCode is ClientConnectionDeletedError or InvalidClientConnectionError)
+                {
+                    ReportError(Error);
+                    continue;
+                }
                 foreach (var Finished in PendingHashList.Where(Item => Item.IsCompleted).ToArray())
                 {
                     await Finished;
                     PendingHashList.Remove(Finished);
                 }
-                PendingHashList.Add(HandleAsync(Context, Cancellation));
+                PendingHashList.Add(ProcessContextAsync(Context, Cancellation));
             }
         }
         catch (Exception Error) when (Cancellation.IsCancellationRequested && Error is HttpListenerException or ObjectDisposedException) { }
         finally { await Task.WhenAll(PendingHashList); }
+    }
+
+    private async Task ProcessContextAsync(HttpListenerContext Context, CancellationToken Cancellation)
+    {
+        try { await HandleAsync(Context, Cancellation); }
+        catch (Exception Error) when (Error is HttpListenerException or IOException or ObjectDisposedException or OperationCanceledException)
+        {
+            ReportError(Error);
+            Context.Response.Abort();
+        }
     }
 
     private async Task HandleAsync(HttpListenerContext Context, CancellationToken Cancellation)
@@ -73,7 +92,7 @@ public sealed class ResponsesCompatServer : IDisposable
             if (Incoming.HttpMethod == "GET" && Incoming.RawUrl == "/health")
             {
                 Context.Response.ContentType = "application/json";
-                await Context.Response.OutputStream.WriteAsync(JsonSerializer.SerializeToUtf8Bytes(new { protocol = ResponsesCompatProfile.Protocol, id = Profile.Id }), Cancellation);
+                await Context.Response.OutputStream.WriteAsync(JsonSerializer.SerializeToUtf8Bytes(new { protocol = ResponsesCompatProfile.Protocol, id = Profile.Id, process_id = Environment.ProcessId }), Cancellation);
                 return;
             }
             string? PathValue = Incoming.Url?.AbsolutePath;
@@ -130,7 +149,11 @@ public sealed class ResponsesCompatServer : IDisposable
                 catch (Exception WriteError) when (WriteError is IOException or HttpListenerException or OperationCanceledException) { ReportError(WriteError); }
             }
         }
-        finally { Context.Response.Close(); }
+        finally
+        {
+            try { Context.Response.Close(); }
+            catch (Exception Error) when (Error is HttpListenerException or IOException or ObjectDisposedException) { ReportError(Error); }
+        }
     }
 
     private static bool IsTransportHeader(string Key) => Key.Equals("Host", StringComparison.OrdinalIgnoreCase) || Key.Equals("Connection", StringComparison.OrdinalIgnoreCase) || Key.Equals("Transfer-Encoding", StringComparison.OrdinalIgnoreCase) || Key.Equals("Keep-Alive", StringComparison.OrdinalIgnoreCase) || Key.Equals("TE", StringComparison.OrdinalIgnoreCase) || Key.Equals("Trailer", StringComparison.OrdinalIgnoreCase) || Key.Equals("Upgrade", StringComparison.OrdinalIgnoreCase) || Key.Equals("Proxy-Authorization", StringComparison.OrdinalIgnoreCase) || Key.Equals("Proxy-Authenticate", StringComparison.OrdinalIgnoreCase);

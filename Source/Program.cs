@@ -58,7 +58,7 @@ public static class Program
                 TaskStore.SaveChannel(Channel);
             }
             using var DesktopBridge = new DesktopRelayBridge();
-            foreach (var Instance in SettingsStore.Load().InstanceList) ResponsesCompatProfile.EnsureRunning(Instance, CliPath);
+            using var CompatSupervisor = new ResponsesCompatSupervisor(SettingsStore.Load, CliPath, LogError);
             using var Coordinator = new RelayCoordinator(TaskStore, DesktopBridge);
             using var Form = new MainForm(SettingsStore.Load(), false, TaskStore, Coordinator);
             var AgentService = new AgentManagementService(TaskStore, Coordinator, new AgentCatalog(), CliPath);

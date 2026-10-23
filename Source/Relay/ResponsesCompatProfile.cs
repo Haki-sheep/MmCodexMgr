@@ -112,24 +112,24 @@ public sealed class ResponsesCompatProfile
         if (!IsReady(Client, Profile)) throw new IOException("协议适配服务未运行");
     }
 
-    public static void EnsureRunning(InstanceProfile Instance, string CliPath)
+    public static bool EnsureRunning(InstanceProfile Instance, string CliPath)
     {
         string ProfilePath = Path.Combine(Instance.HomePath, FileName);
-        if (!File.Exists(ProfilePath)) return;
+        if (!File.Exists(ProfilePath)) return false;
         var Profile = Load(ProfilePath);
         using var Gate = new Mutex(false, "Local\\" + Protocol + "-" + Profile.Id);
         bool Acquired;
         try { Acquired = Gate.WaitOne(TimeSpan.FromSeconds(StartupTimeoutSeconds)); }
         catch (AbandonedMutexException) { Acquired = true; }
         if (!Acquired) throw new TimeoutException("协议适配服务启动锁等待超时");
-        try { StartProcess(Profile, Instance, CliPath, ProfilePath); }
+        try { return StartProcess(Profile, Instance, CliPath, ProfilePath); }
         finally { Gate.ReleaseMutex(); }
     }
 
-    private static void StartProcess(ResponsesCompatProfile Profile, InstanceProfile Instance, string CliPath, string ProfilePath)
+    private static bool StartProcess(ResponsesCompatProfile Profile, InstanceProfile Instance, string CliPath, string ProfilePath)
     {
         using var Client = new HttpClient(new SocketsHttpHandler { UseProxy = false }) { Timeout = TimeSpan.FromSeconds(HealthTimeoutSeconds) };
-        if (IsReady(Client, Profile)) return;
+        if (IsReady(Client, Profile)) return false;
         if (!File.Exists(CliPath)) throw new FileNotFoundException("协议适配 CLI 不存在", CliPath);
         var Info = new ProcessStartInfo(CliPath) { UseShellExecute = false, CreateNoWindow = true, WorkingDirectory = Path.GetDirectoryName(CliPath)! };
         Info.ArgumentList.Add("compat-server"); Info.ArgumentList.Add("--profile"); Info.ArgumentList.Add(ProfilePath);
@@ -137,7 +137,7 @@ public sealed class ResponsesCompatProfile
         var Timer = Stopwatch.StartNew();
         while (Timer.Elapsed < TimeSpan.FromSeconds(StartupTimeoutSeconds))
         {
-            if (IsReady(Client, Profile)) return;
+            if (IsReady(Client, Profile)) return true;
             if (Worker.HasExited) throw new IOException("协议适配服务退出 " + Worker.ExitCode + " 请检查 " + Path.Combine(Instance.HomePath, LogName));
             Thread.Sleep(100);
         }
@@ -154,7 +154,14 @@ public sealed class ResponsesCompatProfile
             if (Document.RootElement.GetProperty("id").GetString() != Profile.Id || Document.RootElement.GetProperty("protocol").GetString() != Protocol) throw new IOException("协议适配端口已被其他服务占用");
             return true;
         }
-        catch (HttpRequestException Error) when (Error.InnerException is SocketException Socket && Socket.SocketErrorCode == SocketError.ConnectionRefused) { return false; }
+        catch (HttpRequestException Error) when (IsConnectionClosed(Error)) { return false; }
+    }
+
+    private static bool IsConnectionClosed(Exception Error)
+    {
+        for (Exception? Current = Error; Current is not null; Current = Current.InnerException)
+            if (Current is SocketException Socket && Socket.SocketErrorCode is SocketError.ConnectionRefused or SocketError.ConnectionReset or SocketError.ConnectionAborted) return true;
+        return false;
     }
     #endregion
 }
