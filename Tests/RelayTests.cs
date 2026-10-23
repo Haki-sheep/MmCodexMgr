@@ -29,6 +29,7 @@ internal static class RelayTests
         string Root = Path.Combine(Path.GetTempPath(), "CodexMgrRelayRender-" + Guid.NewGuid().ToString("N"));
         var Store = new RelayStore(Root);
         var Channel = CreateChannel(Root);
+        Channel.TimeoutMinutes = 0;
         Store.SaveChannel(Channel);
         var Bridge = new FakeBridge();
         using var Coordinator = new RelayCoordinator(Store, Bridge);
@@ -46,6 +47,8 @@ internal static class RelayTests
         Application.DoEvents();
         var Toggle = Descendants(Form).OfType<Button>().Single(Item => Item.Name == AppTheme.ToggleButtonName && Item.Visible);
         var Grid = Descendants(Form).OfType<DataGridView>().Single();
+        var TimeoutInput = Descendants(Form).OfType<NumericUpDown>().Single(Item => Item.Maximum == 1440);
+        Require(TimeoutInput.Minimum == 0 && TimeoutInput.Value == 0 && Descendants(Form).OfType<Label>().Any(Item => Item.Text.Contains("0无限")), "timeout control loads unlimited wait and labels its zero value");
         Require(Grid.Columns.Count == 4 && Grid.Columns[0].HeaderText == "序号" && Grid.Columns[2].HeaderText == "执行状态", "task table exposes sequence title one status and task actions");
         Require(Grid.RowCount == 5 && Grid.Rows.Cast<DataGridViewRow>().Select(Item => Item.Cells[2].Value?.ToString()).ToHashSet().SetEquals(new[] { "未开始", "子Agent正在执行", "主Agent正在执行", "已阻塞", "已结束" }), "preview demonstrates exactly one of the five workflow states in each row");
         Require(Grid.Rows.Cast<DataGridViewRow>().All(Item => Item.Cells[3].Value?.ToString() == (Item.Cells[2].Value?.ToString() == "已结束" ? "删除" : "中断任务")), "finished rows expose deletion while unfinished rows keep interruption");
@@ -141,6 +144,7 @@ internal static class RelayTests
             Require(Store.Get(Old.Id).State == eRelayState.TimedOut, "one-shot deadline handles a missed callback after restart");
         }
 
+        await VerifyInfiniteTimeoutAsync(Path.Combine(Root, "infinite"));
         await VerifyHistoryAsync(Path.Combine(Root, "history"));
         await VerifyMcpAsync();
         await VerifyHostFlowAsync(Path.Combine(Root, "host"));
@@ -152,6 +156,55 @@ internal static class RelayTests
         long Allocated = GC.GetTotalAllocatedBytes(true) - Before;
         Require(Page.Count == RelayLimits.PageSize && Allocated < 1024 * 1024, "task page only reads bounded summaries under 1 MiB allocation");
         Console.WriteLine($"PASS relay {Count} assertions; summary page allocated={Allocated:N0} B; fixture={Root}");
+    }
+
+    /// <summary>无限等待在派发 核对恢复和重启后仍可正常回报或手动中断</summary>
+    private static async Task VerifyInfiniteTimeoutAsync(string Root)
+    {
+        var Store = new RelayStore(Root);
+        var Bridge = new FakeBridge();
+        var Channel = CreateChannel(Root);
+        using (var Coordinator = new RelayCoordinator(Store, Bridge))
+        {
+            Channel.TimeoutMinutes = -1;
+            await RejectAsync(() => Coordinator.ConfigureAsync(Channel), "negative timeout is rejected");
+            Channel.TimeoutMinutes = 1441;
+            await RejectAsync(() => Coordinator.DispatchAsync("main", "main-thread", "invalid-timeout", "非法等待", "处理", "检查", Channel), "timeout above one day is rejected");
+            Channel.TimeoutMinutes = 0;
+            await Coordinator.ConfigureAsync(Channel);
+            Require(Store.LoadChannel()!.TimeoutMinutes == 0, "unlimited channel survives persistence");
+            var Item = await Coordinator.DispatchAsync("main", "main-thread", "infinite", "无限等待", "处理", "检查");
+            Require(Item.DeadlineAt is null && Item.State == eRelayState.Running, "unlimited dispatch has no deadline");
+            Bridge.FailNext = true;
+            await RejectAsync(() => Coordinator.ReportAsync("worker", "worker-thread", Item.Id, "completed", "完成", new()), "unlimited task still exposes delivery failures");
+            await Coordinator.RetryReturnAsync(Item.Id);
+            await Coordinator.ReviewAsync("main", "main-thread", Item.Id);
+
+            Bridge.FailNext = true;
+            await RejectAsync(() => Coordinator.DispatchAsync("main", "main-thread", "infinite-reconcile", "核对无限等待", "处理", "检查"), "uncertain unlimited dispatch stays recoverable");
+            var Uncertain = Store.FindRequest("infinite-reconcile")!;
+            await Coordinator.ReconcileAsync("main", "main-thread", Uncertain.Id, "worker-thread", "执行会话");
+            Require(Store.Get(Uncertain.Id).DeadlineAt is null, "reconciliation preserves unlimited wait");
+            await Coordinator.CancelAsync(Uncertain.Id);
+            await RejectAsync(() => Coordinator.ReportAsync("worker", "worker-thread", Uncertain.Id, "completed", "迟到报告", new()), "manual cancellation still rejects late unlimited reports");
+        }
+
+        var Old = new RelayTask { RequestKey = "infinite-restart", Title = "重启无限等待", Channel = Channel,
+            State = eRelayState.Running, CreatedAt = DateTimeOffset.UtcNow.AddYears(-1) };
+        Store.Save(Old);
+        using (var Restored = new RelayCoordinator(new RelayStore(Root), Bridge))
+        {
+            await Task.Delay(150);
+            Require(Store.Get(Old.Id).State == eRelayState.Running && Store.Get(Old.Id).DeadlineAt is null, "old unlimited task remains running after restart");
+            await Restored.ReportAsync("worker", "worker-thread", Old.Id, "completed", "长任务完成", new());
+            await Restored.ReviewAsync("main", "main-thread", Old.Id);
+            Require(Store.Get(Old.Id).State == eRelayState.Accepted, "restarted unlimited task can finish and pass acceptance");
+        }
+        using var Catalog = JsonDocument.Parse(JsonSerializer.Serialize(AgentToolCatalog.Tools()));
+        var TimeoutSchema = Catalog.RootElement.EnumerateArray().Single(Item => Item.GetProperty("name").GetString() == "agent_start")
+            .GetProperty("inputSchema").GetProperty("properties").GetProperty("timeout_minutes");
+        Require(TimeoutSchema.GetProperty("minimum").GetInt32() == 0 && TimeoutSchema.GetProperty("description").GetString()!.Contains("无限等待"), "MCP exposes zero timeout with unlimited semantics");
+        Require(AgentCli.Help.Contains("0 表示无限等待"), "CLI documents unlimited timeout");
     }
 
     private static async Task VerifyHistoryAsync(string Root)

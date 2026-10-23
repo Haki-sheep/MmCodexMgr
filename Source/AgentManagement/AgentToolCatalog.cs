@@ -10,7 +10,7 @@ public static class AgentToolCatalog
         Tool("agent_start", "按用户指定的实例和项目启动联调 session 与 create_title 二选一 仅用户要求新建会话时提供 create_title 任务边界和验收必须明确 三种协作方式可组合 request_id 重试保持不变 成功后等待事件回传 不要轮询", new
         {
             request_id = Text(128), instance = Text(), project = Text(), session = Text(), create_title = Text(120), title = Text(120), instructions = Text(RelayLimits.MaxTextLength), acceptance = Text(RelayLimits.MaxTextLength),
-            subagent_max = Number(0), session_max = Number(0), cross_agent_max = Number(0), timeout_minutes = new { type = "integer", minimum = 1, maximum = 1440 },
+            subagent_max = Number(0), session_max = Number(0), cross_agent_max = Number(0), timeout_minutes = new { type = "integer", minimum = 0, maximum = 1440, description = "等待回报的分钟数 默认 60 设为 0 表示无限等待" },
             tree_session_max = Number(1), max_depth = new { type = "integer", minimum = 1, maximum = RelayLimits.MaxTreeDepth },
             worker_limits = new { type = "object", properties = new { subagent_max = Number(0), session_max = Number(0), cross_agent_max = Number(0) }, additionalProperties = false },
             workspace = new { type = "object", properties = new { access = new { type = "string", @enum = new[] { "read_only", "write" } }, write_paths = new { type = "array", items = Text(1024), maxItems = 20 } }, required = new[] { "access" }, additionalProperties = false }

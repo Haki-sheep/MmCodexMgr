@@ -16,6 +16,7 @@ public static class AgentCli
           必需 request_id instance project title instructions acceptance workspace
           目标 session 或 create_title 二选一
           可选 subagent_max=0 session_max=1 cross_agent_max=1 timeout_minutes=60
+          timeout_minutes 范围 0 至 1440 分钟 0 表示无限等待
           worker_limits 可分别指定下级三种协作上限 默认继承本层
           tree_session_max=8 max_depth=3 控制整棵树的联调槽位与层数 不含初始主会话
           workspace={access:read_only|write,write_paths:[绝对路径]} 声明写入范围

@@ -37,7 +37,7 @@ public sealed partial class RelayCoordinator : IDisposable
             if (Value.MainInstance.Id == Value.WorkerInstance.Id && Value.MainThreadId == Value.WorkerThreadId) throw new InvalidOperationException("主会话与执行会话不能是同一会话");
             ValidateText(Value.MainThreadId, "主会话 ID", 128);
             ValidateText(Value.WorkerThreadId, "执行会话 ID", 128);
-            if (Value.TimeoutMinutes is < 1 or > 1440) throw new InvalidOperationException("超时范围为 1 至 1440 分钟");
+            if (Value.TimeoutMinutes is < 0 or > 1440) throw new InvalidOperationException("超时范围为 0 至 1440 分钟 0 表示无限等待");
             Store.SaveChannel(Value);
             Channel = Value;
             Changed?.Invoke();
@@ -83,7 +83,7 @@ public sealed partial class RelayCoordinator : IDisposable
                 return Existing;
             }
             if (SessionMax < 0 || SubagentMax < 0 || CrossAgentMax < 0 || WorkerLimits.SubagentMax < 0 || WorkerLimits.SessionMax < 0 || WorkerLimits.CrossAgentMax < 0) throw new InvalidOperationException("协作数量上限不能小于零");
-            if (Current.TimeoutMinutes is < 1 or > 1440) throw new InvalidOperationException("超时范围为 1 至 1440 分钟");
+            if (Current.TimeoutMinutes is < 0 or > 1440) throw new InvalidOperationException("超时范围为 0 至 1440 分钟 0 表示无限等待");
             if (CreateAsync is null && Current.MainInstance.Id == Current.WorkerInstance.Id && Current.MainThreadId == Current.WorkerThreadId) throw new InvalidOperationException("不能向主会话自身派发任务");
             var SlotList = Store.BlockingSlots();
             bool CrossInstance = Current.MainInstance.Id != Current.WorkerInstance.Id;
@@ -100,7 +100,7 @@ public sealed partial class RelayCoordinator : IDisposable
             ValidateText(Acceptance, "验收标准", RelayLimits.MaxTextLength);
             var Item = new RelayTask { Channel = JsonSerializer.Deserialize<RelayChannel>(JsonSerializer.Serialize(Current))!, RequestKey = RequestKey, ParentTaskId = Incoming?.Id ?? "", Title = Title, Instructions = Instructions, Acceptance = Acceptance, SessionMax = SessionMax, SubagentMax = SubagentMax, CrossAgentMax = CrossAgentMax, WorkerLimits = WorkerLimits };
             new RelayPolicy(Store).Apply(Item, Incoming, TreeBudget, Workspace);
-            Item.DeadlineAt = Item.CreatedAt.AddMinutes(Current.TimeoutMinutes);
+            Item.DeadlineAt = Current.TimeoutMinutes == 0 ? null : Item.CreatedAt.AddMinutes(Current.TimeoutMinutes);
             Change(Item, eRelayState.Sending, "主会话已交接 正在发送到执行会话");
             try
             {
@@ -273,7 +273,7 @@ public sealed partial class RelayCoordinator : IDisposable
     {
         lock (DeadlineGate)
         {
-            if (Lifetime.IsCancellationRequested) return;
+            if (Lifetime.IsCancellationRequested || Item.Channel.TimeoutMinutes == 0) return;
             var Remaining = (Item.DeadlineAt ?? Item.CreatedAt.AddMinutes(Item.Channel.TimeoutMinutes)) - DateTimeOffset.UtcNow;
             var Timer = new System.Threading.Timer(State => { _ = ExpireAsync(Item.Id); }, null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
             if (!DeadlineDict.TryAdd(Item.Id, Timer)) { Timer.Dispose(); throw new InvalidOperationException("任务计时器已存在 " + Item.Id); }

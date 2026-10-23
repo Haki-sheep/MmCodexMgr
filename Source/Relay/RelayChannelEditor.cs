@@ -6,7 +6,7 @@ public sealed class RelayChannelEditor : UserControl
     private readonly ThemeComboBox WorkerInstanceInput = new() { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
     private readonly ThemeComboBox MainThreadInput = new() { Dock = DockStyle.Fill };
     private readonly ThemeComboBox WorkerThreadInput = new() { Dock = DockStyle.Fill };
-    private readonly NumericUpDown TimeoutInput = new() { Dock = DockStyle.Fill, Minimum = 1, Maximum = 1440, Value = 60 };
+    private readonly NumericUpDown TimeoutInput = new() { Dock = DockStyle.Fill, Minimum = 0, Maximum = 1440, Value = 60 };
     private readonly NumericUpDown TreeMaxInput = new() { Width = 64, Minimum = 1, Maximum = int.MaxValue, Value = RelayLimits.DefaultTreeSessionMax, Margin = new Padding(0, 7, 0, 0) };
     private readonly NumericUpDown DepthInput = new() { Width = 48, Minimum = 1, Maximum = RelayLimits.MaxTreeDepth, Value = RelayLimits.DefaultTreeMaxDepth, Margin = new Padding(0, 7, 0, 0) };
     private readonly RelayCoordinator Coordinator;
@@ -37,7 +37,7 @@ public sealed class RelayChannelEditor : UserControl
         var Actions = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false };
         Actions.Controls.Add(MainForm.MakeButton("读取运行实例会话", async (_, _) => await RunAsync(LoadThreadsAsync)));
         Actions.Controls.Add(MainForm.MakeButton("保存通道", async (_, _) => await RunAsync(SaveAsync), true));
-        Actions.Controls.Add(new Label { Text = "超时 分钟", AutoSize = true, Margin = new Padding(14, 8, 4, 0) });
+        Actions.Controls.Add(new Label { Text = "超时 分钟 0无限", AutoSize = true, Margin = new Padding(14, 8, 4, 0) });
         TimeoutInput.Dock = DockStyle.None;
         TimeoutInput.Width = 76;
         TimeoutInput.Margin = new Padding(0, 7, 0, 0);

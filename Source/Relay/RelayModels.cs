@@ -13,6 +13,7 @@ public sealed class RelayChannel
     public string MainTitle { get; set; } = "";
     public string WorkerThreadId { get; set; } = "";
     public string WorkerTitle { get; set; } = "";
+    /// <summary>等待执行回报的分钟数 零表示无限等待</summary>
     public int TimeoutMinutes { get; set; } = 60;
     public string CallbackCliPath { get; set; } = "";
     public string ProjectId { get; set; } = "";

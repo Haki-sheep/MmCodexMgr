@@ -36,7 +36,7 @@ public sealed partial class RelayCoordinator
             RequireAcyclic(Store.BlockingSlots(), InstanceId, ThreadId, Item.Channel.WorkerInstance.Id, WorkerThreadId);
             Item.Channel.WorkerThreadId = WorkerThreadId;
             Item.Channel.WorkerTitle = WorkerTitle;
-            Item.DeadlineAt = DateTimeOffset.UtcNow.AddMinutes(Item.Channel.TimeoutMinutes);
+            Item.DeadlineAt = Item.Channel.TimeoutMinutes == 0 ? null : DateTimeOffset.UtcNow.AddMinutes(Item.Channel.TimeoutMinutes);
             Change(Item, eRelayState.Running, "用户核对执行会话已开始 已恢复结果接收 未重复发送任务");
             ArmDeadline(Item);
             _ = WatchWorkerAsync(Item);
