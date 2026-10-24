@@ -11,6 +11,11 @@ public static class InstanceWindowService
     private const uint OwnerWindow = 4;
     /// <summary> 保留窗口大小与最大化状态显示 </summary>
     private const int Show = 5;
+    private const int StyleIndex = -16;
+    private const int ExtendedStyleIndex = -20;
+    private const long ChildStyle = 0x40000000;
+    private const long ToolWindowStyle = 0x80;
+    private const long NoActivateStyle = 0x08000000;
     /// <summary> 恢复最小化窗口 </summary>
     private const int Restore = 9;
     /// <summary> 窗口恢复等待上限 单位毫秒 </summary>
@@ -20,7 +25,7 @@ public static class InstanceWindowService
     private delegate bool EnumWindowsCallback(IntPtr Window, IntPtr Parameter);
 
     /// <summary>
-    /// 按进程与窗口类查找有标题的主窗口 优先选择已显示窗口
+    /// 按进程与窗口类查找可交互主窗口 不依赖启动时尚未设置的标题 优先选择已显示窗口
     /// </summary>
     public static IntPtr FindMainWindow(int ProcessId, string WindowClass)
     {
@@ -28,8 +33,7 @@ public static class InstanceWindowService
         bool FoundVisible = false;
         bool Enumerated = EnumWindows((Window, _) =>
         {
-            GetWindowThreadProcessId(Window, out uint WindowProcessId);
-            if (WindowProcessId != ProcessId || GetWindow(Window, OwnerWindow) != IntPtr.Zero || GetWindowTextLength(Window) == 0) return true;
+            if (!IsMainWindow(ProcessId, Window)) return true;
             var ClassName = new StringBuilder(256);
             GetClassName(Window, ClassName, ClassName.Capacity);
             if (ClassName.ToString() != WindowClass) return true;
@@ -55,8 +59,7 @@ public static class InstanceWindowService
     /// </summary>
     public static void ShowMainWindow(int ProcessId, IntPtr Window)
     {
-        GetWindowThreadProcessId(Window, out uint WindowProcessId);
-        if (Window == IntPtr.Zero || WindowProcessId != ProcessId)
+        if (!IsMainWindow(ProcessId, Window))
             throw new InvalidOperationException($"实例进程 {ProcessId} 仍在运行 但没有可恢复的主窗口 可结束所选实例后重新启动");
         if (!ShowWindowAsync(Window, IsIconic(Window) ? Restore : Show))
             throw new Win32Exception(Marshal.GetLastWin32Error(), $"无法恢复实例窗口 进程 {ProcessId}");
@@ -71,14 +74,23 @@ public static class InstanceWindowService
         SetForegroundWindow(Window);
     }
 
+    private static bool IsMainWindow(int ProcessId, IntPtr Window)
+    {
+        GetWindowThreadProcessId(Window, out uint WindowProcessId);
+        if (Window == IntPtr.Zero || WindowProcessId != ProcessId || GetWindow(Window, OwnerWindow) != IntPtr.Zero) return false;
+        long Style = GetWindowLongPtr(Window, StyleIndex).ToInt64();
+        long ExtendedStyle = GetWindowLongPtr(Window, ExtendedStyleIndex).ToInt64();
+        return (Style & ChildStyle) == 0 && (ExtendedStyle & (ToolWindowStyle | NoActivateStyle)) == 0;
+    }
+
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool EnumWindows(EnumWindowsCallback Callback, IntPtr Parameter);
     [DllImport("user32.dll")]
     private static extern uint GetWindowThreadProcessId(IntPtr Window, out uint ProcessId);
     [DllImport("user32.dll")]
     private static extern IntPtr GetWindow(IntPtr Window, uint Command);
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    private static extern int GetWindowTextLength(IntPtr Window);
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")]
+    private static extern IntPtr GetWindowLongPtr(IntPtr Window, int Index);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern int GetClassName(IntPtr Window, StringBuilder ClassName, int MaxCount);
     [DllImport("user32.dll")]
