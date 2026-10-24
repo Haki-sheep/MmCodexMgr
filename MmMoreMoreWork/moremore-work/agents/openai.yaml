@@ -1,0 +1,6 @@
+interface:
+  display_name: "MoreMoreWork 跨Agent协作"
+  short_description: "结构化目的 分工边界与验收 按预算组合 Subagent 多 Session 和跨实例协作"
+  default_prompt: "使用 $moremore-work 整理任务目的、协作方式与数量、任务边界及验收规范，再按指定预算执行协作。"
+policy:
+  allow_implicit_invocation: true
