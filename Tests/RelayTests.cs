@@ -52,7 +52,11 @@ internal static class RelayTests
         Require(Grid.Columns.Count == 4 && Grid.Columns[0].HeaderText == "序号" && Grid.Columns[2].HeaderText == "执行状态", "task table exposes sequence title one status and task actions");
         Require(Grid.RowCount == 5 && Grid.Rows.Cast<DataGridViewRow>().Select(Item => Item.Cells[2].Value?.ToString()).ToHashSet().SetEquals(new[] { "未开始", "子Agent正在执行", "主Agent正在执行", "已阻塞", "已结束" }), "preview demonstrates exactly one of the five workflow states in each row");
         Require(Grid.Rows.Cast<DataGridViewRow>().All(Item => Item.Cells[3].Value?.ToString() == (Item.Cells[2].Value?.ToString() == "已结束" ? "删除" : "中断任务")), "finished rows expose deletion while unfinished rows keep interruption");
-        Require(Descendants(Form).OfType<Button>().Single(Item => Item.Text == "清空已结束").Visible, "task footer exposes history cleanup");
+        var ClearFinished = Descendants(Form).OfType<Button>().Single(Item => Item.Text == "清空已结束");
+        var ClearBlocked = Descendants(Form).OfType<Button>().Single(Item => Item.Text == "清空已阻塞");
+        Require(ClearFinished.Visible && ClearBlocked.Visible, "task footer exposes finished and blocked cleanup");
+        Require(ReferenceEquals(ClearFinished.Parent, ClearBlocked.Parent) && ClearBlocked.Right <= ClearFinished.Left, "blocked cleanup is placed to the left of finished cleanup");
+        Require(ClearBlocked.Parent!.ClientRectangle.Contains(ClearBlocked.Bounds) && ClearFinished.Parent!.ClientRectangle.Contains(ClearFinished.Bounds), "both cleanup buttons fit inside the footer");
         Toggle.PerformClick();
         Application.DoEvents();
         Require(Settings.DarkMode != DarkMode && Grid.BackgroundColor == (Settings.DarkMode ? ThemePalette.Dark.Surface : ThemePalette.Light.Surface), "theme toggle updates settings and existing task table together");
@@ -146,6 +150,7 @@ internal static class RelayTests
 
         await VerifyInfiniteTimeoutAsync(Path.Combine(Root, "infinite"));
         await VerifyHistoryAsync(Path.Combine(Root, "history"));
+        await RelayCleanupTests.RunAsync();
         await VerifyMcpAsync();
         await VerifyHostFlowAsync(Path.Combine(Root, "host"));
         await VerifyFrameLimitAsync();
@@ -267,6 +272,13 @@ internal static class RelayTests
         Require(Grid.RowCount == RelayLimits.PageSize && Descendants(Form).OfType<Label>().Any(Item => Item.Text == "第 1 页"), "deleting the final row returns to the last populated page");
         Coordinator.ClearHistoryAsync().GetAwaiter().GetResult();
         Require(Grid.RowCount == 0 && Descendants(Form).OfType<Label>().Any(Item => Item.Text == "第 1 页"), "clearing history leaves a stable empty first page");
+        for (int Index = 0; Index <= RelayLimits.PageSize; Index++)
+            Store.Save(new RelayTask { RequestKey = "blocked-page-" + Index, Title = "已阻塞-" + Index, State = eRelayState.TimedOut });
+        Form.Hide(); Form.Show(); Application.DoEvents();
+        Descendants(Form).OfType<Button>().Single(Item => Item.Text == "下一页").PerformClick();
+        Require(Grid.RowCount == 1, "blocked history reaches the final page");
+        Coordinator.ClearBlockedHistoryAsync().GetAwaiter().GetResult();
+        Require(Grid.RowCount == 0 && Descendants(Form).OfType<Label>().Any(Item => Item.Text == "第 1 页"), "clearing blocked history refreshes the grid and returns to the empty first page");
     }
 
     private static async Task VerifyMcpAsync()

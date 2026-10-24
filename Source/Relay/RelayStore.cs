@@ -56,6 +56,18 @@ public sealed partial class RelayStore
             ("$accepted", (int)eRelayState.Accepted), ("$cancelled", (int)eRelayState.Cancelled));
     }
 
+    public List<string> BlockedIds()
+    {
+        using var Database = Open();
+        using var Command = Database.CreateCommand();
+        Command.CommandText = "SELECT id,state,COALESCE(json_extract(data,'$.Outcome'),''),COALESCE(json_extract(data,'$.ProgressStage'),'') FROM relay_tasks";
+        using var Reader = Command.ExecuteReader();
+        var IdList = new List<string>();
+        while (Reader.Read())
+            if (RelayLimits.IsBlocked((eRelayState)Reader.GetInt32(1), Reader.GetString(2), Reader.GetString(3))) IdList.Add(Reader.GetString(0));
+        return IdList;
+    }
+
     public List<RelayTaskSummary> List(int Offset = 0)
     {
         using var Database = Open();

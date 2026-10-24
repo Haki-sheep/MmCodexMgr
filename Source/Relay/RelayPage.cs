@@ -122,11 +122,13 @@ public sealed class RelayPage : UserControl
         Pages.Controls.Add(MainForm.MakeButton("上一页", (_, _) => { if (Offset > 0) { Offset -= RelayLimits.PageSize; TreeView.CollapseAll(); RefreshTasks(); } }));
         Pages.Controls.Add(PageLabel);
         Pages.Controls.Add(MainForm.MakeButton("下一页", (_, _) => { if (TreeView.RootPageCount == RelayLimits.PageSize) { Offset += RelayLimits.PageSize; TreeView.CollapseAll(); RefreshTasks(); } }));
-        var Footer = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Margin = Padding.Empty };
+        var Footer = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, Margin = Padding.Empty };
         Footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         Footer.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        Footer.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         Footer.Controls.Add(Pages, 0, 0);
-        Footer.Controls.Add(MainForm.MakeButton("清空已结束", async (_, _) => await RunAsync(ClearHistoryAsync)), 1, 0);
+        Footer.Controls.Add(MainForm.MakeButton("清空已阻塞", async (_, _) => await RunAsync(ClearBlockedHistoryAsync)), 1, 0);
+        Footer.Controls.Add(MainForm.MakeButton("清空已结束", async (_, _) => await RunAsync(ClearHistoryAsync)), 2, 0);
         ListPanel.Controls.Add(Footer);
         Root.Controls.Add(ListPanel);
         Root.Controls.Add(Status);
@@ -226,6 +228,14 @@ public sealed class RelayPage : UserControl
         int DeletedCount = await Coordinator.ClearHistoryAsync();
         Offset = 0;
         SetStatus("已清空 " + DeletedCount + " 条已结束任务记录");
+    }
+
+    private async Task ClearBlockedHistoryAsync()
+    {
+        if (MessageBox.Show(this, "清空所有分页中的已阻塞任务记录？\n将中断这些任务及其未结束下级的联调 下级记录保留为已结束\n对应的 Codex 对话和项目文件会保留 模型与脚本需要手动停止", "清空已阻塞任务", MessageBoxButtons.OKCancel, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.OK) return;
+        int DeletedCount = await Task.Run(Coordinator.ClearBlockedHistoryAsync);
+        Offset = 0;
+        SetStatus("已清空 " + DeletedCount + " 条已阻塞任务记录");
     }
 
     private async Task CancelAsync(string TaskId)

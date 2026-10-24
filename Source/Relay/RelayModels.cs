@@ -123,9 +123,17 @@ public static class RelayLimits
         _ => throw new ArgumentOutOfRangeException(nameof(State))
     };
 
-    public static string ProgressStateText(eRelayState State, string Outcome, string Stage) => State == eRelayState.Running
-        ? Stage switch { "" => "未开始", "blocked" => "已阻塞", _ => "子Agent正在执行" }
-        : DisplayStateText(State, Outcome);
+    public static bool IsBlocked(eRelayState State, string Outcome, string Stage) => State switch
+    {
+        eRelayState.Running => Stage == "blocked",
+        eRelayState.Returning or eRelayState.Returned => Outcome != "completed",
+        eRelayState.DispatchUncertain or eRelayState.ReturnUncertain or eRelayState.TimedOut or eRelayState.Interrupted => true,
+        _ => false
+    };
+
+    public static string ProgressStateText(eRelayState State, string Outcome, string Stage) => IsBlocked(State, Outcome, Stage)
+        ? "已阻塞"
+        : State == eRelayState.Running ? Stage.Length == 0 ? "未开始" : "子Agent正在执行" : DisplayStateText(State, Outcome);
 
     public static string StageText(string Stage) => Stage switch { "" => "等待执行方确认开始", "started" => "已确认开始", "progress" => "阶段进展", "blocked" => "执行方报告阻塞", _ => throw new InvalidDataException("未知进度阶段 " + Stage) };
     public static string WorkspaceText(string Access) => Access switch { "unspecified" => "未声明 当前任务未校验写入冲突", "read_only" => "只读", "write" => "限定范围写入", _ => throw new InvalidDataException("未知工作区类型 " + Access) };

@@ -218,6 +218,27 @@ public sealed partial class RelayCoordinator : IDisposable
         }
         finally { Gate.Release(); }
     }
+
+    public async Task<int> ClearBlockedHistoryAsync()
+    {
+        await Gate.WaitAsync(Lifetime.Token);
+        try
+        {
+            var IdList = Store.BlockedIds();
+            foreach (string Id in IdList)
+            {
+                var Item = Store.Get(Id);
+                StopDeadline(Id);
+                CancelDescendants(Id);
+                if (Item.State != eRelayState.Cancelled)
+                    Change(Item, eRelayState.Cancelled, "用户清空已阻塞记录 联调已中断 后续回调将被拒绝 模型与脚本需在执行会话中停止");
+                Store.DeleteFinished(Id);
+            }
+            Changed?.Invoke();
+            return IdList.Count;
+        }
+        finally { Gate.Release(); }
+    }
     #endregion
 
     #region Delivery
