@@ -88,7 +88,7 @@ public sealed partial class RelayCoordinator : IDisposable
             var SlotList = Store.BlockingSlots();
             bool CrossInstance = Current.MainInstance.Id != Current.WorkerInstance.Id;
             var OwnedList = SlotList.Where(Slot => Slot.MainInstanceId == InstanceId && Slot.MainThreadId == ThreadId && (Slot.MainInstanceId != Slot.WorkerInstanceId) == CrossInstance).ToList();
-            int EffectiveMax = OwnedList.Select(Slot => CrossInstance ? Slot.CrossAgentMax : Slot.SessionMax).Append(CrossInstance ? CrossAgentMax : SessionMax).Min();
+            int EffectiveMax = CrossInstance ? CrossAgentMax : SessionMax;
             if (OwnedList.Count >= EffectiveMax) throw new InvalidOperationException("已达到当前主会话的 " + (CrossInstance ? "cross_agent_max" : "session_max") + " 上限 " + EffectiveMax);
             if (SlotList.Any(Slot => Slot.WorkerInstanceId == Current.WorkerInstance.Id && (Slot.WorkerThreadId.Length == 0 || Slot.WorkerThreadId == Current.WorkerThreadId))) throw new InvalidOperationException("目标执行会话已有执行中或待核对的任务");
             RequireAcyclic(SlotList, InstanceId, ThreadId, Current.WorkerInstance.Id, Current.WorkerThreadId);
