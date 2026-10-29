@@ -61,10 +61,12 @@ public sealed class RelayPage : UserControl
         TaskGrid.RowTemplate.Height = 44;
         TaskGrid.ColumnHeadersHeight = 34;
         TaskGrid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
-        TaskGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "序号", FillWeight = 10, SortMode = DataGridViewColumnSortMode.NotSortable });
-        TaskGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "任务名", FillWeight = 48, SortMode = DataGridViewColumnSortMode.NotSortable });
-        TaskGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "执行状态", FillWeight = 27, SortMode = DataGridViewColumnSortMode.NotSortable });
-        TaskGrid.Columns.Add(new DataGridViewButtonColumn { HeaderText = "操作", FillWeight = 15, FlatStyle = FlatStyle.Flat });
+        TaskGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "序号", FillWeight = 5, MinimumWidth = 45, SortMode = DataGridViewColumnSortMode.NotSortable });
+        TaskGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "任务名", FillWeight = 32, MinimumWidth = 160, SortMode = DataGridViewColumnSortMode.NotSortable });
+        TaskGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "主Agent", FillWeight = 20, MinimumWidth = 145, SortMode = DataGridViewColumnSortMode.NotSortable });
+        TaskGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "子Agent", FillWeight = 20, MinimumWidth = 145, SortMode = DataGridViewColumnSortMode.NotSortable });
+        TaskGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "执行状态", FillWeight = 13, MinimumWidth = 110, SortMode = DataGridViewColumnSortMode.NotSortable });
+        TaskGrid.Columns.Add(new DataGridViewButtonColumn { HeaderText = "操作", FillWeight = 10, MinimumWidth = 90, FlatStyle = FlatStyle.Flat });
         TaskGrid.CellValueNeeded += (_, Event) =>
         {
             if (Event.RowIndex < 0 || Event.RowIndex >= TreeView.RowList.Count) return;
@@ -75,14 +77,16 @@ public sealed class RelayPage : UserControl
             {
                 0 => Row.More ? "" : (object)(Offset + Event.RowIndex + 1),
                 1 => Prefix + (Row.More ? "加载更多下级…" : (Item.ChildCount == 0 ? "  " : TreeView.IsExpanded(Item.Id) ? "▼ " : "▶ ") + Item.Title),
-                2 => Row.More ? "" : RelayLimits.ProgressStateText(Item.State, Item.Outcome, Item.ProgressStage),
-                3 => Row.More ? "" : Item.State is eRelayState.Accepted or eRelayState.Cancelled ? "删除" : "中断任务",
+                2 => Row.More ? "" : Item.MainTitle,
+                3 => Row.More ? "" : Item.WorkerTitle,
+                4 => Row.More ? "" : RelayLimits.ProgressStateText(Item.State, Item.Outcome, Item.ProgressStage),
+                5 => Row.More ? "" : Item.State is eRelayState.Accepted or eRelayState.Cancelled ? "删除" : "中断任务",
                 _ => throw new ArgumentOutOfRangeException(nameof(Event.ColumnIndex))
             };
         };
         TaskGrid.CellFormatting += (_, Event) =>
         {
-            if (Event.ColumnIndex != 2 || Event.RowIndex < 0 || Event.RowIndex >= TreeView.RowList.Count) return;
+            if (Event.ColumnIndex != 4 || Event.RowIndex < 0 || Event.RowIndex >= TreeView.RowList.Count) return;
             var Item = TreeView.RowList[Event.RowIndex].Entry;
             Event.CellStyle!.ForeColor = Item.State == eRelayState.Running && Item.ProgressStage == "blocked" ? Theme.Palette.Warning : Item.State switch
             {
@@ -103,11 +107,11 @@ public sealed class RelayPage : UserControl
                 else if (Item.ChildCount > 0) TreeView.Toggle(Item.Id);
                 RefreshTasks();
             }
-            if (Event.ColumnIndex == 3 && !Row.More) await RunAsync(() => Item.State is eRelayState.Accepted or eRelayState.Cancelled ? DeleteHistoryAsync(new(Item.Id, Item.Title, Item.State, DateTimeOffset.UtcNow, Item.Outcome)) : CancelAsync(Item.Id));
+            if (Event.ColumnIndex == 5 && !Row.More) await RunAsync(() => Item.State is eRelayState.Accepted or eRelayState.Cancelled ? DeleteHistoryAsync(new(Item.Id, Item.Title, Item.State, DateTimeOffset.UtcNow, Item.Outcome)) : CancelAsync(Item.Id));
         };
         TaskGrid.CellDoubleClick += async (_, Event) =>
         {
-            if (Event.ColumnIndex == 3 || Event.RowIndex < 0 || Event.RowIndex >= TreeView.RowList.Count) return;
+            if (Event.ColumnIndex == 5 || Event.RowIndex < 0 || Event.RowIndex >= TreeView.RowList.Count) return;
             var Row = TreeView.RowList[Event.RowIndex];
             if (!Row.More) await RunAsync(() => { using var Dialog = new RelayTaskDialog(Store, Coordinator, Row.Entry.Id, Theme); Dialog.ShowDialog(this); return Task.CompletedTask; });
         };
@@ -115,7 +119,7 @@ public sealed class RelayPage : UserControl
         {
             if (Event.RowIndex < 0 || Event.RowIndex >= TreeView.RowList.Count) return;
             var Item = TreeView.RowList[Event.RowIndex].Entry;
-            Event.ToolTipText = $"{Item.Title}\n{Item.MainName} → {Item.WorkerName}\n{(Item.ProgressStage.Length == 0 ? "等待执行方开始确认" : Item.ProgressMessage)}\n单击任务名展开下级 双击查看详情与异常恢复";
+            Event.ToolTipText = $"{Item.Title}\n主Agent {Item.MainAgent}\n子Agent {Item.WorkerAgent}\n{(Item.ProgressStage.Length == 0 ? "等待执行方开始确认" : Item.ProgressMessage)}\n单击任务名展开下级 双击查看详情与异常恢复";
         };
         ListPanel.Controls.Add(TaskGrid);
         var Pages = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false };

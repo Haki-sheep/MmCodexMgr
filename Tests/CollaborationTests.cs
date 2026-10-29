@@ -44,8 +44,8 @@ internal static class CollaborationTests
         Require(Grid.RowCount == 1, "UI initially reads only roots");
         typeof(DataGridView).GetMethod("OnCellContentClick", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(Grid, new object[] { new DataGridViewCellEventArgs(1, 0) });
         Application.DoEvents();
-        Require(Grid.RowCount == 3 && Grid.Columns.Count == 4, "expanding keeps four columns and displays immediate children");
-        Require(Grid.Rows.Cast<DataGridViewRow>().Select(Row => Row.Cells[2].Value?.ToString()).Contains("已阻塞"), "blocked progress uses one visible status");
+        Require(Grid.RowCount == 3 && Grid.Columns.Count == 6, "expanding keeps agent columns and displays immediate children");
+        Require(Grid.Rows.Cast<DataGridViewRow>().Select(Row => Row.Cells[4].Value?.ToString()).Contains("已阻塞"), "blocked progress uses one visible status");
         using var Image = new Bitmap(Form.Width, Form.Height);
         Form.DrawToBitmap(Image, new Rectangle(0, 0, Image.Width, Image.Height));
         Image.Save(PathValue);

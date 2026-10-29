@@ -49,9 +49,10 @@ internal static class RelayTests
         var Grid = Descendants(Form).OfType<DataGridView>().Single();
         var TimeoutInput = Descendants(Form).OfType<NumericUpDown>().Single(Item => Item.Maximum == 1440);
         Require(TimeoutInput.Minimum == 0 && TimeoutInput.Value == 0 && Descendants(Form).OfType<Label>().Any(Item => Item.Text.Contains("0无限")), "timeout control loads unlimited wait and labels its zero value");
-        Require(Grid.Columns.Count == 4 && Grid.Columns[0].HeaderText == "序号" && Grid.Columns[2].HeaderText == "执行状态", "task table exposes sequence title one status and task actions");
-        Require(Grid.RowCount == 5 && Grid.Rows.Cast<DataGridViewRow>().Select(Item => Item.Cells[2].Value?.ToString()).ToHashSet().SetEquals(new[] { "未开始", "子Agent正在执行", "主Agent正在执行", "已阻塞", "已结束" }), "preview demonstrates exactly one of the five workflow states in each row");
-        Require(Grid.Rows.Cast<DataGridViewRow>().All(Item => Item.Cells[3].Value?.ToString() == (Item.Cells[2].Value?.ToString() == "已结束" ? "删除" : "中断任务")), "finished rows expose deletion while unfinished rows keep interruption");
+        Require(Grid.Columns.Count == 6 && Grid.Columns[2].HeaderText == "主Agent" && Grid.Columns[3].HeaderText == "子Agent" && Grid.Columns[4].HeaderText == "执行状态", "task table exposes both agent identities before status and actions");
+        Require(Grid.Rows.Cast<DataGridViewRow>().All(Item => Item.Cells[2].Value?.ToString() == "高级模型 · 格式探查" && Item.Cells[3].Value?.ToString() == "快速模型 · 批量解包"), "agent columns display session titles without instance names");
+        Require(Grid.RowCount == 5 && Grid.Rows.Cast<DataGridViewRow>().Select(Item => Item.Cells[4].Value?.ToString()).ToHashSet().SetEquals(new[] { "未开始", "子Agent正在执行", "主Agent正在执行", "已阻塞", "已结束" }), "preview demonstrates exactly one of the five workflow states in each row");
+        Require(Grid.Rows.Cast<DataGridViewRow>().All(Item => Item.Cells[5].Value?.ToString() == (Item.Cells[4].Value?.ToString() == "已结束" ? "删除" : "中断任务")), "finished rows expose deletion while unfinished rows keep interruption");
         var ClearFinished = Descendants(Form).OfType<Button>().Single(Item => Item.Text == "清空已结束");
         var ClearBlocked = Descendants(Form).OfType<Button>().Single(Item => Item.Text == "清空已阻塞");
         Require(ClearFinished.Visible && ClearBlocked.Visible, "task footer exposes finished and blocked cleanup");
