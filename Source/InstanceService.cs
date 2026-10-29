@@ -49,24 +49,17 @@ public static class InstanceService
 
     public static string ResolveAppPath()
     {
-        foreach (var RunningProcess in Process.GetProcessesByName("ChatGPT"))
-        {
-            using (RunningProcess)
-            {
-                string? Candidate = RunningProcess.MainModule?.FileName;
-                if (Candidate is not null && Candidate.Contains("OpenAI.Codex_", StringComparison.OrdinalIgnoreCase)) return Candidate;
-            }
-        }
         var Info = new ProcessStartInfo("powershell.exe") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
         Info.ArgumentList.Add("-NoProfile");
         Info.ArgumentList.Add("-NonInteractive");
         Info.ArgumentList.Add("-Command");
-        Info.ArgumentList.Add("(Get-AppxPackage -Name OpenAI.Codex | Sort-Object Version -Descending | Select-Object -First 1 -ExpandProperty InstallLocation)");
+        Info.ArgumentList.Add("$ErrorActionPreference = 'Stop'; Get-AppxPackage -Name OpenAI.Codex | Sort-Object Version -Descending | Select-Object -First 1 -ExpandProperty InstallLocation");
         using var LookupProcess = Process.Start(Info) ?? throw new IOException("无法查询 Codex 安装目录");
         string DirectoryPath = LookupProcess.StandardOutput.ReadToEnd().Trim();
         string Error = LookupProcess.StandardError.ReadToEnd();
         LookupProcess.WaitForExit();
         if (LookupProcess.ExitCode != 0) throw new IOException("查询 Codex 安装目录失败 " + Error);
+        if (DirectoryPath.Length == 0) throw new FileNotFoundException("未找到当前用户已注册的 Codex 桌面应用 请先安装 Codex");
         string AppPath = Path.Combine(DirectoryPath, "app", "ChatGPT.exe");
         if (!File.Exists(AppPath)) throw new FileNotFoundException("未找到 Codex 桌面应用 请先安装或启动 Codex", AppPath);
         return AppPath;

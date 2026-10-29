@@ -12,6 +12,7 @@ internal static class Tests
     [STAThread]
     private static int Main(string[] ArgumentList)
     {
+        if (ArgumentList.Contains("--app-path")) return AppPathTests.Run(ArgumentList.Contains("--app-launch"));
         if (ArgumentList.Contains("--windows")) { WindowTests.Run(); return 0; }
         if (ArgumentList.Contains("--relay-cleanup")) { System.Threading.Tasks.Task.Run(RelayCleanupTests.RunAsync).GetAwaiter().GetResult(); return 0; }
         if (ArgumentList.Contains("--responses-compat-disconnect")) { System.Threading.Tasks.Task.Run(ResponsesCompatDisconnectTests.RunAsync).GetAwaiter().GetResult(); return 0; }
