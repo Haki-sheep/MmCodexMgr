@@ -120,6 +120,21 @@ internal static class AgentManagementTests
         var Status = await CliAsync(new[] { "status", "--task-id", UncertainId }, Root, PipeName, Settings);
         Require(Status.GetProperty("state").GetString() == "派发待核对" && Status.GetProperty("worker").GetProperty("thread_id").GetString() == "", "CLI status exposes uncertainty and missing thread id without full task logs");
         await Coordinator.CancelAsync(UncertainId);
+        Catalog.FailCreate = false;
+        int ProjectCalls = Catalog.ProjectCalls;
+        var LooseRequest = Start("loose-session", "second", "loose-session");
+        LooseRequest.Remove("project");
+        var Loose = await StartAsync(LooseRequest, Root, PipeName, Settings);
+        Require(Loose.GetProperty("project_id").GetString() == "" && Loose.GetProperty("thread_id").GetString() == "loose-session" && Catalog.ProjectCalls == ProjectCalls && Catalog.LastSessionProject is null, "standalone session starts without querying projects or imposing project ownership");
+        await Coordinator.CancelAsync(Loose.GetProperty("task_id").GetString()!);
+        var LooseCreate = Start("loose-create", "second", null);
+        LooseCreate.Remove("project");
+        LooseCreate["create_title"] = "独立执行会话";
+        var CreatedLoose = await StartAsync(LooseCreate, Root, PipeName, Settings);
+        Require(CreatedLoose.GetProperty("project_id").GetString() == "" && Catalog.LastCreateProject is null && Catalog.ProjectCalls == ProjectCalls, "standalone creation passes no project to the desktop catalog");
+        await Coordinator.CancelAsync(CreatedLoose.GetProperty("task_id").GetString()!);
+        var LooseSessions = await CliAsync(new[] { "sessions", "--instance", "second", "--session", "loose-session" }, Root, PipeName, Settings);
+        Require(LooseSessions[0].GetProperty("Id").GetString() == "loose-session" && Catalog.ProjectCalls == ProjectCalls, "CLI lists standalone sessions without a project option");
         await VerifyCatalogAsync(Root);
         VerifyCliRelocation(Path.Combine(Root, "cli-relocation"));
         Console.WriteLine($"PASS agent management {Count} assertions; fixture={Root}");
@@ -197,6 +212,11 @@ internal static class AgentManagementTests
         var Project = new AgentProject("project", "项目", @"C:\project", true);
         var Matches = Catalog.Sessions(Instance, Project, "同名", 0);
         Require(Matches.Select(Item => Item.Id).ToHashSet().SetEquals(new[] { "a", "b" }), "project lookup supports explicit membership and legacy canonical cwd without including archived or other project sessions");
+        Command.CommandText = "INSERT INTO threads VALUES('loose','散落会话',NULL,NULL,'',0,5)";
+        Command.Parameters.Clear();
+        Command.ExecuteNonQuery();
+        Require(Catalog.Sessions(Instance, null, "散落会话", 0).Single().Id == "loose" && Catalog.Sessions(Instance, null, null, 0).Select(Item => Item.Id).ToHashSet().SetEquals(new[] { "a", "b", "c", "loose" }), "unfiltered lookup includes standalone chats and all local projects while excluding archived chats");
+        Require(Catalog.Sessions(Instance, Project, null, 0).All(Item => Item.Id != "loose"), "explicit project filter still excludes standalone chats with no workspace");
         return Task.CompletedTask;
     }
     #endregion
@@ -219,13 +239,17 @@ internal static class AgentManagementTests
         public bool Duplicate { get; set; }
         public int CreateCount { get; private set; }
         public bool FailCreate { get; set; }
+        public int ProjectCalls { get; private set; }
+        public AgentProject? LastSessionProject { get; private set; }
+        public AgentProject? LastCreateProject { get; private set; }
         public FakeCatalog(string Root) => this.Root = Root;
-        public Task<List<AgentProject>> ProjectsAsync(InstanceProfile Instance, CancellationToken Cancellation) => Task.FromResult(new List<AgentProject> { new("project", "项目 有空格", Root, true) });
+        public Task<List<AgentProject>> ProjectsAsync(InstanceProfile Instance, CancellationToken Cancellation) { ProjectCalls++; return Task.FromResult(new List<AgentProject> { new("project", "项目 有空格", Root, true) }); }
         public AgentSession Session(InstanceProfile Instance, string Id) => new(Id, Id, "project", Root);
-        public List<AgentSession> Sessions(InstanceProfile Instance, AgentProject Project, string? Selector, int Offset) => Duplicate ? new() { Session(Instance, "dup-a"), Session(Instance, "dup-b") } : new() { Session(Instance, Selector!) };
+        public List<AgentSession> Sessions(InstanceProfile Instance, AgentProject? Project, string? Selector, int Offset) { LastSessionProject = Project; return Duplicate ? new() { Session(Instance, "dup-a"), Session(Instance, "dup-b") } : new() { Session(Instance, Selector!) }; }
         public Task RequireIdleAsync(InstanceProfile Instance, string ThreadId, CancellationToken Cancellation) => Busy ? Task.FromException(new InvalidOperationException("fixture active")) : Task.CompletedTask;
-        public Task<RelayThread> CreateAsync(InstanceProfile Instance, AgentProject Project, string Title, string Prompt, CancellationToken Cancellation)
+        public Task<RelayThread> CreateAsync(InstanceProfile Instance, AgentProject? Project, string Title, string Prompt, CancellationToken Cancellation)
         {
+            LastCreateProject = Project;
             CreateCount++;
             Require(Prompt.Contains("目的：提取资源") && Prompt.Contains("report --json-file"), "structured user requirements and callback CLI are preserved in new session prompt");
             if (FailCreate) throw new IOException("fixture uncertain creation");

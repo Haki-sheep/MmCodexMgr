@@ -36,7 +36,8 @@ public sealed class AgentManagementService
             case "agent_sessions":
             {
                 var Target = ResolveInstance(Settings, Text(Arguments, "instance"));
-                var Project = await ResolveProjectAsync(Target, Text(Arguments, "project"), Cancellation);
+                string? ProjectSelector = OptionalText(Arguments, "project");
+                var Project = ProjectSelector is null ? null : await ResolveProjectAsync(Target, ProjectSelector, Cancellation);
                 return Catalog.Sessions(Target, Project, OptionalText(Arguments, "session"), Number(Arguments, "offset", 0));
             }
             case "agent_start": return await StartAsync(Settings, Caller, Request.ThreadId, Arguments, Cancellation);
@@ -79,7 +80,7 @@ public sealed class AgentManagementService
                             var Project = await ResolveProjectAsync(Item.Channel.WorkerInstance, Item.Channel.ProjectId, Cancellation);
                             if (Session.ProjectId.Length != 0 ? Session.ProjectId != Project.Id : AgentCatalog.NormalizePath(Session.Cwd) != AgentCatalog.NormalizePath(Project.Path)) throw new InvalidOperationException("核对的会话不属于原目标项目");
                         }
-                        else if (Item.Channel.WorkerThreadId.Length == 0) throw new InvalidOperationException("历史任务缺少原目标项目 无法确认创建结果");
+                        else if (Item.Channel.WorkerThreadId.Length == 0 && Item.Channel.CreateTitle.Length == 0) throw new InvalidOperationException("历史任务缺少原目标信息 无法确认创建结果");
                         await Coordinator.ReconcileAsync(Caller.Id, Request.ThreadId, Item.Id, Session.Id, Session.Title);
                     }
                 }
@@ -96,7 +97,8 @@ public sealed class AgentManagementService
         var Workspace = ReadWorkspace(Arguments);
         if (Existing is null && Workspace is null) throw new InvalidOperationException("新任务必须声明 workspace.access 只读任务填 read_only 写入任务同时提供 write_paths");
         var Target = ResolveInstance(Settings, Text(Arguments, "instance"));
-        var Project = await ResolveProjectAsync(Target, Text(Arguments, "project"), Cancellation);
+        string? ProjectSelector = OptionalText(Arguments, "project");
+        var Project = ProjectSelector is null ? null : await ResolveProjectAsync(Target, ProjectSelector, Cancellation);
         string? CreateTitle = OptionalText(Arguments, "create_title");
         string? SessionSelector = OptionalText(Arguments, "session");
         if ((CreateTitle is null) == (SessionSelector is null)) throw new InvalidOperationException("session 与 create_title 必须且只能提供一个");
@@ -108,7 +110,7 @@ public sealed class AgentManagementService
         {
             MainInstance = Caller, MainThreadId = ThreadId, MainTitle = Main.Title,
             WorkerInstance = Target, WorkerThreadId = Worker?.Id ?? "", WorkerTitle = Worker?.Title ?? CreateTitle!,
-            ProjectId = Project.Id, CreateTitle = CreateTitle ?? "", CallbackCliPath = CliPath,
+            ProjectId = Project?.Id ?? "", CreateTitle = CreateTitle ?? "", CallbackCliPath = CliPath,
             TimeoutMinutes = Number(Arguments, "timeout_minutes", 60)
         };
         if (!File.Exists(CliPath)) throw new FileNotFoundException("回调 CLI 尚未部署", CliPath);
@@ -122,7 +124,7 @@ public sealed class AgentManagementService
             eRelayState.DispatchUncertain or eRelayState.ReturnUncertain => "投递状态待核对 请查看任务记录与目标对话 不得自动重复创建或发送",
             _ => "按已保存的任务状态继续处理 不得重新执行已完成或终止的任务"
         };
-        return new { task_id = Item.Id, state = RelayLimits.StateText(Item.State), instance_id = Target.Id, project_id = Project.Id, thread_id = Item.Channel.WorkerThreadId, session_max = Item.SessionMax, subagent_max = Item.SubagentMax, cross_agent_max = Item.CrossAgentMax, worker_limits = Item.WorkerLimits, tree_budget = Item.TreeBudget, tree_depth = Item.TreeDepth, workspace = Item.Workspace, instruction = Instruction };
+        return new { task_id = Item.Id, state = RelayLimits.StateText(Item.State), instance_id = Target.Id, project_id = Project?.Id ?? "", thread_id = Item.Channel.WorkerThreadId, session_max = Item.SessionMax, subagent_max = Item.SubagentMax, cross_agent_max = Item.CrossAgentMax, worker_limits = Item.WorkerLimits, tree_budget = Item.TreeBudget, tree_depth = Item.TreeDepth, workspace = Item.Workspace, instruction = Instruction };
     }
 
     private static RelayTreeBudget? ReadTreeBudget(JsonElement Arguments) => Arguments.TryGetProperty("tree_session_max", out _) || Arguments.TryGetProperty("max_depth", out _) ? new() { MaxSessions = Number(Arguments, "tree_session_max", RelayLimits.DefaultTreeSessionMax), MaxDepth = Number(Arguments, "max_depth", RelayLimits.DefaultTreeMaxDepth) } : null;

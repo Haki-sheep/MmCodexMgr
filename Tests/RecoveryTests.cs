@@ -188,9 +188,9 @@ internal static class RecoveryTests
     {
         public AgentSession Session(InstanceProfile Instance, string Id) => new(Id, Id, "", Root);
         public Task<List<AgentProject>> ProjectsAsync(InstanceProfile Instance, CancellationToken Cancellation) => throw new NotSupportedException();
-        public List<AgentSession> Sessions(InstanceProfile Instance, AgentProject Project, string? Selector, int Offset) => throw new NotSupportedException();
+        public List<AgentSession> Sessions(InstanceProfile Instance, AgentProject? Project, string? Selector, int Offset) => throw new NotSupportedException();
         public Task RequireIdleAsync(InstanceProfile Instance, string ThreadId, CancellationToken Cancellation) => throw new NotSupportedException();
-        public Task<RelayThread> CreateAsync(InstanceProfile Instance, AgentProject Project, string Title, string Prompt, CancellationToken Cancellation) => throw new NotSupportedException();
+        public Task<RelayThread> CreateAsync(InstanceProfile Instance, AgentProject? Project, string Title, string Prompt, CancellationToken Cancellation) => throw new NotSupportedException();
     }
 
     private static async Task Reject(Func<Task> Action, string Message)

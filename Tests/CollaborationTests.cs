@@ -256,10 +256,10 @@ internal static class CollaborationTests
     private sealed class Catalog : IAgentCatalog
     {
         public Task<List<AgentProject>> ProjectsAsync(InstanceProfile Instance, CancellationToken Cancellation) => Task.FromResult(new List<AgentProject> { new("project", "项目", Root, true) });
-        public List<AgentSession> Sessions(InstanceProfile Instance, AgentProject Project, string? Selector, int Offset) => new() { Session(Instance, Selector!) };
+        public List<AgentSession> Sessions(InstanceProfile Instance, AgentProject? Project, string? Selector, int Offset) => new() { Session(Instance, Selector!) };
         public AgentSession Session(InstanceProfile Instance, string Id) => new(Id, Id, "project", Root);
         public Task RequireIdleAsync(InstanceProfile Instance, string ThreadId, CancellationToken Cancellation) => Task.CompletedTask;
-        public Task<RelayThread> CreateAsync(InstanceProfile Instance, AgentProject Project, string Title, string Prompt, CancellationToken Cancellation) => throw new NotSupportedException();
+        public Task<RelayThread> CreateAsync(InstanceProfile Instance, AgentProject? Project, string Title, string Prompt, CancellationToken Cancellation) => throw new NotSupportedException();
     }
 
     private static async Task Reject(Func<Task> Action, string MessagePart)

@@ -11,9 +11,10 @@ public static class AgentCli
         MmCodexMgr CLI
         instances
         projects --instance <实例编号|ID|名称>
-        sessions --instance <实例> --project <项目ID|名称|绝对路径> [--session <对话ID|完整名称>] [--offset 0]
+        sessions --instance <实例> [--project <项目ID|名称|绝对路径>] [--session <对话ID|完整名称>] [--offset 0]
         start --json-file <UTF-8 JSON文件>
-          必需 request_id instance project title instructions acceptance workspace
+          必需 request_id instance title instructions acceptance workspace
+          project 可选 省略时查找实例内所有会话 新建时创建无项目会话
           目标 session 或 create_title 二选一
           可选 subagent_max=0 session_max=1 cross_agent_max=1 timeout_minutes=60
           session_max 与 cross_agent_max 按本次请求校验 不锁定为已有任务的值 下级仍受上级预算约束
