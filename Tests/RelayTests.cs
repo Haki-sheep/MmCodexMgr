@@ -293,7 +293,7 @@ internal static class RelayTests
         using var Catalog = JsonDocument.Parse(ResponseList[1]);
         Require(ResponseList.Length == 2 && Initialize.RootElement.GetProperty("result").GetProperty("protocolVersion").GetString() == "2025-06-18", "MCP handshake handles notifications without bogus responses");
         var ToolList = Catalog.RootElement.GetProperty("result").GetProperty("tools");
-        Require(ToolList.GetArrayLength() == 17 && new[] { "agent_start", "relay_progress", "agent_open", "agent_resume" }.All(Name => ToolList.EnumerateArray().Any(Item => Item.GetProperty("name").GetString() == Name)), "MCP exposes routed startup progress session opening recovery and legacy contracts together");
+        Require(ToolList.GetArrayLength() == 18 && new[] { "agent_start", "relay_progress", "agent_open", "agent_resume", "agent_cleanup" }.All(Name => ToolList.EnumerateArray().Any(Item => Item.GetProperty("name").GetString() == Name)), "MCP exposes routed startup progress session opening recovery cleanup and legacy contracts together");
         using var Metadata = JsonDocument.Parse("{\"x-codex-turn-metadata\":\"{\\\"thread_id\\\":\\\"bound-thread\\\"}\"}");
         Require(RelayMcp.ReadThreadId(Metadata.RootElement) == "bound-thread", "thread ownership comes from Codex executor metadata");
     }

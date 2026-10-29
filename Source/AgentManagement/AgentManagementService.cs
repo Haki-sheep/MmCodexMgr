@@ -40,6 +40,12 @@ public sealed class AgentManagementService
                 return Catalog.Sessions(Target, Project, OptionalText(Arguments, "session"), Number(Arguments, "offset", 0));
             }
             case "agent_start": return await StartAsync(Settings, Caller, Request.ThreadId, Arguments, Cancellation);
+            case "agent_cleanup":
+            {
+                string State = Text(Arguments, "state");
+                int Cleared = await Coordinator.CleanupAsync(Caller.Id, Request.ThreadId, State);
+                return new { cleared = Cleared, state = State, scope = "caller", conversations_preserved = true };
+            }
             case "agent_open":
             {
                 var Target = ResolveInstance(Settings, Text(Arguments, "instance"));

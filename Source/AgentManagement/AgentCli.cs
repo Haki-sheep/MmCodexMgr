@@ -26,6 +26,10 @@ public static class AgentCli
         status --task-id <任务ID>
         open --instance <实例> --session-id <会话ID>  自动启动实例并打开原会话 不发送执行消息
         resume --task-id <任务ID>  主会话恢复实例退出后的原任务 不创建新会话
+        cleanup --state <interrupted|blocked|finished>
+          清理当前主会话名下的联调记录 不删除 Codex 对话或项目文件
+          interrupted=实例退出后阻塞 blocked=所有阻塞 finished=已验收或已撤销
+          清理未结束记录会中断其下级联调 不停止模型或脚本
         cancel --task-id <任务ID>  仅中断联调 不停止模型或脚本
         accept --task-id <任务ID>
         progress --json-file <UTF-8 JSON文件>  task_id stage(started|progress|blocked) message
@@ -115,7 +119,7 @@ public static class AgentCli
             {
                 "instances" => "agent_instances", "projects" => "agent_projects", "sessions" => "agent_sessions", "start" => "agent_start",
                 "report" => "relay_report", "status" => "agent_task", "cancel" => "agent_cancel", "accept" => "relay_accept",
-                "progress" => "relay_progress", "tree" => "agent_tree", "retry-return" => "agent_retry_return", "reconcile" => "agent_reconcile", "open" => "agent_open", "resume" => "agent_resume",
+                "progress" => "relay_progress", "tree" => "agent_tree", "retry-return" => "agent_retry_return", "reconcile" => "agent_reconcile", "open" => "agent_open", "resume" => "agent_resume", "cleanup" => "agent_cleanup",
                 _ => throw new InvalidOperationException("未知命令 " + Call.Command)
             };
             var Request = new RelayRequest(Caller.Id, ThreadId, Command, Call.Arguments);
@@ -148,6 +152,7 @@ public static class AgentCli
             "retry-return" => new[] { "task-id", "confirmed" },
             "reconcile" => new[] { "task-id", "session-id", "confirmed" },
             "open" => new[] { "instance", "session-id" },
+            "cleanup" => new[] { "state" },
             "status" or "cancel" or "accept" or "resume" => new[] { "task-id" },
             "install" => new[] { "instance", "skill" },
             "compat-install" or "compat-remove" => new[] { "instance" },
