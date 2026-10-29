@@ -7,9 +7,9 @@ public sealed class RelayPolicy
     private readonly RelayStore Store;
     public RelayPolicy(RelayStore Store) => this.Store = Store;
 
-    public void Apply(RelayTask Item, RelayTask? Incoming, RelayTreeBudget? RequestedBudget, RelayWorkspace? Workspace)
+    public void Apply(RelayTask Item, RelayTask? Incoming, RelayTreeBudget? RequestedBudget, RelayWorkspace? Workspace, bool Resuming = false)
     {
-        var ReservationList = Store.Reservations();
+        var ReservationList = Store.Reservations().Where(Slot => Slot.Id != Item.Id).ToList();
         Item.TreeRootId = Incoming is null ? Item.Channel.MainInstance.Id + "/" + Item.Channel.MainThreadId : RootId(Incoming);
         Item.TreeDepth = Incoming is null ? 1 : Depth(Incoming) + 1;
         var TreeList = ReservationList.Where(Slot => (Slot.TreeRootId.Length == 0 ? RootId(Store.Get(Slot.Id)) : Slot.TreeRootId) == Item.TreeRootId).ToList();
@@ -29,6 +29,14 @@ public sealed class RelayPolicy
             if (!AncestorHashList.Add(Parent.Id)) throw new InvalidDataException("任务父级出现循环 " + Parent.Id);
         if (Incoming?.Workspace.Access == "read_only" && Item.Workspace.Access == "write") throw new InvalidOperationException("只读任务不能把写入工作交给下级");
         if (Incoming?.Workspace.Access == "write" && Item.Workspace.WritePathList.Any(PathValue => !Incoming.Workspace.WritePathList.Any(ParentPath => Contains(ParentPath, PathValue)))) throw new InvalidOperationException("下级写入范围超出上级声明的目录");
+        if (Resuming)
+        {
+            var Pending = new Queue<string>();
+            Pending.Enqueue(Item.Id);
+            while (Pending.TryDequeue(out string? ParentId))
+                foreach (string ChildId in Store.UnfinishedChildIds(ParentId))
+                    if (AncestorHashList.Add(ChildId)) Pending.Enqueue(ChildId);
+        }
         foreach (var Other in ReservationList.Where(Slot => !AncestorHashList.Contains(Slot.Id) && Slot.Workspace.Access == "write"))
             if (Item.Workspace.WritePathList.Any(PathValue => Other.Workspace.WritePathList.Any(OtherPath => Contains(PathValue, OtherPath) || Contains(OtherPath, PathValue)))) throw new InvalidOperationException("写入范围与任务 " + Other.Id + " 冲突 请使用独立 worktree 或分离输出目录");
     }

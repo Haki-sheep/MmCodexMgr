@@ -16,7 +16,13 @@ public interface IRelayProcessEvents
     Task WatchAsync(InstanceProfile Instance, CancellationToken Cancellation);
 }
 
-public sealed class DesktopRelayBridge : IRelayBridge, IRelayProcessEvents, IDisposable
+public interface IRelayRecoveryBridge
+{
+    Task OpenAsync(InstanceProfile Instance, string ThreadId, CancellationToken Cancellation);
+    Task<bool> PrepareResumeAsync(InstanceProfile Instance, string ThreadId, CancellationToken Cancellation);
+}
+
+public sealed partial class DesktopRelayBridge : IRelayBridge, IRelayProcessEvents, IRelayRecoveryBridge, IDisposable
 {
     private const string DesktopPipePrefix = "codex-app-tools-";
     private readonly System.Collections.Concurrent.ConcurrentDictionary<int, System.Diagnostics.Process> ProcessDict = new();
@@ -75,6 +81,7 @@ public sealed class DesktopRelayBridge : IRelayBridge, IRelayProcessEvents, IDis
 
     public async Task SendAsync(InstanceProfile Instance, string ThreadId, string Prompt, string Model, CancellationToken Cancellation)
     {
+        await EnsureAvailableAsync(Instance, Cancellation);
         var Arguments = new Dictionary<string, object> { ["threadId"] = ThreadId, ["hostId"] = "local", ["prompt"] = Prompt };
         if (Model.Length != 0) Arguments["model"] = Model;
         await CallAsync(Instance, ThreadId, "send_message_to_thread", Arguments, Cancellation);
@@ -117,7 +124,7 @@ public sealed class DesktopRelayBridge : IRelayBridge, IRelayProcessEvents, IDis
     private static async Task<NamedPipeClientStream> ConnectAsync(InstanceProfile Instance, CancellationToken Cancellation)
     {
         var Running = await Task.Run(() => InstanceService.Find(Instance, InstanceService.ListRunning()), Cancellation)
-            ?? throw new InvalidOperationException("请先启动实例 " + Instance.Name);
+            ?? throw new DesktopUnavailableException("请先启动实例 " + Instance.Name);
         string[] PipeList = await Task.Run(() => Directory.GetFiles(@"\\.\pipe\", DesktopPipePrefix + "*"), Cancellation);
         foreach (string PipePath in PipeList)
         {
@@ -132,7 +139,7 @@ public sealed class DesktopRelayBridge : IRelayBridge, IRelayProcessEvents, IDis
             catch { Client.Dispose(); throw; }
             Client.Dispose();
         }
-        throw new IOException("实例没有可连接的桌面工具管道 " + Instance.Name + " 请确认该版本支持 Codex app tools");
+        throw new DesktopUnavailableException("实例没有可连接的桌面工具管道 " + Instance.Name + " 请确认该版本支持 Codex app tools");
     }
 
     [DllImport("kernel32.dll", SetLastError = true)]

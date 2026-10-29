@@ -13,6 +13,8 @@ internal static class Tests
     private static int Main(string[] ArgumentList)
     {
         if (ArgumentList.Contains("--app-path")) return AppPathTests.Run(ArgumentList.Contains("--app-launch"));
+        if (ArgumentList.Contains("--recovery")) { RecoveryTests.Run(); return 0; }
+        if (ArgumentList.Contains("--recovery-live")) return RecoveryTests.LiveProbe();
         if (ArgumentList.Contains("--windows")) { WindowTests.Run(); return 0; }
         if (ArgumentList.Contains("--relay-cleanup")) { System.Threading.Tasks.Task.Run(RelayCleanupTests.RunAsync).GetAwaiter().GetResult(); return 0; }
         if (ArgumentList.Contains("--responses-compat-disconnect")) { System.Threading.Tasks.Task.Run(ResponsesCompatDisconnectTests.RunAsync).GetAwaiter().GetResult(); return 0; }
@@ -54,7 +56,7 @@ internal static class Tests
                 Console.WriteLine("PASS config sync " + Count + " assertions; fixture=" + Root);
                 return 0;
             }
-            TestCc(); TestDetection(); WindowTests.Run(); TestBranding(); RelayTests.Run(); AgentManagementTests.Run(); CollaborationTests.Run();
+            TestCc(); TestDetection(); WindowTests.Run(); TestBranding(); RelayTests.Run(); AgentManagementTests.Run(); CollaborationTests.Run(); RecoveryTests.Run();
             Console.WriteLine("PASS " + Count + " assertions; fixture=" + Root);
             return 0;
         }

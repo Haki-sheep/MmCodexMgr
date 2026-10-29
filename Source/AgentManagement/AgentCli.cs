@@ -24,6 +24,8 @@ public static class AgentCli
         report --json-file <UTF-8 JSON文件>
           必需 task_id outcome(completed|needs_decision|failed) summary artifacts(绝对路径数组)
         status --task-id <任务ID>
+        open --instance <实例> --session-id <会话ID>  自动启动实例并打开原会话 不发送执行消息
+        resume --task-id <任务ID>  主会话恢复实例退出后的原任务 不创建新会话
         cancel --task-id <任务ID>  仅中断联调 不停止模型或脚本
         accept --task-id <任务ID>
         progress --json-file <UTF-8 JSON文件>  task_id stage(started|progress|blocked) message
@@ -113,7 +115,7 @@ public static class AgentCli
             {
                 "instances" => "agent_instances", "projects" => "agent_projects", "sessions" => "agent_sessions", "start" => "agent_start",
                 "report" => "relay_report", "status" => "agent_task", "cancel" => "agent_cancel", "accept" => "relay_accept",
-                "progress" => "relay_progress", "tree" => "agent_tree", "retry-return" => "agent_retry_return", "reconcile" => "agent_reconcile",
+                "progress" => "relay_progress", "tree" => "agent_tree", "retry-return" => "agent_retry_return", "reconcile" => "agent_reconcile", "open" => "agent_open", "resume" => "agent_resume",
                 _ => throw new InvalidOperationException("未知命令 " + Call.Command)
             };
             var Request = new RelayRequest(Caller.Id, ThreadId, Command, Call.Arguments);
@@ -145,7 +147,8 @@ public static class AgentCli
             "tree" => new[] { "task-id", "offset" },
             "retry-return" => new[] { "task-id", "confirmed" },
             "reconcile" => new[] { "task-id", "session-id", "confirmed" },
-            "status" or "cancel" or "accept" => new[] { "task-id" },
+            "open" => new[] { "instance", "session-id" },
+            "status" or "cancel" or "accept" or "resume" => new[] { "task-id" },
             "install" => new[] { "instance", "skill" },
             "compat-install" or "compat-remove" => new[] { "instance" },
             "mcp" => new[] { "instance" },

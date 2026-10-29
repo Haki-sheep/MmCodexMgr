@@ -46,6 +46,7 @@ public sealed class RelayTaskDialog : Form
             if (MessageBox.Show(this, "请确认原主会话尚未收到本次结果\n重发可能重复唤醒该会话", "核对回传", MessageBoxButtons.OKCancel, MessageBoxIcon.Warning) == DialogResult.OK) await Coordinator.RetryReturnAsync(TaskId);
         });
         if (Item.State == eRelayState.DispatchUncertain) AddAction("核对执行会话已开始", () => ReconcileAsync(Item));
+        if (Item.State == eRelayState.Interrupted) AddAction("恢复原任务", () => Coordinator.ResumeAsync(Item.Channel.MainInstance.Id, Item.Channel.MainThreadId, Item.Id));
         if (Item.State == eRelayState.Returned && Item.Outcome == "completed") AddAction("确认验收通过", () => Coordinator.ReviewAsync(Item.Channel.MainInstance.Id, Item.Channel.MainThreadId, Item.Id));
         AddAction("打开主会话", () => OpenThreadAsync(Item.Channel.MainInstance, Item.Channel.MainThreadId));
         if (Item.Channel.WorkerThreadId.Length != 0) AddAction("打开执行会话", () => OpenThreadAsync(Item.Channel.WorkerInstance, Item.Channel.WorkerThreadId));
@@ -78,5 +79,5 @@ public sealed class RelayTaskDialog : Form
         await Service.ExecuteAsync(new(Item.Channel.MainInstance.Id, Item.Channel.MainThreadId, "agent_reconcile", JsonSerializer.SerializeToElement(new { task_id = Item.Id, session_id = Input.Text.Trim(), confirmed = true })), CancellationToken.None);
     }
 
-    private static async Task OpenThreadAsync(InstanceProfile Instance, string ThreadId) => await DesktopRelayBridge.CallAsync(Instance, ThreadId, "navigate_to_codex_page", new { threadId = ThreadId }, CancellationToken.None);
+    private async Task OpenThreadAsync(InstanceProfile Instance, string ThreadId) => await Coordinator.OpenSessionAsync(Instance, ThreadId, CancellationToken.None);
 }

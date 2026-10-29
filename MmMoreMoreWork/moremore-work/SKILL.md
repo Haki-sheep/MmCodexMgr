@@ -53,7 +53,7 @@ description: 根据用户要求结构化协作提示词与任务边界 组合使
 
 优先使用 `mm_codex_mgr` MCP 的 `agent_instances` `agent_projects` `agent_sessions` `agent_start` `agent_task` `agent_tree` 等工具 直接传结构化参数 MCP 与 CLI 共用同一管理器服务和预算规则 同一操作只调用一个入口 不重复派发
 
-当前会话未加载这些 MCP 工具时 使用 [scripts/mmcodex.ps1](scripts/mmcodex.ps1) 调用 CLI 先执行 `help` 查看当前命令 参数和默认值以 CLI 为准 管理器需要运行 目标实例也需要运行 安装或桥接异常时可单次执行 `doctor --instance <实例>` 定位 CLI MCP Skill 和桌面桥接的具体问题 不启动模型
+当前会话未加载这些 MCP 工具时 使用 [scripts/mmcodex.ps1](scripts/mmcodex.ps1) 调用 CLI 先执行 `help` 查看当前命令 参数和默认值以 CLI 为准 管理器需要运行 首次派发前目标实例需要运行 已有会话可用 open 自动启动实例并打开 安装或桥接异常时可单次执行 `doctor --instance <实例>` 定位 CLI MCP Skill 和桌面桥接的具体问题 不启动模型
 
 自然语言映射：
 
@@ -124,3 +124,12 @@ CLI 与 MCP 发送最终回报前会保存到本地发件箱 若管理器离线 
 只有用户已核对执行会话确实收到并开始任务时 才使用 `agent_reconcile` 或 CLI `reconcile --task-id <ID> --session-id <ID> --confirmed true` 恢复原记录 不重复创建或发送 只有用户核对原主会话未收到结果后 才使用 `agent_retry_return` 或 CLI `retry-return --task-id <ID> --confirmed true` 重发回传 不自行把 confirmed 填为 true 管理器界面双击任务可查看详情与这些恢复入口
 
 `cancel` 中断本任务及其下级的联调记录并拒绝后续结果 不会停止模型 工具或脚本 本轮沿用该执行中断边界
+
+## 原会话恢复
+
+
+任务执行实例退出时 管理器在原截止时间内自动尝试恢复一次 启动原实例并打开原执行会话 会话空闲时投递续跑消息 仍在执行时只恢复结果接收 不重复发送 保留原任务 ID 会话 ID 下级任务与写入声明 连续退出或准备失败会保留阻塞原因 不无限重启
+
+需要打开已有会话时使用 `agent_open` 或 `open --instance <实例> --session-id <准确会话ID>` 此操作不创建会话也不发送工作消息 不需要 AI 点击管理器窗口 需要续跑实例退出后的原任务时 由原主会话使用 `agent_resume` 或 `resume --task-id <原任务ID>` 管理器核对会话占用与预算后继续 使用当前任务原有验收要求 先检查历史 产物和仍在运行的脚本 从未完成处接续 不重复创建下级
+
+手动 resume 重新计算原时长的截止时间 自动恢复保留原截止时间 已恢复且执行中的重复请求不会再次发送 已撤销 超时 已完成的任务不能 resume 续跑消息投递不明确时保留派发待核对 先核对目标再使用 reconcile 不把 resume 当作重发手段 管理器在恢复准备期间退出时尚未发送续跑消息 重启后可使用 resume

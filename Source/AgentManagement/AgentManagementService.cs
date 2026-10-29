@@ -40,16 +40,25 @@ public sealed class AgentManagementService
                 return Catalog.Sessions(Target, Project, OptionalText(Arguments, "session"), Number(Arguments, "offset", 0));
             }
             case "agent_start": return await StartAsync(Settings, Caller, Request.ThreadId, Arguments, Cancellation);
+            case "agent_open":
+            {
+                var Target = ResolveInstance(Settings, Text(Arguments, "instance"));
+                var Session = Catalog.Session(Target, Text(Arguments, "session_id"));
+                await Coordinator.OpenSessionAsync(Target, Session.Id, Cancellation);
+                return new { opened = true, instance_id = Target.Id, thread_id = Session.Id, title = Session.Title };
+            }
             case "agent_task":
             case "agent_cancel":
             case "agent_tree":
             case "agent_retry_return":
             case "agent_reconcile":
+            case "agent_resume":
             {
                 var Item = Store.Get(Text(Arguments, "task_id"));
                 bool Main = Item.Channel.MainInstance.Id == Caller.Id && Item.Channel.MainThreadId == Request.ThreadId;
                 bool Worker = Item.Channel.WorkerInstance.Id == Caller.Id && Item.Channel.WorkerThreadId == Request.ThreadId;
-                if (!Main && !Worker || Request.Command is "agent_cancel" or "agent_retry_return" or "agent_reconcile" && !Main) throw new InvalidOperationException("当前会话无权操作该任务");
+                if (!Main && !Worker || Request.Command is "agent_cancel" or "agent_retry_return" or "agent_reconcile" or "agent_resume" && !Main) throw new InvalidOperationException("当前会话无权操作该任务");
+                if (Request.Command == "agent_resume") return Describe(await Coordinator.ResumeAsync(Caller.Id, Request.ThreadId, Item.Id));
                 if (Request.Command == "agent_cancel") await Coordinator.CancelAsync(Item.Id);
                 if (Request.Command == "agent_tree") return Store.TreePage(Item.Id, Number(Arguments, "offset", 0)).Select(Entry => new { task_id = Entry.Id, parent_task_id = Entry.ParentTaskId, title = Entry.Title, state = RelayLimits.StateText(Entry.State), children = Entry.ChildCount, main_instance = Entry.MainName, worker_instance = Entry.WorkerName, progress_at = Entry.ProgressAt }).ToArray();
                 if (Request.Command is "agent_retry_return" or "agent_reconcile")
@@ -139,6 +148,7 @@ public sealed class AgentManagementService
         tree_budget = Item.TreeBudget, tree_root_id = Item.TreeRootId, tree_depth = Item.TreeDepth,
         workspace = new { access = Item.Workspace.Access, write_path_count = Item.Workspace.WritePathList.Count },
         progress_stage = Item.ProgressStage, progress = Item.ProgressMessage, progress_at = Item.ProgressAt,
+        recovery_count = Item.RecoveryCount,
         recent_event_excerpts = Item.EventList.TakeLast(2).Select(Text => Text.Length > 512 ? Text[..512] + "…" : Text).ToArray()
     };
 

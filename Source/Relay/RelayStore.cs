@@ -5,7 +5,7 @@ namespace CodexInstanceManager;
 
 public sealed partial class RelayStore
 {
-    private static readonly string BlockingPredicate = "state IN (" + string.Join(",", new[] { eRelayState.Sending, eRelayState.Running, eRelayState.Returning, eRelayState.DispatchUncertain, eRelayState.ReturnUncertain }.Select(State => (int)State)) + ")";
+    private static readonly string BlockingPredicate = "state IN (" + string.Join(",", new[] { eRelayState.Sending, eRelayState.Running, eRelayState.Returning, eRelayState.DispatchUncertain, eRelayState.ReturnUncertain, eRelayState.Recovering }.Select(State => (int)State)) + ")";
     private readonly string Root;
     public RelayStore(string Root)
     {
@@ -85,10 +85,11 @@ public sealed partial class RelayStore
     {
         using var Database = Open();
         using var Command = Database.CreateCommand();
-        Command.CommandText = "SELECT id FROM relay_tasks WHERE state IN ($sending,$running,$returning)";
+        Command.CommandText = "SELECT id FROM relay_tasks WHERE state IN ($sending,$running,$returning,$recovering)";
         Command.Parameters.AddWithValue("$sending", (int)eRelayState.Sending);
         Command.Parameters.AddWithValue("$running", (int)eRelayState.Running);
         Command.Parameters.AddWithValue("$returning", (int)eRelayState.Returning);
+        Command.Parameters.AddWithValue("$recovering", (int)eRelayState.Recovering);
         using var Reader = Command.ExecuteReader();
         var IdList = new List<string>();
         while (Reader.Read()) IdList.Add(Reader.GetString(0));
@@ -98,7 +99,7 @@ public sealed partial class RelayStore
     public bool HasBlockingTask()
     {
         using var Database = Open();
-        return Convert.ToInt64(ConversationDatabase.Scalar(Database, "SELECT COUNT(*) FROM relay_tasks WHERE state IN ($sending,$running,$returning,$dispatchUncertain,$returnUncertain)", ("$sending", (int)eRelayState.Sending), ("$running", (int)eRelayState.Running), ("$returning", (int)eRelayState.Returning), ("$dispatchUncertain", (int)eRelayState.DispatchUncertain), ("$returnUncertain", (int)eRelayState.ReturnUncertain))) != 0;
+        return Convert.ToInt64(ConversationDatabase.Scalar(Database, "SELECT COUNT(*) FROM relay_tasks WHERE " + BlockingPredicate)) != 0;
     }
 
     public List<RelaySlot> BlockingSlots()

@@ -16,6 +16,8 @@ public static class AgentToolCatalog
             workspace = new { type = "object", properties = new { access = new { type = "string", @enum = new[] { "read_only", "write" } }, write_paths = new { type = "array", items = Text(1024), maxItems = 20 } }, required = new[] { "access" }, additionalProperties = false }
         }, new[] { "request_id", "instance", "project", "title", "instructions", "acceptance", "workspace" }),
         Tool("agent_task", "单次读取本人参与任务的状态 进度 结果和预算 仅用户询问进度或排错时查询 不要轮询", new { task_id = Text(128) }, new[] { "task_id" }),
+        Tool("agent_open", "启动指定实例并打开已存在的准确会话 不新建会话 不发送执行消息", new { instance = Text(), session_id = Text(128) }, new[] { "instance", "session_id" }),
+        Tool("agent_resume", "仅任务主会话恢复实例退出后的原任务 自动打开原执行会话 空闲时投递续跑消息 保留原任务和下级 投递不明时禁止使用 已恢复的请求不重复发送", new { task_id = Text(128) }, new[] { "task_id" }),
         Tool("agent_tree", "分页读取当前任务的直接下级 摘要按需加载 不要轮询", new { task_id = Text(128), offset = Number(0) }, new[] { "task_id" }),
         Tool("agent_cancel", "仅任务主会话中断本任务和下级的联调记录 不停止模型或脚本", new { task_id = Text(128) }, new[] { "task_id" }),
         Tool("relay_progress", "执行方开始工作或完成重要阶段时主动上报进度 started progress blocked 不唤醒主会话 不能替代最终 relay_report 无需定时心跳", new { task_id = Text(128), stage = new { type = "string", @enum = new[] { "started", "progress", "blocked" } }, message = Text(RelayLimits.MaxEventLength) }, new[] { "task_id", "stage", "message" }),

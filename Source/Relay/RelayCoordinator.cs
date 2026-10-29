@@ -24,6 +24,7 @@ public sealed partial class RelayCoordinator : IDisposable
         {
             var Item = Store.Get(Id);
             if (Item.State == eRelayState.Running) { ArmDeadline(Item); _ = WatchWorkerAsync(Item); }
+            else if (Item.State == eRelayState.Recovering) Change(Item, eRelayState.Interrupted, "管理器在恢复准备期间退出 尚未投递续跑消息 可使用 resume 继续");
             else Change(Item, Item.State == eRelayState.Sending ? eRelayState.DispatchUncertain : eRelayState.ReturnUncertain, "管理器在投递期间退出 请核对目标会话后处理");
         }
     }
@@ -350,14 +351,28 @@ public sealed partial class RelayCoordinator : IDisposable
             await Gate.WaitAsync(Lifetime.Token);
             try
             {
-                foreach (string Id in Store.PendingIds())
+                foreach (string Id in Store.PendingIds().OrderBy(Id => Store.Get(Id).TreeDepth))
                 {
                     var Item = Store.Get(Id);
                     if (Item.State != eRelayState.Running || Item.Channel.WorkerInstance.Id != InstanceId) continue;
                     StopDeadline(Id);
-                    CancelDescendants(Item.Id);
-                    Change(Item, eRelayState.Interrupted, "执行实例退出 未收到明确完成回调 后续回调将被拒绝");
-                    await NotifyFailureAsync(Item, "执行实例已经退出 任务未确认完成");
+                    if (Bridge is IRelayRecoveryBridge && Item.RecoveryCount == 0 && (Item.DeadlineAt is null || Item.DeadlineAt > DateTimeOffset.UtcNow))
+                    {
+                        try { await ResumeCoreAsync(Item, true); }
+                        catch (OperationCanceledException) when (Lifetime.IsCancellationRequested) { throw; }
+                        catch (Exception Error)
+                        {
+                            Program.LogError(Error);
+                            var Failed = Store.Get(Id);
+                            if (Failed.State == eRelayState.Running) Change(Failed, eRelayState.Interrupted, "恢复前置检查失败 " + Error.Message);
+                            await NotifyRecoveryFailureAsync(Failed, Error.Message);
+                        }
+                    }
+                    else
+                    {
+                        Change(Item, eRelayState.Interrupted, "执行实例退出 自动恢复不可用或本任务已尝试恢复 请使用 resume 恢复原任务");
+                        await NotifyRecoveryFailureAsync(Item, "执行实例已经退出 任务未确认完成");
+                    }
                 }
             }
             finally { Gate.Release(); }

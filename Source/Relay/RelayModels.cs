@@ -2,7 +2,7 @@ namespace CodexInstanceManager;
 
 public enum eRelayState
 {
-    Sending, Running, Returning, Returned, Accepted, DispatchUncertain, ReturnUncertain, Cancelled, TimedOut, Interrupted
+    Sending, Running, Returning, Returned, Accepted, DispatchUncertain, ReturnUncertain, Cancelled, TimedOut, Interrupted, Recovering
 }
 
 public sealed class RelayChannel
@@ -49,6 +49,7 @@ public sealed class RelayTask
     public string ProgressMessage { get; set; } = "";
     public DateTimeOffset? ProgressAt { get; set; }
     public DateTimeOffset? DeadlineAt { get; set; }
+    public int RecoveryCount { get; set; }
 }
 
 public sealed class RelayTreeBudget
@@ -110,7 +111,7 @@ public static class RelayLimits
         eRelayState.Returning => "正在回传", eRelayState.Returned => "已回传 待主会话处理",
         eRelayState.Accepted => "验收通过", eRelayState.DispatchUncertain => "派发待核对",
         eRelayState.ReturnUncertain => "回传待核对", eRelayState.Cancelled => "已撤销",
-        eRelayState.TimedOut => "已超时", eRelayState.Interrupted => "执行实例已退出", _ => throw new ArgumentOutOfRangeException(nameof(State))
+        eRelayState.TimedOut => "已超时", eRelayState.Interrupted => "执行恢复已阻塞", eRelayState.Recovering => "正在恢复原会话", _ => throw new ArgumentOutOfRangeException(nameof(State))
     };
 
     public static string OutcomeText(string Outcome) => Outcome switch
@@ -123,6 +124,7 @@ public static class RelayLimits
     {
         eRelayState.Sending => "未开始",
         eRelayState.Running => "子Agent正在执行",
+        eRelayState.Recovering => "正在恢复",
         eRelayState.Returning or eRelayState.Returned => Outcome == "completed" ? "主Agent正在执行" : "已阻塞",
         eRelayState.Accepted or eRelayState.Cancelled => "已结束",
         eRelayState.DispatchUncertain or eRelayState.ReturnUncertain or eRelayState.TimedOut or eRelayState.Interrupted => "已阻塞",
