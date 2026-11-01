@@ -12,18 +12,21 @@ public sealed partial class RelayCoordinator : IDisposable
     private readonly object DeadlineGate = new();
     public event Action? Changed;
     public RelayChannel? Channel { get; private set; }
+    public CursorRelayRunner? Cursor { get; }
 
     #region Lifecycle
-    public RelayCoordinator(RelayStore Store, IRelayBridge Bridge)
+    public RelayCoordinator(RelayStore Store, IRelayBridge Bridge, CursorRelayRunner? Cursor = null)
     {
         this.Store = Store;
         this.Bridge = Bridge;
+        this.Cursor = Cursor;
         if (Bridge is IRelayProcessEvents Events) Events.InstanceExited += OnInstanceExited;
         Channel = Store.LoadChannel();
         foreach (string Id in Store.PendingIds())
         {
             var Item = Store.Get(Id);
-            if (Item.State == eRelayState.Running) { ArmDeadline(Item); _ = WatchWorkerAsync(Item); }
+            if (Item.State == eRelayState.Running && Item.Channel.WorkerInstance.Id == CursorRelayRunner.InstanceId) Change(Item, eRelayState.Interrupted, "管理器重启 Cursor 原执行进程未确认 请核对产物后 resume 原任务 不自动重复执行");
+            else if (Item.State == eRelayState.Running) { ArmDeadline(Item); _ = WatchWorkerAsync(Item); }
             else if (Item.State == eRelayState.Recovering) Change(Item, eRelayState.Interrupted, "管理器在恢复准备期间退出 尚未投递续跑消息 可使用 resume 继续");
             else Change(Item, Item.State == eRelayState.Sending ? eRelayState.DispatchUncertain : eRelayState.ReturnUncertain, "管理器在投递期间退出 请核对目标会话后处理");
         }
@@ -49,6 +52,7 @@ public sealed partial class RelayCoordinator : IDisposable
     public void Dispose()
     {
         Lifetime.Cancel();
+        Cursor?.Dispose();
         if (Bridge is IRelayProcessEvents Events) Events.InstanceExited -= OnInstanceExited;
         lock (DeadlineGate)
         {
@@ -75,6 +79,7 @@ public sealed partial class RelayCoordinator : IDisposable
                 if (Existing.Title != Title || Existing.Instructions != Instructions || Existing.Acceptance != Acceptance ||
                     Existing.Channel.WorkerInstance.Id != Current.WorkerInstance.Id || Existing.Channel.ProjectId != Current.ProjectId ||
                     Existing.Channel.CreateTitle != Current.CreateTitle || Existing.Channel.TimeoutMinutes != Current.TimeoutMinutes ||
+                    Existing.Channel.WorkingDirectory != Current.WorkingDirectory || Existing.Channel.WorkerModel != Current.WorkerModel || Existing.Channel.CursorCliPath != Current.CursorCliPath ||
                     Current.CreateTitle.Length == 0 && Existing.Channel.WorkerThreadId != Current.WorkerThreadId ||
                     Existing.SessionMax != SessionMax || Existing.SubagentMax != SubagentMax || Existing.CrossAgentMax != CrossAgentMax ||
                     JsonSerializer.Serialize(Existing.WorkerLimits) != JsonSerializer.Serialize(WorkerLimits) ||
@@ -106,16 +111,21 @@ public sealed partial class RelayCoordinator : IDisposable
             try
             {
                 if (Bridge is DesktopRelayBridge && Current.CallbackCliPath.Length == 0) RelayToolInstaller.RequireInstalled(Current.WorkerInstance);
-                if (CreateAsync is not null)
+                if (Current.WorkerInstance.Id == CursorRelayRunner.InstanceId)
+                {
+                    await (Cursor ?? throw new InvalidOperationException("当前管理器未启用 Cursor 执行端")).PrepareAsync(Item, Lifetime.Token);
+                }
+                else if (CreateAsync is not null)
                 {
                     var Created = await CreateAsync(Item);
                     Item.Channel.WorkerThreadId = Created.Id;
                     Item.Channel.WorkerTitle = Created.Title;
                 }
                 else await Bridge.SendAsync(Item.Channel.WorkerInstance, Item.Channel.WorkerThreadId, BuildWorkerPrompt(Item), "", Lifetime.Token);
-                Change(Item, eRelayState.Running, "桌面已接收派发 等待执行会话主动回调");
+                Change(Item, eRelayState.Running, Current.WorkerInstance.Id == CursorRelayRunner.InstanceId ? "Cursor 会话已准备 等待 CLI 执行开始事件" : "桌面已接收派发 等待执行会话主动回调");
                 ArmDeadline(Item);
-                _ = WatchWorkerAsync(Item);
+                if (Current.WorkerInstance.Id == CursorRelayRunner.InstanceId) LaunchCursor(Item);
+                else _ = WatchWorkerAsync(Item);
             }
             catch (Exception Error)
             {
@@ -177,6 +187,7 @@ public sealed partial class RelayCoordinator : IDisposable
             var Item = Store.Get(TaskId);
             if (Item.State is eRelayState.Accepted or eRelayState.Cancelled) throw new InvalidOperationException("任务已经结束");
             StopDeadline(Item.Id);
+            Cursor?.Stop(Item.Id);
             CancelDescendants(Item.Id);
             Change(Item, eRelayState.Cancelled, "用户撤销联调 后续回调将被拒绝 已启动的工具进程需在执行会话中停止");
         }
@@ -230,6 +241,7 @@ public sealed partial class RelayCoordinator : IDisposable
             {
                 var Item = Store.Get(Id);
                 StopDeadline(Id);
+                Cursor?.Stop(Id);
                 CancelDescendants(Id);
                 if (Item.State != eRelayState.Cancelled)
                     Change(Item, eRelayState.Cancelled, "用户清空已阻塞记录 联调已中断 后续回调将被拒绝 模型与脚本需在执行会话中停止");
@@ -315,6 +327,7 @@ public sealed partial class RelayCoordinator : IDisposable
                 if (Item is null) return;
                 if (Item.State == eRelayState.Running)
                 {
+                    Cursor?.Stop(Item.Id);
                     CancelDescendants(Item.Id);
                     Change(Item, eRelayState.TimedOut, "执行超时 未收到明确回调 请查看执行会话 后续回调将被拒绝");
                     await NotifyFailureAsync(Item, "执行超时 未收到执行会话的明确回调");
@@ -333,6 +346,10 @@ public sealed partial class RelayCoordinator : IDisposable
             if (DeadlineDict.Remove(Id, out var Timer)) Timer.Dispose();
         }
     }
+
+    private void LaunchCursor(RelayTask Item) => Cursor!.Launch(Item,
+        (Stage, Message) => ProgressAsync(CursorRelayRunner.InstanceId, Item.Channel.WorkerThreadId, Item.Id, Stage, Message),
+        Result => ReportAsync(CursorRelayRunner.InstanceId, Item.Channel.WorkerThreadId, Item.Id, Result.Outcome, Result.Summary, Result.Artifacts), Lifetime.Token);
 
     private async Task WatchWorkerAsync(RelayTask Item)
     {
@@ -410,6 +427,7 @@ public sealed partial class RelayCoordinator : IDisposable
                 Pending.Enqueue(Id);
                 var Item = Store.Get(Id);
                 StopDeadline(Id);
+                Cursor?.Stop(Id);
                 Change(Item, eRelayState.Cancelled, "上级联调已终止 本任务不再接收回调 模型与脚本需在执行会话中停止");
             }
     }

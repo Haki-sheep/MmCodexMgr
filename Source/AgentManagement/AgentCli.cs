@@ -15,6 +15,9 @@ public static class AgentCli
         start --json-file <UTF-8 JSON文件>
           必需 request_id instance title instructions acceptance workspace
           project 可选 省略时查找实例内所有会话 新建时创建无项目会话
+          instance=cursor 使用 Cursor CLI 新建必须提供 cwd 绝对目录 不使用 project
+          Cursor 可选 model cursor_cli_path 已有会话不能更换目录 CLI 或模型
+          Cursor 只执行当前任务 worker_limits 必须为零 默认全部为零
           目标 session 或 create_title 二选一
           可选 subagent_max=0 session_max=1 cross_agent_max=1 timeout_minutes=60
           session_max 与 cross_agent_max 按本次请求校验 不锁定为已有任务的值 下级仍受上级预算约束
@@ -31,7 +34,7 @@ public static class AgentCli
           清理当前主会话名下的联调记录 不删除 Codex 对话或项目文件
           interrupted=实例退出后阻塞 blocked=所有阻塞 finished=已验收或已撤销
           清理未结束记录会中断其下级联调 不停止模型或脚本
-        cancel --task-id <任务ID>  仅中断联调 不停止模型或脚本
+        cancel --task-id <任务ID>  中断联调 Cursor CLI 及其子进程会停止 Codex 模型或脚本需另行停止
         accept --task-id <任务ID>
         progress --json-file <UTF-8 JSON文件>  task_id stage(started|progress|blocked) message
         tree --task-id <任务ID> [--offset 0]
@@ -95,7 +98,7 @@ public static class AgentCli
                 var Report = await AgentDoctor.RunAsync(Settings, ExecutablePath, Call.OptionDict.GetValueOrDefault("instance"), Cancellation);
                 try
                 {
-                    await RelayHost.RequestAsync(new(Report.InstanceId, "", "agent_ping", JsonSerializer.SerializeToElement(new { })), Cancellation, PipeName);
+                    await RelayHost.RequestAsync(new(Report.InstanceId == CursorRelayRunner.InstanceId ? Settings.SelectedId : Report.InstanceId, "", "agent_ping", JsonSerializer.SerializeToElement(new { })), Cancellation, PipeName);
                     Report.CheckList.Add(new("管理器服务", true, "已连接"));
                 }
                 catch (Exception Failure) when (Failure is IOException or TimeoutException or OperationCanceledException)
@@ -177,7 +180,7 @@ public static class AgentCli
             if (Document.RootElement.ValueKind != JsonValueKind.Object) throw new InvalidDataException("请求必须是 JSON 对象");
             string[] PropertyList = Command switch
             {
-                "start" => new[] { "request_id", "instance", "project", "session", "create_title", "title", "instructions", "acceptance", "session_max", "subagent_max", "cross_agent_max", "worker_limits", "timeout_minutes", "tree_session_max", "max_depth", "workspace" },
+                "start" => new[] { "request_id", "instance", "project", "session", "create_title", "title", "instructions", "acceptance", "session_max", "subagent_max", "cross_agent_max", "worker_limits", "timeout_minutes", "tree_session_max", "max_depth", "workspace", "cwd", "model", "cursor_cli_path" },
                 "progress" => new[] { "task_id", "stage", "message" },
                 _ => new[] { "task_id", "outcome", "summary", "artifacts" }
             };

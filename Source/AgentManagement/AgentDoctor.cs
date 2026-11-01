@@ -14,6 +14,11 @@ public static class AgentDoctor
 {
     public static async Task<AgentHealthReport> RunAsync(ManagerSettings Settings, string CliPath, string? Selector, CancellationToken Cancellation, Func<InstanceProfile, CancellationToken, Task<List<string>>>? Probe = null)
     {
+        if (Selector == CursorRelayRunner.InstanceId)
+        {
+            using var Cursor = new CursorRelayRunner();
+            return await Cursor.DoctorAsync(Cancellation);
+        }
         var Instance = AgentManagementService.ResolveInstance(Settings, Selector ?? Settings.SelectedId);
         var CheckList = new List<AgentHealthCheck>();
         if (File.Exists(Path.Combine(Instance.HomePath, ResponsesCompatProfile.FileName)))

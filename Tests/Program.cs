@@ -12,6 +12,9 @@ internal static class Tests
     [STAThread]
     private static int Main(string[] ArgumentList)
     {
+        if (ArgumentList.Contains("--harness-ui")) return HarnessUiTests.Run();
+        if (ArgumentList.Contains("--cursor-relay")) { Task.Run(() => CursorRelayTests.RunAsync()).GetAwaiter().GetResult(); return 0; }
+        if (ArgumentList.Contains("--cursor-live")) { Task.Run(() => CursorRelayTests.RunAsync(true)).GetAwaiter().GetResult(); return 0; }
         if (ArgumentList.Contains("--app-path")) return AppPathTests.Run(ArgumentList.Contains("--app-launch"));
         if (ArgumentList.Contains("--recovery")) { RecoveryTests.Run(); return 0; }
         if (ArgumentList.Contains("--recovery-live")) return RecoveryTests.LiveProbe();

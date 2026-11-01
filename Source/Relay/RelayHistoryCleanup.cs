@@ -14,6 +14,7 @@ public sealed partial class RelayCoordinator
                 if (Item.State is not (eRelayState.Accepted or eRelayState.Cancelled))
                 {
                     StopDeadline(Id);
+                    Cursor?.Stop(Id);
                     CancelDescendants(Id);
                     Change(Item, eRelayState.Cancelled, "主会话通过 CLI 或 MCP 清理记录 已中断下级联调 模型与脚本需另行停止");
                 }

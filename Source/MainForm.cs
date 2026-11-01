@@ -23,6 +23,7 @@ public sealed class MainForm : Form
     private readonly InstanceActivityMonitor ActivityMonitor = new();
     private readonly ThemeTabControl MainTabs = new() { Dock = DockStyle.Fill };
     private readonly TabPage RelayTab = new("跨Agent管理");
+    private readonly TabPage HarnessTab = new("跨 Harness 协作");
     private readonly Button ThemeButton = new();
     private readonly AppTheme Theme;
     private readonly bool PreviewOnly;
@@ -71,7 +72,8 @@ public sealed class MainForm : Form
         InstancesTab.Controls.Add(Root);
         MainTabs.TabPages.Add(InstancesTab);
         MainTabs.TabPages.Add(RelayTab);
-        MainTabs.SelectedIndexChanged += (_, _) => { if (MainTabs.SelectedTab == RelayTab) BuildRelayPage(); };
+        MainTabs.TabPages.Add(HarnessTab);
+        MainTabs.SelectedIndexChanged += (_, _) => { if (MainTabs.SelectedTab == RelayTab) BuildRelayPage(); else if (MainTabs.SelectedTab == HarnessTab) BuildHarnessPage(); };
         Controls.Add(MainTabs);
         StyleButton(ThemeButton, false);
         ThemeButton.Name = AppTheme.ToggleButtonName;
@@ -253,6 +255,18 @@ public sealed class MainForm : Form
         var Page = new RelayPage(Settings, TaskStore, TaskCoordinator, Theme, () => SafeAction(ToggleTheme));
         RelayTab.Controls.Add(Page);
         Theme.Apply(Page);
+    }
+    private void BuildHarnessPage()
+    {
+        if (HarnessTab.Controls.Count != 0) return;
+        var Page = new HarnessPage(Settings, TaskCoordinator?.Cursor, Theme, () => SafeAction(ToggleTheme));
+        HarnessTab.Controls.Add(Page);
+        Theme.Apply(Page);
+    }
+    public void ShowHarnessPage()
+    {
+        BuildHarnessPage();
+        MainTabs.SelectedTab = HarnessTab;
     }
     public void ShowRelayPage()
     {
@@ -446,6 +460,7 @@ public sealed class MainForm : Form
     {
         if (Command == "show") { ShowManager(); return; }
         if (Command == "relay") { ShowRelayPage(); ShowManager(); return; }
+        if (Command == "harness") { ShowHarnessPage(); ShowManager(); return; }
         var Profile = Settings.InstanceList.FirstOrDefault(Item => Item.Id == Command) ?? throw new InvalidOperationException("找不到指定实例 " + Command);
         InstanceList.SelectedItem = Profile;
         await LaunchSelectedAsync();

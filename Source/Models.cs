@@ -22,6 +22,14 @@ public sealed class ManagerSettings
     public List<InstanceProfile> InstanceList { get; set; } = new();
     public string SelectedId { get; set; } = "primary";
     public bool DarkMode { get; set; } = true;
+    public CursorHarnessSettings Cursor { get; set; } = new();
+}
+
+public sealed class CursorHarnessSettings
+{
+    public string CliPath { get; set; } = "";
+    public string WorkingDirectory { get; set; } = "";
+    public string Model { get; set; } = "";
 }
 
 public static class ManagerPaths

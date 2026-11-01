@@ -25,12 +25,13 @@ public static class Program
         ApplicationConfiguration.Initialize();
         try
         {
-            if (ArgumentList.Length == 2 && ArgumentList[0] is "--render-preview" or "--render-relay-preview")
+            if (ArgumentList.Length == 2 && ArgumentList[0] is "--render-preview" or "--render-relay-preview" or "--render-harness-preview")
             {
                 var PreviewStore = new RelayStore(Path.Combine(Path.GetTempPath(), "CodexManagerRelayPreview-" + Guid.NewGuid().ToString("N")));
                 using var PreviewCoordinator = new RelayCoordinator(PreviewStore, new DesktopRelayBridge());
                 using var Preview = new MainForm(SettingsStore.Load(), true, PreviewStore, PreviewCoordinator);
                 if (ArgumentList[0] == "--render-relay-preview") Preview.ShowRelayPage();
+                if (ArgumentList[0] == "--render-harness-preview") Preview.ShowHarnessPage();
                 Preview.Show();
                 Application.DoEvents();
                 using var Bitmap = new Bitmap(Preview.Width, Preview.Height);
@@ -39,7 +40,7 @@ public static class Program
                 File.WriteAllText(ArgumentList[1] + ".json", System.Text.Json.JsonSerializer.Serialize(new { Preview.DeviceDpi, Preview.CurrentAutoScaleDimensions, Preview.AutoScaleDimensions, FontHeight = Preview.Font.Height, Controls = DescribeLayout(Preview) }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
                 return;
             }
-            string Command = ArgumentList.Length == 2 && ArgumentList[0] == "--launch" ? ArgumentList[1] : ArgumentList.Contains("--relay") ? "relay" : "show";
+            string Command = ArgumentList.Length == 2 && ArgumentList[0] == "--launch" ? ArgumentList[1] : ArgumentList.Contains("--relay") ? "relay" : ArgumentList.Contains("--harness") ? "harness" : "show";
             using var Mutex = new Mutex(true, "Local\\" + PipeName, out bool Created);
             if (!Created)
             {
@@ -59,7 +60,8 @@ public static class Program
             }
             using var DesktopBridge = new DesktopRelayBridge();
             using var CompatSupervisor = new ResponsesCompatSupervisor(SettingsStore.Load, CliPath, LogError);
-            using var Coordinator = new RelayCoordinator(TaskStore, DesktopBridge);
+            using var Cursor = new CursorRelayRunner();
+            using var Coordinator = new RelayCoordinator(TaskStore, DesktopBridge, Cursor);
             using var Form = new MainForm(SettingsStore.Load(), false, TaskStore, Coordinator);
             var AgentService = new AgentManagementService(TaskStore, Coordinator, new AgentCatalog(), CliPath);
             using var Relay = new RelayHost(Coordinator, AgentService: AgentService);

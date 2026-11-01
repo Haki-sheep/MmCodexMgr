@@ -4,6 +4,11 @@ public sealed partial class RelayCoordinator
 {
     public async Task OpenSessionAsync(InstanceProfile Instance, string ThreadId, CancellationToken Cancellation)
     {
+        if (Instance.Id == CursorRelayRunner.InstanceId)
+        {
+            await (Cursor ?? throw new InvalidOperationException("当前管理器未启用 Cursor 执行端")).OpenAsync(ThreadId, Cancellation);
+            return;
+        }
         if (Bridge is not IRelayRecoveryBridge Recovery) throw new InvalidOperationException("当前桌面桥接不支持会话恢复");
         using var Timeout = CancellationTokenSource.CreateLinkedTokenSource(Cancellation, Lifetime.Token);
         Timeout.CancelAfter(TimeSpan.FromSeconds(RelayLimits.RequestTimeoutSeconds));
@@ -45,6 +50,11 @@ public sealed partial class RelayCoordinator
 
     private async Task ResumeCoreAsync(RelayTask Item, bool Automatic)
     {
+        if (Item.Channel.WorkerInstance.Id == CursorRelayRunner.InstanceId)
+        {
+            await ResumeCursorAsync(Item);
+            return;
+        }
         if (Bridge is not IRelayRecoveryBridge Recovery) throw new InvalidOperationException("当前桌面桥接不支持会话恢复");
         ValidateText(Item.Channel.WorkerThreadId, "原执行会话 ID", 128);
         if (Item.Outcome.Length != 0) throw new InvalidOperationException("任务已有执行结果 禁止重新执行");
@@ -76,6 +86,20 @@ public sealed partial class RelayCoordinator
             Change(Item, Item.State == eRelayState.DispatchUncertain ? eRelayState.DispatchUncertain : eRelayState.Interrupted, "恢复失败 " + Error.Message);
             throw;
         }
+    }
+
+    private async Task ResumeCursorAsync(RelayTask Item)
+    {
+        if (Item.Outcome.Length != 0) throw new InvalidOperationException("任务已有结果 禁止重新执行");
+        ValidateText(Item.Channel.WorkerThreadId, "原 Cursor 会话 ID", 128);
+        await (Cursor ?? throw new InvalidOperationException("当前管理器未启用 Cursor 执行端")).PrepareAsync(Item, Lifetime.Token);
+        Item.RecoveryCount++;
+        Item.ProgressStage = "";
+        Item.ProgressMessage = "等待 Cursor 原会话续跑确认";
+        Item.ProgressAt = null;
+        Change(Item, eRelayState.Running, "正在启动 Cursor 原会话续跑 请先检查历史和产物");
+        ArmDeadline(Item);
+        LaunchCursor(Item);
     }
 
     private async Task NotifyRecoveryFailureAsync(RelayTask Item, string Reason)

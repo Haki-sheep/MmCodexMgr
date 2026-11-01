@@ -2,7 +2,7 @@ using System.Text.Json;
 
 namespace CodexInstanceManager;
 
-public sealed class AgentManagementService
+public sealed partial class AgentManagementService
 {
     private readonly Func<ManagerSettings> LoadSettings;
     private readonly RelayStore Store;
@@ -10,6 +10,7 @@ public sealed class AgentManagementService
     private readonly IAgentCatalog Catalog;
     private readonly string CliPath;
 
+    #region Requests
     public AgentManagementService(RelayStore Store, RelayCoordinator Coordinator, IAgentCatalog Catalog, string CliPath, Func<ManagerSettings>? LoadSettings = null)
     {
         this.Store = Store;
@@ -24,17 +25,25 @@ public sealed class AgentManagementService
         var Settings = LoadSettings();
         var Caller = ResolveInstance(Settings, Request.InstanceId);
         if (Request.Command == "agent_ping") return new { ready = true };
+        if (Request.Command == "agent_doctor" && Request.Arguments.TryGetProperty("instance", out var CursorSelector) && CursorSelector.GetString() == CursorRelayRunner.InstanceId) return await RequireCursor().DoctorAsync(Cancellation);
         if (Request.Command == "agent_doctor") return await AgentDoctor.RunAsync(Settings, CliPath, Request.Arguments.TryGetProperty("instance", out var DoctorInstance) ? DoctorInstance.GetString() : Caller.Id, Cancellation);
         Catalog.Session(Caller, Request.ThreadId);
         var Arguments = Request.Arguments;
         switch (Request.Command)
         {
             case "agent_instances":
-                return Settings.InstanceList.Select((Item, Index) => new { number = Index + 1, id = Item.Id, name = Item.Name, home = Item.HomePath }).ToArray();
+                return Settings.InstanceList.Select((Item, Index) => (object)new { number = Index + 1, id = Item.Id, name = Item.Name, home = Item.HomePath, kind = "codex" })
+                    .Concat(Coordinator.Cursor is null ? Array.Empty<object>() : new object[] { new { number = (int?)null, id = CursorRelayRunner.InstanceId, name = "Cursor CLI", home = CursorRelayRunner.Profile.HomePath, kind = "cursor_cli" } }).ToArray();
             case "agent_projects":
+                if (Text(Arguments, "instance") == CursorRelayRunner.InstanceId) throw new InvalidOperationException("Cursor CLI 使用 cwd 指定工作目录 不使用 Codex 项目登记");
                 return await Catalog.ProjectsAsync(ResolveInstance(Settings, Text(Arguments, "instance")), Cancellation);
             case "agent_sessions":
             {
+                if (Text(Arguments, "instance") == CursorRelayRunner.InstanceId)
+                {
+                    if (OptionalText(Arguments, "project") is not null) throw new InvalidOperationException("Cursor CLI 会话不使用 project 筛选 请按会话 ID 或完整名称查找");
+                    return RequireCursor().List(OptionalText(Arguments, "session"), Number(Arguments, "offset", 0));
+                }
                 var Target = ResolveInstance(Settings, Text(Arguments, "instance"));
                 string? ProjectSelector = OptionalText(Arguments, "project");
                 var Project = ProjectSelector is null ? null : await ResolveProjectAsync(Target, ProjectSelector, Cancellation);
@@ -49,6 +58,12 @@ public sealed class AgentManagementService
             }
             case "agent_open":
             {
+                if (Text(Arguments, "instance") == CursorRelayRunner.InstanceId)
+                {
+                    var CursorSession = RequireCursor().Session(Text(Arguments, "session_id"));
+                    await RequireCursor().OpenAsync(CursorSession.Id, Cancellation);
+                    return new { opened = true, instance_id = CursorRelayRunner.InstanceId, thread_id = CursorSession.Id, title = CursorSession.Title };
+                }
                 var Target = ResolveInstance(Settings, Text(Arguments, "instance"));
                 var Session = Catalog.Session(Target, Text(Arguments, "session_id"));
                 await Coordinator.OpenSessionAsync(Target, Session.Id, Cancellation);
@@ -74,6 +89,7 @@ public sealed class AgentManagementService
                     if (Request.Command == "agent_retry_return") await Coordinator.RetryReturnAsync(Item.Id);
                     else
                     {
+                        if (Item.Channel.WorkerInstance.Id == CursorRelayRunner.InstanceId) throw new InvalidOperationException("Cursor 派发待核对任务不可仅凭进程启动手动恢复结果接收 请核对 CLI 会话和产物后处理原记录");
                         var Session = Catalog.Session(Item.Channel.WorkerInstance, Text(Arguments, "session_id"));
                         if (Item.Channel.ProjectId.Length != 0)
                         {
@@ -90,12 +106,18 @@ public sealed class AgentManagementService
         }
     }
 
+    #endregion
+
+    #region Dispatch
     private async Task<object> StartAsync(ManagerSettings Settings, InstanceProfile Caller, string ThreadId, JsonElement Arguments, CancellationToken Cancellation)
     {
         string Key = Caller.Id + "/" + ThreadId + "/" + Text(Arguments, "request_id");
         var Existing = Store.FindRequest(Key);
         var Workspace = ReadWorkspace(Arguments);
         if (Existing is null && Workspace is null) throw new InvalidOperationException("新任务必须声明 workspace.access 只读任务填 read_only 写入任务同时提供 write_paths");
+        if (Text(Arguments, "instance") == CursorRelayRunner.InstanceId) return await StartCursorAsync(Settings, Caller, ThreadId, Arguments, Existing, Workspace, Key, Cancellation);
+        foreach (string CursorParameter in new[] { "cwd", "model", "cursor_cli_path" })
+            if (Arguments.TryGetProperty(CursorParameter, out _)) throw new InvalidOperationException(CursorParameter + " 仅适用于 instance=cursor");
         var Target = ResolveInstance(Settings, Text(Arguments, "instance"));
         string? ProjectSelector = OptionalText(Arguments, "project");
         var Project = ProjectSelector is null ? null : await ResolveProjectAsync(Target, ProjectSelector, Cancellation);
@@ -145,13 +167,16 @@ public sealed class AgentManagementService
         return new() { SubagentMax = Number(Limits, "subagent_max", Number(Arguments, "subagent_max", 0)), SessionMax = Number(Limits, "session_max", Number(Arguments, "session_max", 1)), CrossAgentMax = Number(Limits, "cross_agent_max", Number(Arguments, "cross_agent_max", 1)) };
     }
 
+    #endregion
+
+    #region Queries
     private static object Describe(RelayTask Item) => new
     {
         task_id = Item.Id, parent_task_id = Item.ParentTaskId, title = Item.Title,
         state = RelayLimits.StateText(Item.State), display_state = RelayLimits.ProgressStateText(Item.State, Item.Outcome, Item.ProgressStage),
         outcome = Item.Outcome, summary = Item.Result, artifacts = Item.ArtifactList,
         main = new { instance_id = Item.Channel.MainInstance.Id, thread_id = Item.Channel.MainThreadId },
-        worker = new { instance_id = Item.Channel.WorkerInstance.Id, thread_id = Item.Channel.WorkerThreadId, project_id = Item.Channel.ProjectId, create_title = Item.Channel.CreateTitle },
+        worker = new { instance_id = Item.Channel.WorkerInstance.Id, thread_id = Item.Channel.WorkerThreadId, project_id = Item.Channel.ProjectId, create_title = Item.Channel.CreateTitle, cwd = Item.Channel.WorkingDirectory, model = Item.Channel.WorkerModel },
         worker_limits = Item.WorkerLimits,
         tree_budget = Item.TreeBudget, tree_root_id = Item.TreeRootId, tree_depth = Item.TreeDepth,
         workspace = new { access = Item.Workspace.Access, write_path_count = Item.Workspace.WritePathList.Count },
@@ -182,4 +207,5 @@ public sealed class AgentManagementService
     private static string Text(JsonElement Arguments, string Name) => OptionalText(Arguments, Name) ?? throw new InvalidOperationException("缺少参数 " + Name);
     private static string? OptionalText(JsonElement Arguments, string Name) => Arguments.TryGetProperty(Name, out var Value) && Value.ValueKind != JsonValueKind.Null ? !string.IsNullOrWhiteSpace(Value.GetString()) ? Value.GetString() : throw new InvalidOperationException("参数不能为空 " + Name) : null;
     private static int Number(JsonElement Arguments, string Name, int Default) => Arguments.TryGetProperty(Name, out var Value) ? Value.GetInt32() : Default;
+    #endregion
 }

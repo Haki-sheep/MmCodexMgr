@@ -1,6 +1,6 @@
 ---
 name: moremore-work
-description: 根据用户要求结构化协作提示词与任务边界 组合使用 Codex Subagent 同实例多 Session 和跨实例 Agent 支持 subagent_max session_max cross_agent_max 以及按实例 项目 对话名称创建或定位执行会话 用户要求分工 联调或指定协作数量时使用
+description: 根据用户要求结构化协作提示词与任务边界 组合使用 Codex Subagent 同实例多 Session 跨实例 Agent 与 Cursor CLI 跨 Harness 联调 支持 subagent_max session_max cross_agent_max 以及按实例 项目 对话名称创建或定位执行会话 用户要求分工 联调或指定协作数量时使用
 ---
 
 # MoreMoreWork
@@ -97,6 +97,38 @@ CLI 从 `CODEX_HOME` 和 `CODEX_THREAD_ID` 读取当前身份 不要填写另一
 
 使用已有会话时将 `create_title` 换为 `session` 不能同时提供两者 创建的是可见 Codex 对话 主从关系由管理器任务记录 建好后保留返回的 `task_id` 和 `thread_id` 创建成功时按宿主要求展示对话入口
 
+## Cursor CLI 跨 Harness 联调
+
+用户指定 Cursor 时使用同一套 `agent_start` 或 CLI `start` 目标固定为 `instance="cursor"` 不将 Cursor 添加为 Codex 实例 不提取模型 Key 不反代 Cursor
+
+管理器的“跨 Harness 协作”页提供 Cursor CLI 路径 默认工作目录 默认模型 登录检查与交互终端 任务状态和验收仍在“跨Agent管理”页 DeepSeek Harness 尚未接入 不冒充 Cursor 或 Codex 实例代替它
+
+- 先检查 `agent_instances` 中的 `kind=cursor_cli` 或执行 `doctor --instance cursor` 只检查 CLI 版本和登录 不启动模型 未安装或未登录时先按 [Cursor 官方说明](https://cursor.com/docs/cli/installation) 安装并执行 `cursor-agent login` 命令名冲突时使用官方 CLI 完整路径 不调用含义不确定的 `agent`
+- 首次执行不要求打开 Cursor 编辑器 使用 CLI 的本机账号认证 新建会话必须有 `cwd` 绝对目录 或已在跨 Harness 页配置默认工作目录 不提供 Codex `project`
+- `create_title` 与 `session` 二选一 新建仍须符合用户授权 查找已有会话使用 `sessions --instance cursor [--session <完整名称或ID>]` 只查询管理器登记的 Cursor CLI 会话 不表示接管编辑器中已有聊天
+- 可选 `model` 与 `cursor_cli_path` 覆盖新会话默认值 CLI 路径必须为绝对路径 留空模型沿用 Cursor 默认 已有会话保留登记的目录 模型和 CLI 不得在返工中静默更换
+- Cursor 执行端本次只直接完成交付任务 `worker_limits` 默认全部为 0 显式提供时三项均须为 0 不创建下级 Agent 不使用或伪造 `CODEX_THREAD_ID` / `CODEX_HOME` 不要求 Cursor 调用 Codex 的 report progress 或 accept
+- 占用主会话的 `cross_agent_max` 与整棵树槽位 只读任务使用 Cursor ask 模式 写入任务使用 `--force` 自动执行已授权范围内的操作 并声明 `workspace.access=write` 与绝对 `write_paths` 并行修改仓库仍需独立 worktree `cwd` 指向对应工作区 写入路径声明用于冲突检查 不是文件系统沙箱
+- 管理器在 Cursor 初始化事件确认会话 ID 后上报 started 最终回复必须仅为 JSON `{"outcome":"completed|needs_decision|failed","summary":"实际修改 检查结果与未解决项","artifacts":["产物绝对路径"]}` 管理器负责校验 保存到发件箱并回传原主会话 非法回复 命令失败或会话 ID 不匹配不能当作 completed
+- 派发后结束当前回合 等待回传 不轮询 原主会话按原标准验收 验收不通过时以新的 `request_id` 和原 `session` 派发返工 重试原请求保持同一个 `request_id` 不重复创建或启动
+- `open --instance cursor --session-id <ID>` 打开登记会话的交互终端 正在执行的会话不能另开交互进程 `cancel` 和超时会停止管理器启动的 Cursor CLI 进程树 已生成产物保留 管理器退出也会关闭该进程树 重启后原执行任务标为已阻塞 不自动重复执行 核对历史与产物后可 `resume --task-id <原ID>` 继续原会话
+
+示例 使用前替换真实工作目录 `create_title` 仅用于用户已授权的新建会话
+
+```json
+{
+  "request_id": "cursor-review-01",
+  "instance": "cursor",
+  "create_title": "Cursor 只读审查",
+  "cwd": "C:/Work/Project",
+  "title": "审查指定模块",
+  "instructions": "目的：核对指定模块的逻辑问题\n方式与数量：本会话直接执行 不继续分工\n任务分析：只读指定目录 不修改文件\n验收规范：报告问题位置 依据和未运行检查",
+  "acceptance": "主会话复核问题位置与依据",
+  "workspace": {"access": "read_only"},
+  "cross_agent_max": 1
+}
+```
+
 ## 事件回传与验收
 
 Session 派发成功后 当前主会话结束本轮等待回传 不代表整体任务结束 管理器收到执行会话的 `report` 后自动唤醒 主会话必须继续验收与调度 不循环调用 status read_thread 或 sleep 原生 Subagent 使用宿主提供的完成事件
@@ -125,9 +157,11 @@ CLI 与 MCP 发送最终回报前会保存到本地发件箱 若管理器离线 
 
 只有用户已核对执行会话确实收到并开始任务时 才使用 `agent_reconcile` 或 CLI `reconcile --task-id <ID> --session-id <ID> --confirmed true` 恢复原记录 不重复创建或发送 只有用户核对原主会话未收到结果后 才使用 `agent_retry_return` 或 CLI `retry-return --task-id <ID> --confirmed true` 重发回传 不自行把 confirmed 填为 true 管理器界面双击任务可查看详情与这些恢复入口
 
-`cancel` 中断本任务及其下级的联调记录并拒绝后续结果 不会停止模型 工具或脚本 本轮沿用该执行中断边界
+`cancel` 中断本任务及其下级的联调记录并拒绝后续结果 Codex 的模型 工具或脚本需在执行会话中另行停止 管理器启动的 Cursor CLI 进程树会停止 已生成产物保留
 
 ## 原会话恢复
+
+本节的实例自动恢复适用于 Codex 桌面实例 Cursor 的管理器重启与手动续跑规则见上节
 
 
 任务执行实例退出时 管理器在原截止时间内自动尝试恢复一次 启动原实例并打开原执行会话 会话空闲时投递续跑消息 仍在执行时只恢复结果接收 不重复发送 保留原任务 ID 会话 ID 下级任务与写入声明 连续退出或准备失败会保留阻塞原因 不无限重启
@@ -140,4 +174,4 @@ CLI 与 MCP 发送最终回报前会保存到本地发件箱 若管理器离线 
 
 用户要求清理记录时使用 `agent_cleanup` 或 `cleanup --state interrupted|blocked|finished` interrupted 只清理实例退出后阻塞的记录 blocked 清理所有阻塞记录 finished 只清理已验收或已撤销的记录 CLI 与 MCP 仅清理当前调用会话作为主会话的任务 覆盖所有分页 不清理其他主会话的记录
 
-清理未结束记录会中断其下级联调并保留下级历史 正在执行 恢复中和已成功回传待验收的记录不会作为已结束清理 Codex 对话 项目文件与产物保留 模型和脚本不会因此停止 删除 Codex 对话本身不属于此清理命令的能力范围
+清理未结束记录会中断其下级联调并保留下级历史 正在执行 恢复中和已成功回传待验收的记录不会作为已结束清理 Codex 对话 项目文件与产物保留 Codex 模型和脚本不会因此停止 Cursor CLI 进程树会停止 删除 Codex 对话本身不属于此清理命令的能力范围
