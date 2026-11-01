@@ -86,7 +86,11 @@ public static class RelayOutbox
             {
                 try
                 {
-                    if (!File.ReadAllBytes(PathValue).AsSpan().SequenceEqual(ContentList)) throw new InvalidOperationException("该任务有尚未确认的回报 禁止替换已保存内容 " + PathValue);
+                    using var Existing = new FileStream(PathValue, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete);
+                    if (Existing.Length > RelayLimits.MaxFrameBytes) throw new InvalidDataException("已有回报超过发件箱限制");
+                    var ExistingContentList = new byte[Existing.Length];
+                    Existing.ReadExactly(ExistingContentList);
+                    if (!ExistingContentList.AsSpan().SequenceEqual(ContentList)) throw new InvalidOperationException("该任务有尚未确认的回报 禁止替换已保存内容 " + PathValue);
                 }
                 catch (FileNotFoundException) { File.Move(Temporary, PathValue); }
             }
