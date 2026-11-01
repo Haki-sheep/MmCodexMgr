@@ -23,6 +23,11 @@ internal static class HarnessUiTests
                 if (!Button.Parent!.ClientRectangle.Contains(Button.Bounds)) throw new Exception($"Harness action clipped dark={Dark} size={Size} button={Button.Text} bounds={Button.Bounds} parent={Button.Parent.ClientRectangle}");
                 Count++;
             }
+            Form.ShowRelayPage();
+            Application.DoEvents();
+            var Cleanup = Descendants(Form).OfType<Button>().Single(Item => Item.Text == "检查并清空无效任务");
+            if (!Cleanup.Parent!.ClientRectangle.Contains(Cleanup.Bounds)) throw new Exception("Activity cleanup button clipped " + Size);
+            Count++;
         }
         Console.WriteLine($"PASS harness and cleanup UI {Count} layout assertions");
         return 0;

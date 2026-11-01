@@ -33,7 +33,7 @@ public static class AgentCli
         cleanup --state <interrupted|blocked|finished>
           清理当前主会话名下的联调记录 不删除 Codex 对话或项目文件
           interrupted=实例退出后阻塞 blocked=所有阻塞 finished=已验收或已撤销
-          清理未结束记录会中断其下级联调 不停止模型或脚本
+          清理未结束记录会中断其下级联调 Cursor CLI 会停止 Codex 模型或脚本需另行停止
         cancel --task-id <任务ID>  中断联调 Cursor CLI 及其子进程会停止 Codex 模型或脚本需另行停止
         accept --task-id <任务ID>
         progress --json-file <UTF-8 JSON文件>  task_id stage(started|progress|blocked) message

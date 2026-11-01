@@ -189,7 +189,7 @@ public sealed partial class RelayCoordinator : IDisposable
             StopDeadline(Item.Id);
             Cursor?.Stop(Item.Id);
             CancelDescendants(Item.Id);
-            Change(Item, eRelayState.Cancelled, "用户撤销联调 后续回调将被拒绝 已启动的工具进程需在执行会话中停止");
+            Change(Item, eRelayState.Cancelled, "用户撤销联调 后续回调将被拒绝 Cursor CLI 进程树会停止 Codex 工具进程需在执行会话中停止");
         }
         finally { Gate.Release(); }
     }
@@ -244,7 +244,7 @@ public sealed partial class RelayCoordinator : IDisposable
                 Cursor?.Stop(Id);
                 CancelDescendants(Id);
                 if (Item.State != eRelayState.Cancelled)
-                    Change(Item, eRelayState.Cancelled, "用户清空已阻塞记录 联调已中断 后续回调将被拒绝 模型与脚本需在执行会话中停止");
+                    Change(Item, eRelayState.Cancelled, "用户清空已阻塞记录 联调已中断 后续回调将被拒绝 Cursor CLI 会停止 Codex 模型与脚本需另行停止");
                 Store.DeleteFinished(Id);
             }
             Changed?.Invoke();
@@ -428,7 +428,7 @@ public sealed partial class RelayCoordinator : IDisposable
                 var Item = Store.Get(Id);
                 StopDeadline(Id);
                 Cursor?.Stop(Id);
-                Change(Item, eRelayState.Cancelled, "上级联调已终止 本任务不再接收回调 模型与脚本需在执行会话中停止");
+                Change(Item, eRelayState.Cancelled, "上级联调已终止 本任务不再接收回调 Cursor CLI 会停止 Codex 模型与脚本需另行停止");
             }
     }
 
