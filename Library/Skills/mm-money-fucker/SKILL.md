@@ -3,7 +3,7 @@ name: mm-money-fucker
 description: 为支付宝等渠道的场外基金与黄金基金生成中文研究日报 读取用户截图或文字反馈持仓 订单与现金 持久保存事实及建议供长期复盘 按需或由已授权bot调用 比较至少10只候选并给出人类复核的买卖建议 不自主交易
 ---
 
-# MmMoneyFucker
+# mm-money-fucker
 
 为不盯盘的个人投资者研究场外公募基金与黄金基金 输出可核验的建议 由用户决定是否交易
 
@@ -14,7 +14,7 @@ description: 为支付宝等渠道的场外基金与黄金基金生成中文研�
 - 仅反馈持仓时只完成识别 核对与保存 不强制生成10只产品日报 不要求用户把已清晰展示的字段再抄一遍
 - 执行日报时读取 [研究流程](references/research-workflow.md) 与 [消息契约](references/report-contract.md)
 - 选择数据源 接入数据库或回测时再读取 [数据源与方法来源](references/sources-and-libraries.md)
-- 支持自然语言 `使用 MmMoneyFucker 做今日基金分析` 或 `$mm-money-fucker`
+- 支持自然语言 `使用 mm-money-fucker 做今日基金分析` 或 `$mm-money-fucker`
 
 ## 任务边界
 

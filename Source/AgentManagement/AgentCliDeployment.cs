@@ -7,28 +7,31 @@ public static class AgentCliDeployment
 {
     public static string LoadPath() => Path.Combine(AppContext.BaseDirectory, "mmcodex.exe");
 
-    public static object Install(InstanceProfile Instance, string CliPath, string? SkillSource)
+    public static object Install(InstanceProfile Instance, string CliPath, string? SkillSource, string? BackupRoot = null)
     {
         if (!File.Exists(CliPath)) throw new FileNotFoundException("CLI 不存在", CliPath);
+        string Backups = BackupRoot ?? ManagerPaths.BackupRoot;
+        string LegacySkill = Path.Combine(Instance.HomePath, "skills", "moremore-work");
+        if (Directory.Exists(LegacySkill) && (File.GetAttributes(LegacySkill) & FileAttributes.ReparsePoint) != 0) throw new IOException("旧协作 Skill 是目录链接 请先核对实际目标 " + LegacySkill);
         string? SkillDestination = null;
         string? SkillBackup = null;
         if (SkillSource is not null)
         {
             string Source = ManagerPaths.Normalize(SkillSource);
             if (!File.Exists(Path.Combine(Source, "SKILL.md"))) throw new FileNotFoundException("Skill 缺少 SKILL.md", Source);
-            SkillDestination = Path.Combine(Instance.HomePath, "skills", "moremore-work");
+            SkillDestination = Path.Combine(Instance.HomePath, "skills", SkillNames.Collaboration);
             if (ManagerPaths.Same(Source, SkillDestination) || ManagerPaths.IsUnder(Source, SkillDestination) || ManagerPaths.IsUnder(SkillDestination, Source)) throw new InvalidOperationException("Skill 源目录和安装目录不能相互包含");
             string Staging = SkillDestination + ".install-" + Guid.NewGuid().ToString("N");
             CopyDirectory(Source, Staging);
             if (Directory.Exists(SkillDestination))
             {
-                SkillBackup = Path.Combine(ManagerPaths.BackupRoot, "skills", Guid.NewGuid().ToString("N"), "moremore-work");
+                SkillBackup = Path.Combine(Backups, "skills", Guid.NewGuid().ToString("N"), SkillNames.Collaboration);
                 Directory.CreateDirectory(Path.GetDirectoryName(SkillBackup)!);
                 Directory.Move(SkillDestination, SkillBackup);
             }
             Directory.Move(Staging, SkillDestination);
         }
-        string ExistingSkill = Path.Combine(Instance.HomePath, "skills", "moremore-work");
+        string ExistingSkill = Path.Combine(Instance.HomePath, "skills", SkillNames.Collaboration);
         if (File.Exists(Path.Combine(ExistingSkill, "SKILL.md")))
         {
             string SkillConfigPath = Path.Combine(ExistingSkill, "config.json");
@@ -39,8 +42,15 @@ public static class AgentCliDeployment
             SettingsStore.AtomicWrite(SkillConfigPath, JsonSerializer.SerializeToUtf8Bytes(SkillConfig));
             SkillDestination = ExistingSkill;
         }
-        string ConfigBackup = RelayToolInstaller.InstallCli(Instance, CliPath);
-        return new { installed = true, instance_id = Instance.Id, home = Instance.HomePath, cli_path = CliPath, skill_path = SkillDestination, skill_backup = SkillBackup, config_backup = ConfigBackup, reload = "配置已落盘 当前会话可立即使用 Skill CLI 新会话加载 MCP 目录迁移后在新位置重新运行 install 更新 Skill 与 MCP 路径" };
+        string ConfigBackup = RelayToolInstaller.InstallCli(Instance, CliPath, Backups);
+        string? LegacyBackup = null;
+        if (File.Exists(Path.Combine(ExistingSkill, "SKILL.md")) && Directory.Exists(LegacySkill))
+        {
+            LegacyBackup = Path.Combine(Backups, "skills", Guid.NewGuid().ToString("N"), "moremore-work");
+            Directory.CreateDirectory(Path.GetDirectoryName(LegacyBackup)!);
+            Directory.Move(LegacySkill, LegacyBackup);
+        }
+        return new { installed = true, instance_id = Instance.Id, home = Instance.HomePath, cli_path = CliPath, skill_path = SkillDestination, skill_backup = SkillBackup, legacy_skill_backup = LegacyBackup, config_backup = ConfigBackup, reload = "配置已落盘 当前会话可立即使用 Skill CLI 新会话加载 MCP 目录迁移后在新位置重新运行 install 更新 Skill 与 MCP 路径" };
     }
 
     private static void CopyDirectory(string Source, string Destination)

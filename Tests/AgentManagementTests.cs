@@ -194,13 +194,16 @@ internal static class AgentManagementTests
     private static void VerifyCliRelocation(string Root)
     {
         var Instance = new InstanceProfile { Id = "relocated", HomePath = Path.Combine(Root, "home") };
-        string SkillPath = Path.Combine(Instance.HomePath, "skills", "moremore-work");
+        string SkillPath = Path.Combine(Instance.HomePath, "skills", SkillNames.Collaboration);
         Directory.CreateDirectory(SkillPath);
         string ConfigPath = Path.Combine(Instance.HomePath, "config.toml");
         string SkillConfigPath = Path.Combine(SkillPath, "config.json");
         File.WriteAllText(ConfigPath, "model='keep-model'\n[mcp_servers.existing]\ncommand='keep-command'\n");
         File.WriteAllText(Path.Combine(SkillPath, "SKILL.md"), "fixture skill");
         File.WriteAllText(SkillConfigPath, "{\"cli_path\":\"old-cli.exe\",\"keep_setting\":true}");
+        string LegacySkillPath = Path.Combine(Instance.HomePath, "skills", "moremore-work");
+        Directory.CreateDirectory(LegacySkillPath);
+        File.WriteAllText(Path.Combine(LegacySkillPath, "SKILL.md"), "legacy fixture");
         string OriginalDirectory = Path.Combine(Root, "original manager");
         string MovedDirectory = Path.Combine(Root, "迁移后的管理器");
         Directory.CreateDirectory(OriginalDirectory);
@@ -209,9 +212,10 @@ internal static class AgentManagementTests
         string MovedCli = Path.Combine(MovedDirectory, "mmcodex.exe");
         File.Copy(Environment.ProcessPath!, OriginalCli);
         File.Copy(OriginalCli, MovedCli);
-        AgentCliDeployment.Install(Instance, OriginalCli, null);
+        var Installation = JsonSerializer.SerializeToElement(AgentCliDeployment.Install(Instance, OriginalCli, null, Path.Combine(Root, "install-backup")));
+        Require(!Directory.Exists(LegacySkillPath) && File.Exists(Path.Combine(Installation.GetProperty("legacy_skill_backup").GetString()!, "SKILL.md")), "new collaboration install moves legacy alias into backup");
         string PreviousConfig = File.ReadAllText(ConfigPath);
-        var Result = JsonSerializer.SerializeToElement(AgentCliDeployment.Install(Instance, MovedCli, null));
+        var Result = JsonSerializer.SerializeToElement(AgentCliDeployment.Install(Instance, MovedCli, null, Path.Combine(Root, "install-backup")));
         using var SkillConfig = JsonDocument.Parse(File.ReadAllText(SkillConfigPath));
         var Config = Tomlyn.Toml.ToModel(File.ReadAllText(ConfigPath));
         var Servers = (Tomlyn.Model.TomlTable)Config["mcp_servers"];

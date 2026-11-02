@@ -48,10 +48,10 @@ public static class AgentDoctor
         {
             CheckList.Add(new("MCP 注册", false, Error.Message));
         }
-        string SkillRoot = Path.Combine(Instance.HomePath, "skills", "moremore-work");
+        string SkillRoot = Path.Combine(Instance.HomePath, "skills", SkillNames.Collaboration);
         try
         {
-            if (!File.Exists(Path.Combine(SkillRoot, "SKILL.md"))) throw new FileNotFoundException("尚未安装 MoreMoreWork Skill");
+            if (!File.Exists(Path.Combine(SkillRoot, "SKILL.md"))) throw new FileNotFoundException("尚未安装 " + SkillNames.Collaboration);
             using var SkillConfig = JsonDocument.Parse(File.ReadAllText(Path.Combine(SkillRoot, "config.json")));
             string InstalledCli = SkillConfig.RootElement.GetProperty("cli_path").GetString()!;
             CheckList.Add(new("Skill 路径", ManagerPaths.Same(InstalledCli, CliPath), ManagerPaths.Same(InstalledCli, CliPath) ? SkillRoot : "Skill 指向其他 CLI " + InstalledCli));

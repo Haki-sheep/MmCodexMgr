@@ -1,4 +1,0 @@
-interface:
-  display_name: "角色建模 改模 动画与 Unity 导入"
-  short_description: "从零建模先选制作工具 使用 Blender 改模与 K 动画 按需导入 Unity"
-  default_prompt: "使用 $blender-unity-character 按本次目标制作或修改角色 从零建模先确认工具 已有模型按需修改 并完成要求的验证与交付。"

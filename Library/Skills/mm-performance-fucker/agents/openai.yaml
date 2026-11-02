@@ -1,0 +1,4 @@
+interface:
+  display_name: "mm-performance-fucker"
+  short_description: "Unity 性能采样与静态审计 从连续数据提取异常证据 配合 FakeUnityCLI 复测"
+  default_prompt: "使用 $mm-performance-fucker 配合 $mm-fake-unity-fucker 分析当前 Unity 工程性能 先提取异常证据再按同条件复测"

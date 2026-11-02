@@ -212,7 +212,7 @@ internal static class CollaborationTests
         File.WriteAllText(Path.Combine(Instance.HomePath, "state_5.sqlite"), "fixture");
         File.WriteAllText(Path.Combine(Instance.HomePath, "config.toml"), "model='private-model'\n");
         RelayToolInstaller.InstallCli(Instance, Environment.ProcessPath!, Path.Combine(Root, "doctor-backup"));
-        string SkillRoot = Path.Combine(Instance.HomePath, "skills", "moremore-work");
+        string SkillRoot = Path.Combine(Instance.HomePath, "skills", SkillNames.Collaboration);
         Directory.CreateDirectory(SkillRoot);
         File.WriteAllText(Path.Combine(SkillRoot, "SKILL.md"), "fixture");
         File.WriteAllText(Path.Combine(SkillRoot, "config.json"), JsonSerializer.Serialize(new { cli_path = Environment.ProcessPath }));

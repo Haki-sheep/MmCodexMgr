@@ -1,0 +1,4 @@
+interface:
+  display_name: "mm-shader-asset-fucker"
+  short_description: "还原 Unity 编译 Shader 并验证变体 支持备份替换及材质引用迁移"
+  default_prompt: "使用 $mm-shader-asset-fucker 盘点并还原当前 Unity 工程中的编译 Shader 验证后按我的要求替换原资产"

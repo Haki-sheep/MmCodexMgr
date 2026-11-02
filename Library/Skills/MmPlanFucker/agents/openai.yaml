@@ -1,4 +1,0 @@
-interface:
-  display_name: "MmPlanFucker"
-  short_description: "从概念追问到逻辑与 UI 策划案 按要求配图 并审查矛盾 竞品和实现难度"
-  default_prompt: "使用 $MmPlanFucker，根据我的概念或参考游戏逐轮完善设计，结合逻辑与 UI 交互说明，明确跨模块 @引用，仅在我要求时制作 UI 图。"

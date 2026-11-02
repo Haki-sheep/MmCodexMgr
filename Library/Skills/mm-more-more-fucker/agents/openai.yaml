@@ -1,0 +1,6 @@
+interface:
+  display_name: "mm-more-more-fucker"
+  short_description: "按任务边界选择原生子代理、多会话或跨工具协作并验收结果"
+  default_prompt: "使用 $mm-more-more-fucker 整理任务目的、协作方式与数量、任务边界及验收规范，再按默认或本次指定的预算执行协作。"
+policy:
+  allow_implicit_invocation: true
