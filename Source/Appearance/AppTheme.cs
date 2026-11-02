@@ -6,8 +6,8 @@ public enum eThemeRole { Background, Surface, Muted, Primary, Preserve }
 
 public sealed record ThemePalette(Color Background, Color Surface, Color Input, Color Text, Color Muted, Color Border, Color Selection, Color Accent, Color Success, Color Warning)
 {
-    public static readonly ThemePalette Light = new(Color.FromArgb(245, 247, 251), Color.White, Color.White, Color.FromArgb(38, 45, 62), Color.FromArgb(104, 113, 130), Color.FromArgb(219, 222, 233), Color.FromArgb(234, 237, 255), Color.FromArgb(79, 86, 219), Color.SeaGreen, Color.FromArgb(161, 97, 15));
-    public static readonly ThemePalette Dark = new(Color.FromArgb(22, 25, 32), Color.FromArgb(31, 35, 44), Color.FromArgb(39, 44, 55), Color.FromArgb(225, 230, 239), Color.FromArgb(156, 167, 185), Color.FromArgb(61, 69, 85), Color.FromArgb(52, 61, 94), Color.FromArgb(111, 119, 242), Color.FromArgb(102, 204, 157), Color.FromArgb(239, 184, 97));
+    public static readonly ThemePalette Light = new(Color.FromArgb(246, 248, 251), Color.White, Color.FromArgb(250, 251, 253), Color.FromArgb(37, 44, 57), Color.FromArgb(111, 121, 137), Color.FromArgb(225, 230, 239), Color.FromArgb(231, 239, 253), Color.FromArgb(62, 110, 232), Color.SeaGreen, Color.FromArgb(161, 97, 15));
+    public static readonly ThemePalette Dark = new(Color.FromArgb(24, 26, 30), Color.FromArgb(32, 35, 41), Color.FromArgb(39, 42, 49), Color.FromArgb(232, 235, 242), Color.FromArgb(153, 162, 180), Color.FromArgb(54, 59, 70), Color.FromArgb(41, 55, 79), Color.FromArgb(125, 166, 255), Color.FromArgb(102, 204, 157), Color.FromArgb(239, 184, 97));
 }
 
 public sealed class AppTheme

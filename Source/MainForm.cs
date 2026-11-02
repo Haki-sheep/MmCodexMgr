@@ -13,18 +13,19 @@ public sealed class MainForm : Form
     private readonly PictureBox IconPreview = new();
     private readonly Label StatusLabel = new();
     private readonly Label CcLabel = new();
-    private readonly Button ColorButton = new();
-    private readonly Button SyncButton = new();
-    private readonly Button ConversationButton = new();
-    private readonly Button ProjectButton = new();
+    private readonly Button ColorButton = new StudioButton();
+    private readonly Button SyncButton = new StudioButton();
+    private readonly Button ConversationButton = new StudioButton();
+    private readonly Button ProjectButton = new StudioButton();
     private readonly NotifyIcon TrayIcon = new();
     private readonly BrandingService Branding = new();
     private readonly System.Windows.Forms.Timer RefreshDelay = new() { Interval = 150 };
     private readonly InstanceActivityMonitor ActivityMonitor = new();
     private readonly ThemeTabControl MainTabs = new() { Dock = DockStyle.Fill };
-    private readonly TabPage RelayTab = new("跨Agent管理");
-    private readonly TabPage HarnessTab = new("跨 Harness 协作");
-    private readonly Button ThemeButton = new();
+    private readonly NavigationPage RelayTab = new("跨 Agent 管理");
+    private readonly NavigationPage HarnessTab = new("跨 Harness 协作");
+    private readonly NavigationPage LibraryTab = new("规则与技能库");
+    private readonly Button ThemeButton = new StudioButton();
     private readonly AppTheme Theme;
     private readonly bool PreviewOnly;
     private readonly RelayStore? TaskStore;
@@ -63,17 +64,18 @@ public sealed class MainForm : Form
         NativeDestroyIcon(IconHandle);
 
         var Root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 3, Padding = new Padding(24) };
-        Root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 260));
+        Root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 220));
         Root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         Root.RowStyles.Add(new RowStyle(SizeType.Absolute, 76));
         Root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         Root.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
-        var InstancesTab = new TabPage("实例管理") { BackColor = BackColor };
+        var InstancesTab = new NavigationPage("实例管理") { BackColor = BackColor };
         InstancesTab.Controls.Add(Root);
         MainTabs.TabPages.Add(InstancesTab);
         MainTabs.TabPages.Add(RelayTab);
         MainTabs.TabPages.Add(HarnessTab);
-        MainTabs.SelectedIndexChanged += (_, _) => { if (MainTabs.SelectedTab == RelayTab) BuildRelayPage(); else if (MainTabs.SelectedTab == HarnessTab) BuildHarnessPage(); };
+        MainTabs.TabPages.Add(LibraryTab);
+        MainTabs.SelectedIndexChanged += (_, _) => { if (MainTabs.SelectedTab == RelayTab) BuildRelayPage(); else if (MainTabs.SelectedTab == HarnessTab) BuildHarnessPage(); else if (MainTabs.SelectedTab == LibraryTab) BuildLibraryPage(); };
         Controls.Add(MainTabs);
         StyleButton(ThemeButton, false);
         ThemeButton.Name = AppTheme.ToggleButtonName;
@@ -83,8 +85,8 @@ public sealed class MainForm : Form
         var Header = new Panel { Dock = DockStyle.Fill };
         Header.Controls.Add(ThemeButton);
         Header.Layout += (_, _) => PositionThemeButton();
-        Header.Controls.Add(new Label { Text = "Codex 实例管理器", Font = new Font(Font.FontFamily, 23, FontStyle.Bold), AutoSize = true, Location = new Point(0, 0) });
-        Header.Controls.Add(new Label { Text = "独立配置 · 一键启动 · 同步工具", ForeColor = Color.DimGray, AutoSize = true, Location = new Point(3, 43) });
+        Header.Controls.Add(new Label { Text = "工作空间", Font = new Font(Font.FontFamily, 22, FontStyle.Bold), AutoSize = true, Location = new Point(0, 0) });
+        Header.Controls.Add(new Label { Text = "管理实例与工具  /  为每项工作保持独立环境", ForeColor = Color.DimGray, AutoSize = true, Location = new Point(3, 43) });
         Root.Controls.Add(Header, 0, 0);
         Root.SetColumnSpan(Header, 2);
 
@@ -97,7 +99,7 @@ public sealed class MainForm : Form
         InstanceList.BorderStyle = BorderStyle.None;
         InstanceList.BackColor = Color.White;
         InstanceList.DrawMode = DrawMode.OwnerDrawFixed;
-        InstanceList.ItemHeight = 82;
+        InstanceList.ItemHeight = 76;
         InstanceList.DrawItem += DrawInstance;
         InstanceList.SelectedIndexChanged += (_, _) => LoadSelected();
         Left.Controls.Add(InstanceList, 0, 1);
@@ -181,11 +183,11 @@ public sealed class MainForm : Form
 
         var SyncCard = MakeCard("同步 Skills / MCP", 8);
         var SyncBody = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false };
-        SyncBody.Controls.Add(new Label { Text = "从其他实例单向复制用户 Skills、MCP、规则与可选插件", AutoSize = true });
+        SyncBody.Controls.Add(new Label { Text = "以主实例为源镜像 Skills 自动去重并移除目标多余项", AutoSize = true });
         SyncBody.Controls.Add(new Label { Text = "不导入对话、项目、置顶和排序  ·  保留目标账号与模型", ForeColor = Color.DimGray, AutoSize = true });
         SyncButton.Text = "选择配置内容并预览";
         StyleButton(SyncButton, true);
-        SyncButton.Click += (_, _) => SafeAction(() => { SaveSelected(); if (Selected is not null) using (var Dialog = new SyncDialog(Settings.InstanceList, Selected)) ShowThemedDialog(Dialog); });
+        SyncButton.Click += (_, _) => SafeAction(() => { SaveSelected(); if (Selected is not null) using (var Dialog = new SyncDialog(Settings.InstanceList, Selected, Settings.Library.ExcludedNameList)) ShowThemedDialog(Dialog); });
         SyncBody.Controls.Add(SyncButton);
         SyncCard.Controls.Add(SyncBody);
         Right.Controls.Add(SyncCard, 0, 3);
@@ -244,7 +246,7 @@ public sealed class MainForm : Form
 
     private static Panel MakeCard(string Title, int BottomMargin)
     {
-        var Card = new Panel { Dock = DockStyle.Fill, BackColor = Color.White, Padding = new Padding(18, 42, 18, 12), Margin = new Padding(0, 0, 0, BottomMargin) };
+        var Card = new StudioCard { Dock = DockStyle.Fill, BackColor = Color.White, Padding = new Padding(18, 42, 18, 12), Margin = new Padding(0, 0, 0, BottomMargin) };
         Card.Controls.Add(new Label { Text = Title, Font = new Font("Microsoft YaHei UI", 11, FontStyle.Bold), AutoSize = true, Location = new Point(18, 12) });
         return Card;
     }
@@ -262,6 +264,18 @@ public sealed class MainForm : Form
         var Page = new HarnessPage(Settings, TaskCoordinator?.Cursor, Theme, () => SafeAction(ToggleTheme));
         HarnessTab.Controls.Add(Page);
         Theme.Apply(Page);
+    }
+    private void BuildLibraryPage()
+    {
+        if (LibraryTab.Controls.Count != 0) return;
+        var Page = new LibraryPage(Settings, Theme, PreviewOnly);
+        LibraryTab.Controls.Add(Page);
+        Theme.Apply(Page);
+    }
+    public void ShowLibraryPage()
+    {
+        BuildLibraryPage();
+        MainTabs.SelectedTab = LibraryTab;
     }
     public void ShowHarnessPage()
     {
@@ -281,7 +295,7 @@ public sealed class MainForm : Form
     }
     public static Button MakeButton(string Text, EventHandler Handler, bool Primary = false)
     {
-        var Button = new Button { Text = Text };
+        var Button = new StudioButton { Text = Text };
         StyleButton(Button, Primary);
         Button.Click += Handler;
         return Button;
@@ -295,6 +309,7 @@ public sealed class MainForm : Form
         Button.FlatAppearance.BorderSize = Primary ? 0 : 1;
         Button.FlatAppearance.BorderColor = Color.FromArgb(219, 222, 233);
         Button.BackColor = Primary ? AccentColor : Color.White;
+        if (Primary) Button.Tag = eThemeRole.Primary;
         Button.ForeColor = Primary ? Color.White : Color.FromArgb(53, 59, 77);
         Button.Cursor = Cursors.Hand;
         Button.Margin = new Padding(0, 2, 8, 2);
@@ -461,6 +476,7 @@ public sealed class MainForm : Form
         if (Command == "show") { ShowManager(); return; }
         if (Command == "relay") { ShowRelayPage(); ShowManager(); return; }
         if (Command == "harness") { ShowHarnessPage(); ShowManager(); return; }
+        if (Command == "library") { ShowLibraryPage(); ShowManager(); return; }
         var Profile = Settings.InstanceList.FirstOrDefault(Item => Item.Id == Command) ?? throw new InvalidOperationException("找不到指定实例 " + Command);
         InstanceList.SelectedItem = Profile;
         await LaunchSelectedAsync();

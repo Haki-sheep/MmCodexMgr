@@ -25,22 +25,32 @@ public static class Program
         ApplicationConfiguration.Initialize();
         try
         {
-            if (ArgumentList.Length == 2 && ArgumentList[0] is "--render-preview" or "--render-relay-preview" or "--render-harness-preview")
+            if (ArgumentList.Length == 2 && ArgumentList[0] is "--render-preview" or "--render-relay-preview" or "--render-harness-preview" or "--render-library-preview")
             {
-                var PreviewStore = new RelayStore(Path.Combine(Path.GetTempPath(), "CodexManagerRelayPreview-" + Guid.NewGuid().ToString("N")));
-                using var PreviewCoordinator = new RelayCoordinator(PreviewStore, new DesktopRelayBridge());
-                using var Preview = new MainForm(SettingsStore.Load(), true, PreviewStore, PreviewCoordinator);
-                if (ArgumentList[0] == "--render-relay-preview") Preview.ShowRelayPage();
-                if (ArgumentList[0] == "--render-harness-preview") Preview.ShowHarnessPage();
-                Preview.Show();
-                Application.DoEvents();
-                using var Bitmap = new Bitmap(Preview.Width, Preview.Height);
-                Preview.DrawToBitmap(Bitmap, new Rectangle(0, 0, Preview.Width, Preview.Height));
-                Bitmap.Save(ArgumentList[1]);
-                File.WriteAllText(ArgumentList[1] + ".json", System.Text.Json.JsonSerializer.Serialize(new { Preview.DeviceDpi, Preview.CurrentAutoScaleDimensions, Preview.AutoScaleDimensions, FontHeight = Preview.Font.Height, Controls = DescribeLayout(Preview) }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+                string PreviewRoot = Path.Combine(Path.GetTempPath(), "CodexManagerRelayPreview-" + Guid.NewGuid().ToString("N"));
+                try
+                {
+                    var PreviewStore = new RelayStore(PreviewRoot);
+                    using var PreviewCoordinator = new RelayCoordinator(PreviewStore, new DesktopRelayBridge());
+                    using var Preview = new MainForm(SettingsStore.Load(), true, PreviewStore, PreviewCoordinator);
+                    if (ArgumentList[0] == "--render-relay-preview") Preview.ShowRelayPage();
+                    if (ArgumentList[0] == "--render-harness-preview") Preview.ShowHarnessPage();
+                    if (ArgumentList[0] == "--render-library-preview") Preview.ShowLibraryPage();
+                    Preview.Show();
+                    Application.DoEvents();
+                    using var Bitmap = new Bitmap(Preview.Width, Preview.Height);
+                    Preview.DrawToBitmap(Bitmap, new Rectangle(0, 0, Preview.Width, Preview.Height));
+                    Bitmap.Save(ArgumentList[1]);
+                    File.WriteAllText(ArgumentList[1] + ".json", System.Text.Json.JsonSerializer.Serialize(new { Preview.DeviceDpi, Preview.CurrentAutoScaleDimensions, Preview.AutoScaleDimensions, FontHeight = Preview.Font.Height, Controls = DescribeLayout(Preview) }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+                }
+                finally
+                {
+                    if (!ManagerPaths.IsUnder(PreviewRoot, Path.GetTempPath())) throw new IOException("预览清理路径越界");
+                    if (Directory.Exists(PreviewRoot)) Directory.Delete(PreviewRoot, true);
+                }
                 return;
             }
-            string Command = ArgumentList.Length == 2 && ArgumentList[0] == "--launch" ? ArgumentList[1] : ArgumentList.Contains("--relay") ? "relay" : ArgumentList.Contains("--harness") ? "harness" : "show";
+            string Command = ArgumentList.Length == 2 && ArgumentList[0] == "--launch" ? ArgumentList[1] : ArgumentList.Contains("--relay") ? "relay" : ArgumentList.Contains("--harness") ? "harness" : ArgumentList.Contains("--library") ? "library" : "show";
             using var Mutex = new Mutex(true, "Local\\" + PipeName, out bool Created);
             if (!Created)
             {

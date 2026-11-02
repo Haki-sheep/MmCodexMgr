@@ -13,6 +13,7 @@ internal static class Tests
     private static int Main(string[] ArgumentList)
     {
         if (ArgumentList.Contains("--library")) return LibraryTests.Run();
+        if (ArgumentList.Contains("--library-ui")) return LibraryUiTests.Run();
         if (ArgumentList.Contains("--activity-live")) return Task.Run(RelayInvalidTaskTests.LiveProbeAsync).GetAwaiter().GetResult();
         if (ArgumentList.Contains("--invalid-tasks")) { Task.Run(RelayInvalidTaskTests.RunAsync).GetAwaiter().GetResult(); return 0; }
         if (ArgumentList.Contains("--harness-ui")) return HarnessUiTests.Run();
