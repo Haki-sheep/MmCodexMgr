@@ -63,12 +63,13 @@ internal static class HarnessUiTests
                 if (Grid.Columns.Count != 5 || Grid.Columns[1].HeaderText != "协调者：会话名" || Grid.Columns[2].HeaderText != "执行者：会话名") throw new Exception("Incorrect board columns");
                 Count++;
                 var MenuButton = Descendants(Board).OfType<Button>().Single(Item => Item.Text == "任务看板");
-                if (!MenuButton.Parent!.ClientRectangle.Contains(MenuButton.Bounds)) throw new Exception("Board menu clipped " + Size);
+                if (!MenuButton.Parent!.ClientRectangle.Contains(MenuButton.Bounds)) throw new Exception("Board action clipped " + Size);
                 Count++;
+                if (MenuButton.ContextMenuStrip is not null) throw new Exception("Board cleanup must execute directly without a menu");
                 MenuButton.PerformClick();
-                Application.DoEvents();
-                if (!MenuButton.ContextMenuStrip!.Visible || !MenuButton.ContextMenuStrip.Items.Cast<ToolStripItem>().Select(Item => Item.Text).SequenceEqual(new[] { "检查并清空无效任务", "清空已阻塞", "清空已结束" })) throw new Exception("Board menu lost cleanup commands");
-                MenuButton.ContextMenuStrip.Close();
+                var CleanupWait = System.Diagnostics.Stopwatch.StartNew();
+                while (!Descendants(Board).OfType<Label>().Any(Item => Item.Text.StartsWith("已清理")) && CleanupWait.Elapsed < TimeSpan.FromSeconds(5)) { Application.DoEvents(); Thread.Sleep(5); }
+                if (!Descendants(Board).OfType<Label>().Any(Item => Item.Text.StartsWith("已清理 无效 0 条 · 阻塞 0 条 · 已结束 0 条"))) throw new Exception("Single click did not execute all three cleanup stages");
                 Count++;
                 if (Descendants(Board).OfType<RelayChannelEditor>().Any()) throw new Exception("Channel editor still on task board");
                 Count++;

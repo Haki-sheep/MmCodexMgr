@@ -56,7 +56,24 @@ internal static class RelayInvalidTaskTests
         Require(Removed == 55 && Store.FindTask(StaleList[0].Id) is not null, "cleanup rechecks activity and preserves tasks that restarted after preview");
         Require(Store.FindTask(Returned.Id) is null && Store.FindTask(Accepted.Id) is not null && Store.FindTask(Decision.Id) is not null, "stale execution labels clear while accepted and decision records are retained");
         Require(Store.Get(Parent.Id).State == eRelayState.Running && Store.Get(Child.Id).State == eRelayState.Running, "live parent and child states are unchanged");
-        Console.WriteLine("PASS invalid task activity cleanup 6 assertions; fixture=" + Root);
+        var Finished = Add("one-click-finished", eRelayState.Accepted);
+        var Blocked = Add("one-click-blocked", eRelayState.TimedOut);
+        var Stale = Add("one-click-stale");
+        var Resumed = Add("one-click-resumed");
+        var RecheckValidator = new RelayTaskValidator(Settings, Store, null, Probe);
+        async Task<RelayValidity> Recheck(RelayTask Item)
+        {
+            if (Item.Id == Resumed.Id) Probe.StateDict[Item.Channel.WorkerThreadId] = eRelayActivity.Active;
+            return await RecheckValidator.CheckAsync(Item);
+        }
+        var Cleaned = await Coordinator.CleanupBoardAsync(Validator.CheckAsync, Recheck);
+        Require(Cleaned.InvalidCount == 1 && Cleaned.BlockedCount == 2 && Cleaned.FinishedCount == 2, "one action executes invalid blocked and finished cleanup even when invalid recheck preserves a resumed task");
+        Require(Store.FindTask(Stale.Id) is null && Store.FindTask(Blocked.Id) is null && Store.FindTask(Finished.Id) is null && Store.FindTask(Decision.Id) is null, "all three cleanup categories are actually removed");
+        Require(Store.Get(Resumed.Id).State == eRelayState.Running && Store.Get(Parent.Id).State == eRelayState.Running && Store.Get(Child.Id).State == eRelayState.Running, "fresh recheck and active descendants protect running records");
+        Require(Store.Get(Unknown.Id).State == eRelayState.Running && Cleaned.UncheckedCount == 1 && Store.Count() == 7, "unknown activity and valid tasks remain after the combined cleanup");
+        var Again = await Coordinator.CleanupBoardAsync(Validator.CheckAsync, RecheckValidator.CheckAsync);
+        Require(Again.InvalidCount == 0 && Again.BlockedCount == 0 && Again.FinishedCount == 0, "repeated combined cleanup is stable");
+        Console.WriteLine("PASS invalid task activity and combined cleanup 11 assertions; fixture=" + Root);
     }
 
     private static void Require(bool Condition, string Message)

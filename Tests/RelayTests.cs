@@ -52,11 +52,8 @@ internal static class RelayTests
         Require(Grid.RowCount == 5 && Grid.Rows.Cast<DataGridViewRow>().Select(Item => Item.Cells[3].Value?.ToString()).ToHashSet().SetEquals(new[] { "未开始", "执行者正在执行", "协调者正在执行", "已阻塞", "已结束" }), "preview demonstrates the five workflow states");
         Require(Grid.Rows.Cast<DataGridViewRow>().All(Item => Item.Cells[4].Value?.ToString() == (Item.Cells[3].Value?.ToString() == "已结束" ? "删除" : "中断任务")), "finished rows expose deletion and unfinished rows keep interruption");
         var BoardButton = Descendants(Form).OfType<Button>().Single(Item => Item.Text == "任务看板");
-        Require(BoardButton.Parent!.ClientRectangle.Contains(BoardButton.Bounds), "single board menu button fits in footer");
-        BoardButton.PerformClick();
-        Application.DoEvents();
-        Require(BoardButton.ContextMenuStrip!.Items.Cast<ToolStripItem>().Select(Item => Item.Text).SequenceEqual(new[] { "检查并清空无效任务", "清空已阻塞", "清空已结束" }), "board menu preserves all three cleanup actions");
-        BoardButton.ContextMenuStrip.Close();
+        Require(BoardButton.Parent!.ClientRectangle.Contains(BoardButton.Bounds), "single board action fits in footer");
+        Require(BoardButton.ContextMenuStrip is null, "board cleanup runs directly without selecting a menu action");
         Toggle.PerformClick();
         Application.DoEvents();
         Require(Settings.DarkMode != DarkMode && Grid.BackgroundColor == (Settings.DarkMode ? ThemePalette.Dark.Surface : ThemePalette.Light.Surface), "theme toggle updates settings and existing task table together");

@@ -10,8 +10,6 @@ public sealed class RelayPage : UserControl
     private readonly Label Status = new() { Dock = DockStyle.Fill, AutoSize = true, AutoEllipsis = true, Tag = eThemeRole.Muted, Visible = false };
     private readonly Label PageLabel = new() { AutoSize = true, Margin = new Padding(8, 10, 8, 0) };
     private readonly RelayTreeView TreeView;
-    /// <summary> 任务记录维护菜单 </summary>
-    private readonly ContextMenuStrip BoardMenu = new();
     private int Offset;
     private bool Busy;
 
@@ -126,12 +124,8 @@ public sealed class RelayPage : UserControl
         Footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         Footer.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         Footer.Controls.Add(Pages, 0, 0);
-        BoardMenu.Items.Add("检查并清空无效任务", null, async (_, _) => await RunAsync(ClearInvalidTasksAsync));
-        BoardMenu.Items.Add("清空已阻塞", null, async (_, _) => await RunAsync(ClearBlockedHistoryAsync));
-        BoardMenu.Items.Add("清空已结束", null, async (_, _) => await RunAsync(ClearHistoryAsync));
-        var BoardButton = MainForm.MakeButton("任务看板", (Sender, _) => { var Button = (Button)Sender!; BoardMenu.BackColor = Theme.Palette.Surface; BoardMenu.ForeColor = Theme.Palette.Text; BoardMenu.Show(Button, new Point(0, Button.Height)); });
-        BoardButton.AccessibleDescription = "打开任务检查与清理菜单";
-        BoardButton.ContextMenuStrip = BoardMenu;
+        var BoardButton = MainForm.MakeButton("任务看板", async (_, _) => await RunAsync(CleanupBoardAsync));
+        BoardButton.AccessibleDescription = "一键检查并清理无效任务 已阻塞和已结束记录 阻塞任务及其下级将中断联调";
         Footer.Controls.Add(BoardButton, 1, 0);
         ListPanel.Controls.Add(Footer);
         Root.Controls.Add(ListPanel);
@@ -146,7 +140,7 @@ public sealed class RelayPage : UserControl
 
     protected override void Dispose(bool Disposing)
     {
-        if (Disposing) { Coordinator.Changed -= OnChanged; BoardMenu.Dispose(); }
+        if (Disposing) Coordinator.Changed -= OnChanged;
         base.Dispose(Disposing);
     }
     #endregion
@@ -196,23 +190,14 @@ public sealed class RelayPage : UserControl
     #endregion
 
     #region Actions
-    private async Task ClearInvalidTasksAsync()
+    private async Task CleanupBoardAsync()
     {
-        var Validator = new RelayTaskValidator(SettingsStore.Load(), Store, Coordinator.Cursor);
-        var Scan = await Task.Run(() => Coordinator.CheckInvalidAsync(Validator.CheckAsync));
-        string Details = $"已检查 {Scan.CheckedCount} 条任务\n已确认无效 {Scan.InvalidList.Count} 条\n无法确认 {Scan.UncheckedList.Count} 条将保留";
-        if (Scan.InvalidList.Count == 0)
-        {
-            MessageBox.Show(this, Details, "任务检查完成", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            SetStatus(Details.Replace("\n", " · "));
-            return;
-        }
-        string Preview = string.Join("\n", Scan.InvalidList.Take(8).Select(Item => Item.Title + " · " + Item.Reason));
-        if (MessageBox.Show(this, Details + "\n\n" + Preview + "\n\n确认清空已确认没有执行活动的任务记录？\n未结束的下级联调会中断 对话和项目文件保留", "检查并清空无效任务", MessageBoxButtons.OKCancel, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.OK) return;
-        var FreshValidator = new RelayTaskValidator(SettingsStore.Load(), Store, Coordinator.Cursor);
-        int Removed = await Task.Run(() => Coordinator.ClearInvalidAsync(Scan.InvalidList.Select(Item => Item.Id).ToList(), FreshValidator.CheckAsync));
+        SetStatus("正在检查任务并清理无效 阻塞和结束记录…");
+        var Validator = new RelayTaskValidator(Settings, Store, Coordinator.Cursor);
+        var FreshValidator = new RelayTaskValidator(Settings, Store, Coordinator.Cursor);
+        var Result = await Task.Run(() => Coordinator.CleanupBoardAsync(Validator.CheckAsync, FreshValidator.CheckAsync));
         Offset = 0;
-        SetStatus($"已清空 {Removed} 条无效任务 无法确认或重新有效的记录已保留");
+        SetStatus($"已清理 无效 {Result.InvalidCount} 条 · 阻塞 {Result.BlockedCount} 条 · 已结束 {Result.FinishedCount} 条 · 检查 {Result.CheckedCount} 条 · 活动不明 {Result.UncheckedCount} 条未按无效清理");
     }
 
     private async Task DeleteHistoryAsync(RelayTaskSummary Item)
@@ -220,22 +205,6 @@ public sealed class RelayPage : UserControl
         if (MessageBox.Show(this, "删除任务记录「" + Item.Title + "」？\n对应的 Codex 对话和项目文件会保留", "删除任务记录", MessageBoxButtons.OKCancel, MessageBoxIcon.Warning) != DialogResult.OK) return;
         await Coordinator.DeleteHistoryAsync(Item.Id);
         SetStatus("已删除任务记录");
-    }
-
-    private async Task ClearHistoryAsync()
-    {
-        if (MessageBox.Show(this, "清空所有分页中的已结束任务记录？\n进行中和待处理任务会保留", "清空已结束任务", MessageBoxButtons.OKCancel, MessageBoxIcon.Warning) != DialogResult.OK) return;
-        int DeletedCount = await Coordinator.ClearHistoryAsync();
-        Offset = 0;
-        SetStatus("已清空 " + DeletedCount + " 条已结束任务记录");
-    }
-
-    private async Task ClearBlockedHistoryAsync()
-    {
-        if (MessageBox.Show(this, "清空所有分页中的已阻塞任务记录？\n将中断这些任务及其未结束下级的联调 下级记录保留为已结束\n对应的 Codex 对话和项目文件会保留 Cursor CLI 将停止 Codex 模型与脚本需要手动停止", "清空已阻塞任务", MessageBoxButtons.OKCancel, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.OK) return;
-        int DeletedCount = await Task.Run(Coordinator.ClearBlockedHistoryAsync);
-        Offset = 0;
-        SetStatus("已清空 " + DeletedCount + " 条已阻塞任务记录");
     }
 
     private async Task CancelAsync(string TaskId)
