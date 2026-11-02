@@ -181,6 +181,18 @@ CLI 与 MCP 发送最终回报前会保存到本地发件箱 若管理器离线 
 
 手动 resume 重新计算原时长的截止时间 自动恢复保留原截止时间 已恢复且执行中的重复请求不会再次发送 已撤销 超时 已完成的任务不能 resume 续跑消息投递不明确时保留派发待核对 先核对目标再使用 reconcile 不把 resume 当作重发手段 管理器在恢复准备期间退出时尚未发送续跑消息 重启后可使用 resume
 
+## 管理器规则与技能库
+
+管理器的规则与技能库页支持查看 Skill 的 name 与 description 打开源文件 扫描全局 Rule 并先预览再同步 Rule 以配置的唯一源 MD 为准 不合并各软件里的旧版本 WorkBuddy 等未核实文件接口的软件使用复制源规则后在软件设置导入
+
+实例页的 Skills 同步固定以主实例为源 按 SKILL.md 的 name 去重并完整镜像 目标多余自定义 Skill 移入备份 .system 保留 账号 模型 对话与项目保留 因此更新本 Skill 后先安装到主实例再同步其他实例
+
+Git 源库位于所选仓库的 Library 目录 可导入库外任意包含 SKILL.md 的技能包 不限制名称与数量 排除项仅保存在本机 新用户默认不排除任何 Skill 发布以所选维护源库为准 保留尚未安装到本机的包 其他电脑拉取后可采用 Git 库 再预览安装整库和同步规则 本 Skill 的维护源码仍在 MmMoreMoreWork/moremore-work Library 中为可分发集合快照
+
+CLI 的 library-skills 与 library-scan-rules 无需启动管理器 library-preview-skills 与 library-preview-rules 将预览保存到指定的新 JSON 文件 核对后使用 library-apply --plan-file 应用 预览后文件变化或计划被修改时拒绝执行 完整参数以 mmcodex help 为准 发布与拉取不会自动安装 Skill 或覆盖全局 Rule
+
+分发包不预填某台电脑的 CLI 路径 scripts/mmcodex.ps1 优先使用有效的本机配置 否则从管理器选择的仓库 包所在仓库或 PATH 定位 CLI 新设备可直接在规则与技能库页选择仓库 并采用 Git 库
+
 ## 联调记录清理
 
 用户要求清理记录时使用 `agent_cleanup` 或 `cleanup --state interrupted|blocked|finished` interrupted 只清理实例退出后阻塞的记录 blocked 清理所有阻塞记录 finished 只清理已验收或已撤销的记录 CLI 与 MCP 仅清理当前调用会话作为主会话的任务 覆盖所有分页 不清理其他主会话的记录
