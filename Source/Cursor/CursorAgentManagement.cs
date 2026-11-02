@@ -22,7 +22,8 @@ public sealed partial class AgentManagementService
         if (Existing is null) Cli = CursorCli.ResolvePath(Cli);
         if (Session is not null && (!ManagerPaths.Same(Session.Cwd, Cwd) || Session.Model != Model || !ManagerPaths.Same(Session.CliPath, Cli))) throw new InvalidOperationException("已有 Cursor 会话不能更换 cwd model 或 cursor_cli_path");
         if (Existing is null && Session is not null && Cursor.IsRunning(Session.Id)) throw new InvalidOperationException("Cursor 会话正在执行 不能同时派发另一项任务");
-        var WorkerLimits = ReadWorkerLimits(Arguments) ?? new RelayAgentLimits { SubagentMax = 0, SessionMax = 0, CrossAgentMax = 0 };
+        int SubagentMax = ReadSubagentMax(Arguments, Caller, ThreadId, Existing);
+        var WorkerLimits = ReadWorkerLimits(Arguments, SubagentMax) ?? new RelayAgentLimits { SubagentMax = 0, SessionMax = 0, CrossAgentMax = 0 };
         if (WorkerLimits.SubagentMax != 0 || WorkerLimits.SessionMax != 0 || WorkerLimits.CrossAgentMax != 0) throw new InvalidOperationException("Cursor 执行端目前只执行当前任务 worker_limits 必须全部为零");
         var Main = Catalog.Session(Caller, ThreadId);
         var Route = new RelayChannel
@@ -34,7 +35,7 @@ public sealed partial class AgentManagementService
         };
         Cancellation.ThrowIfCancellationRequested();
         var Item = await Coordinator.DispatchAsync(Caller.Id, ThreadId, Key, Text(Arguments, "title"), Text(Arguments, "instructions"), Text(Arguments, "acceptance"), Route,
-            Number(Arguments, "session_max", 1), Number(Arguments, "subagent_max", 0), CrossAgentMax: Number(Arguments, "cross_agent_max", 1), WorkerLimits: WorkerLimits, TreeBudget: ReadTreeBudget(Arguments), Workspace: Workspace);
+            Number(Arguments, "session_max", 1), SubagentMax, CrossAgentMax: Number(Arguments, "cross_agent_max", 1), WorkerLimits: WorkerLimits, TreeBudget: ReadTreeBudget(Arguments), Workspace: Workspace);
         return new
         {
             task_id = Item.Id, state = RelayLimits.StateText(Item.State), instance_id = CursorRelayRunner.InstanceId,

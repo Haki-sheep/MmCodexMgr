@@ -11,7 +11,7 @@ public static class AgentToolCatalog
         {
             cwd = Text(), model = Text(), cursor_cli_path = Text(),
             request_id = Text(128), instance = Text(), project = Text(), session = Text(), create_title = Text(120), title = Text(120), instructions = Text(RelayLimits.MaxTextLength), acceptance = Text(RelayLimits.MaxTextLength),
-            subagent_max = Number(0), session_max = Number(0), cross_agent_max = Number(0), timeout_minutes = new { type = "integer", minimum = 0, maximum = 1440, description = "等待回报的分钟数 默认 60 设为 0 表示无限等待" },
+            subagent_max = new { type = "integer", minimum = 0, @default = RelayLimits.DefaultSubagentMax, description = "原生子代理并发上限 新根任务默认 3 下级继承上级预算 重试保留原值 显式 0 禁用 仍受宿主上限约束" }, session_max = Number(0), cross_agent_max = Number(0), timeout_minutes = new { type = "integer", minimum = 0, maximum = 1440, description = "等待回报的分钟数 默认 60 设为 0 表示无限等待" },
             tree_session_max = Number(1), max_depth = new { type = "integer", minimum = 1, maximum = RelayLimits.MaxTreeDepth },
             worker_limits = new { type = "object", properties = new { subagent_max = Number(0), session_max = Number(0), cross_agent_max = Number(0) }, additionalProperties = false },
             workspace = new { type = "object", properties = new { access = new { type = "string", @enum = new[] { "read_only", "write" } }, write_paths = new { type = "array", items = Text(1024), maxItems = 20 } }, required = new[] { "access" }, additionalProperties = false }

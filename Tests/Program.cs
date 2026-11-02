@@ -30,6 +30,7 @@ internal static class Tests
         if (ArgumentList.Contains("--memory-probe")) return MemoryTests.Run();
         if (ArgumentList.Contains("--relay-live")) return RelayTests.LiveProbe();
         if (ArgumentList.Contains("--agents-live")) return AgentManagementTests.LiveProbe();
+        if (ArgumentList.Contains("--agent-defaults")) { AgentManagementTests.RunDefaults(); return 0; }
         if (ArgumentList.Contains("--agents")) { AgentManagementTests.Run(); return 0; }
         if (ArgumentList.Contains("--collaboration")) { CollaborationTests.Run(); return 0; }
         if (ArgumentList.Contains("--events-live")) return CollaborationTests.EventProbe();

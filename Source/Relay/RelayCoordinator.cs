@@ -63,7 +63,7 @@ public sealed partial class RelayCoordinator : IDisposable
     #endregion
 
     #region Commands
-    public async Task<RelayTask> DispatchAsync(string InstanceId, string ThreadId, string RequestKey, string Title, string Instructions, string Acceptance, RelayChannel? Route = null, int SessionMax = 1, int SubagentMax = 0, Func<RelayTask, Task<RelayThread>>? CreateAsync = null, int CrossAgentMax = 1, RelayAgentLimits? WorkerLimits = null, RelayTreeBudget? TreeBudget = null, RelayWorkspace? Workspace = null)
+    public async Task<RelayTask> DispatchAsync(string InstanceId, string ThreadId, string RequestKey, string Title, string Instructions, string Acceptance, RelayChannel? Route = null, int SessionMax = 1, int SubagentMax = RelayLimits.DefaultSubagentMax, Func<RelayTask, Task<RelayThread>>? CreateAsync = null, int CrossAgentMax = 1, RelayAgentLimits? WorkerLimits = null, RelayTreeBudget? TreeBudget = null, RelayWorkspace? Workspace = null)
     {
         await Gate.WaitAsync(Lifetime.Token);
         try

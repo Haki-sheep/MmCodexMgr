@@ -10,6 +10,8 @@ internal static class AgentManagementTests
     #region Entry
     public static void Run() => Task.Run(VerifyAsync).GetAwaiter().GetResult();
 
+    public static void RunDefaults() => Task.Run(VerifyDefaultBudgetsAsync).GetAwaiter().GetResult();
+
     public static int LiveProbe()
     {
         var Instance = SettingsStore.Load().InstanceList.Single(Item => Item.IsPrimary);
@@ -26,6 +28,28 @@ internal static class AgentManagementTests
     #endregion
 
     #region Verification
+    private static async Task VerifyDefaultBudgetsAsync()
+    {
+        string Root = Path.Combine(Path.GetTempPath(), "CodexAgentDefaultsTests-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Root);
+        try
+        {
+            var Settings = new ManagerSettings { InstanceList = new() { new() { Id = "main", Name = "主实例", HomePath = Path.Combine(Root, "main") } } };
+            var Store = new RelayStore(Path.Combine(Root, "relay"));
+            using var Coordinator = new RelayCoordinator(Store, new FakeBridge());
+            var Service = new AgentManagementService(Store, Coordinator, new FakeCatalog(Root), Environment.ProcessPath!, () => Settings);
+            string PipeName = "CodexAgentDefaultsTests-" + Guid.NewGuid().ToString("N");
+            using var Host = new RelayHost(Coordinator, PipeName, Service);
+            await VerifySubagentDefaultsAsync(Root, PipeName, Settings, Coordinator);
+            Console.WriteLine($"PASS agent defaults {Count} assertions");
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            Directory.Delete(Root, true);
+        }
+    }
+
     private static async Task VerifyAsync()
     {
         string Root = Path.Combine(Path.GetTempPath(), "CodexAgentTests-" + Guid.NewGuid().ToString("N"));
@@ -135,9 +159,36 @@ internal static class AgentManagementTests
         await Coordinator.CancelAsync(CreatedLoose.GetProperty("task_id").GetString()!);
         var LooseSessions = await CliAsync(new[] { "sessions", "--instance", "second", "--session", "loose-session" }, Root, PipeName, Settings);
         Require(LooseSessions[0].GetProperty("Id").GetString() == "loose-session" && Catalog.ProjectCalls == ProjectCalls, "CLI lists standalone sessions without a project option");
+        await VerifySubagentDefaultsAsync(Root, PipeName, Settings, Coordinator);
         await VerifyCatalogAsync(Root);
         VerifyCliRelocation(Path.Combine(Root, "cli-relocation"));
         Console.WriteLine($"PASS agent management {Count} assertions; fixture={Root}");
+    }
+
+    private static async Task VerifySubagentDefaultsAsync(string Root, string PipeName, ManagerSettings Settings, RelayCoordinator Coordinator)
+    {
+        foreach (int Limit in new[] { 3, 1, 0 })
+        {
+            var RequestDict = Start("default-root-" + Limit, "main", "session-a");
+            if (Limit == 3) RequestDict.Remove("subagent_max");
+            else RequestDict["subagent_max"] = Limit;
+            RequestDict["worker_limits"] = new { session_max = 1, cross_agent_max = 1 };
+            var Started = await StartAsync(RequestDict, Root, PipeName, Settings);
+            string RootId = Started.GetProperty("task_id").GetString()!;
+            Require(Started.GetProperty("subagent_max").GetInt32() == Limit && Started.GetProperty("worker_limits").GetProperty("SubagentMax").GetInt32() == Limit, "omitted root and worker defaults preserve configured Subagent budget " + Limit);
+            var ChildRequestDict = Start("default-child-" + Limit, "main", "session-c");
+            ChildRequestDict.Remove("subagent_max");
+            var Child = await StartAsync(ChildRequestDict, Root, PipeName, Settings, "session-a");
+            Require(Child.GetProperty("subagent_max").GetInt32() == Limit && Child.GetProperty("worker_limits").GetProperty("SubagentMax").GetInt32() == Limit, "omitted child limit inherits parent budget including explicit zero " + Limit);
+            await Coordinator.CancelAsync(Child.GetProperty("task_id").GetString()!);
+            var EscalationDict = Start("default-escalation-" + Limit, "main", "session-d");
+            EscalationDict["subagent_max"] = Limit + 1;
+            await RejectAsync(() => StartAsync(EscalationDict, Root, PipeName, Settings, "session-a"), "explicit child limit cannot exceed inherited budget " + Limit);
+            await Coordinator.CancelAsync(RootId);
+            RequestDict.Remove("subagent_max");
+            var Retried = await StartAsync(RequestDict, Root, PipeName, Settings);
+            Require(Retried.GetProperty("task_id").GetString() == RootId && Retried.GetProperty("subagent_max").GetInt32() == Limit, "retry without limit retains original budget " + Limit);
+        }
     }
 
     private static void VerifyCliRelocation(string Root)

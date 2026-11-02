@@ -19,7 +19,8 @@ public static class AgentCli
           Cursor 可选 model cursor_cli_path 已有会话不能更换目录 CLI 或模型
           Cursor 只执行当前任务 worker_limits 必须为零 默认全部为零
           目标 session 或 create_title 二选一
-          可选 subagent_max=0 session_max=1 cross_agent_max=1 timeout_minutes=60
+          可选 subagent_max=3 session_max=1 cross_agent_max=1 timeout_minutes=60
+          未指定 subagent_max 时新根任务默认 3 下级继承上级预算 重试保留原值 显式 0 禁用
           session_max 与 cross_agent_max 按本次请求校验 不锁定为已有任务的值 下级仍受上级预算约束
           timeout_minutes 范围 0 至 1440 分钟 0 表示无限等待
           worker_limits 可分别指定下级三种协作上限 默认继承本层

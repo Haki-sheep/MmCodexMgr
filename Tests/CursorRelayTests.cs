@@ -47,6 +47,7 @@ internal static class CursorRelayTests
         string FirstId = First.GetProperty("task_id").GetString()!;
         string SessionId = First.GetProperty("thread_id").GetString()!;
         var Returned = await AwaitAsync("first", Item => Item.State == eRelayState.Returned);
+        Require(Returned.SubagentMax == 3 && Returned.WorkerLimits.SubagentMax == 0 && Returned.WorkerLimits.SessionMax == 0 && Returned.WorkerLimits.CrossAgentMax == 0, "default root Subagent budget does not enable delegation inside Cursor leaf");
         Require(Returned.Result == "CURSOR_MANAGER_OK" && Returned.Outcome == "completed", "Cursor result automatically returns through coordinator");
         Require(Returned.Channel.WorkerThreadId == SessionId && Returned.ProgressStage == "started", "started event binds the expected session");
         Require(Bridge.PromptList.Count == 1 && Bridge.PromptList[0].Contains("CURSOR_MANAGER_OK"), "main callback carries actual Cursor result");

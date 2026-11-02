@@ -94,6 +94,8 @@ public sealed record RelayThread(string Id, string Title, string Status)
 public static class RelayLimits
 {
     public const int PageSize = 40;
+    /// <summary>原生子代理的默认并发上限</summary>
+    public const int DefaultSubagentMax = 3;
     public const int DefaultTreeSessionMax = 8;
     public const int DefaultTreeMaxDepth = 3;
     public const int MaxTreeDepth = 32;

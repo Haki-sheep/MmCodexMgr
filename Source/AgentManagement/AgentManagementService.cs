@@ -136,10 +136,11 @@ public sealed partial class AgentManagementService
             TimeoutMinutes = Number(Arguments, "timeout_minutes", 60)
         };
         if (!File.Exists(CliPath)) throw new FileNotFoundException("回调 CLI 尚未部署", CliPath);
+        int SubagentMax = ReadSubagentMax(Arguments, Caller, ThreadId, Existing);
         var Item = await Coordinator.DispatchAsync(Caller.Id, ThreadId, Key, Text(Arguments, "title"), Text(Arguments, "instructions"), Text(Arguments, "acceptance"), Route,
-            Number(Arguments, "session_max", 1), Number(Arguments, "subagent_max", 0),
+            Number(Arguments, "session_max", 1), SubagentMax,
             CreateTitle is null ? null : TaskItem => Catalog.CreateAsync(Target, Project, CreateTitle, RelayCoordinator.BuildWorkerPrompt(TaskItem), Cancellation),
-            Number(Arguments, "cross_agent_max", 1), ReadWorkerLimits(Arguments), ReadTreeBudget(Arguments), Workspace);
+            Number(Arguments, "cross_agent_max", 1), ReadWorkerLimits(Arguments, SubagentMax), ReadTreeBudget(Arguments), Workspace);
         string Instruction = Item.State switch
         {
             eRelayState.Running => "结束当前回合 等待执行会话主动回传 不要轮询",
@@ -159,12 +160,14 @@ public sealed partial class AgentManagementService
         return new() { Access = Text(Value, "access"), WritePathList = Value.TryGetProperty("write_paths", out var Paths) ? Paths.EnumerateArray().Select(PathValue => PathValue.GetString()!).ToList() : new() };
     }
 
-    private static RelayAgentLimits? ReadWorkerLimits(JsonElement Arguments)
+    private int ReadSubagentMax(JsonElement Arguments, InstanceProfile Caller, string ThreadId, RelayTask? Existing) => Number(Arguments, "subagent_max", Existing?.SubagentMax ?? Store.IncomingTask(Caller.Id, ThreadId)?.WorkerLimits.SubagentMax ?? RelayLimits.DefaultSubagentMax);
+
+    private static RelayAgentLimits? ReadWorkerLimits(JsonElement Arguments, int SubagentMax)
     {
         if (!Arguments.TryGetProperty("worker_limits", out var Limits)) return null;
         foreach (var Property in Limits.EnumerateObject())
             if (Property.Name is not ("subagent_max" or "session_max" or "cross_agent_max")) throw new InvalidOperationException("未知下级预算 " + Property.Name);
-        return new() { SubagentMax = Number(Limits, "subagent_max", Number(Arguments, "subagent_max", 0)), SessionMax = Number(Limits, "session_max", Number(Arguments, "session_max", 1)), CrossAgentMax = Number(Limits, "cross_agent_max", Number(Arguments, "cross_agent_max", 1)) };
+        return new() { SubagentMax = Number(Limits, "subagent_max", SubagentMax), SessionMax = Number(Limits, "session_max", Number(Arguments, "session_max", 1)), CrossAgentMax = Number(Limits, "cross_agent_max", Number(Arguments, "cross_agent_max", 1)) };
     }
 
     #endregion
