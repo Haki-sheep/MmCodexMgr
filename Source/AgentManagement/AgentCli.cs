@@ -19,6 +19,8 @@ public static class AgentCli
           Cursor 可选 model cursor_cli_path 已有会话不能更换目录 CLI 或模型
           Cursor 只执行当前任务 worker_limits 必须为零 默认全部为零
           目标 session 或 create_title 二选一
+          已授权自动协作时可用 create_title 自动新建任务所需会话 无需逐次确认
+          Codex 目标实例未运行时自动启动并等待桥接就绪 首次使用需完成登录并已有会话上下文
           可选 subagent_max=3 session_max=1 cross_agent_max=1 timeout_minutes=60
           未指定 subagent_max 时新根任务默认 3 下级继承上级预算 重试保留原值 显式 0 禁用
           session_max 与 cross_agent_max 按本次请求校验 不锁定为已有任务的值 下级仍受上级预算约束

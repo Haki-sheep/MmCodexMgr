@@ -33,6 +33,7 @@ internal static class Tests
         if (ArgumentList.Contains("--memory-probe")) return MemoryTests.Run();
         if (ArgumentList.Contains("--relay-live")) return RelayTests.LiveProbe();
         if (ArgumentList.Contains("--agents-live")) return AgentManagementTests.LiveProbe();
+        if (ArgumentList.Contains("--agent-startup")) { AgentStartupTests.Run(); return 0; }
         if (ArgumentList.Contains("--agent-defaults")) { AgentManagementTests.RunDefaults(); return 0; }
         if (ArgumentList.Contains("--agents")) { AgentManagementTests.Run(); return 0; }
         if (ArgumentList.Contains("--collaboration")) { CollaborationTests.Run(); return 0; }
@@ -66,7 +67,7 @@ internal static class Tests
                 Console.WriteLine("PASS config sync " + Count + " assertions; fixture=" + Root);
                 return 0;
             }
-            TestCc(); TestDetection(); WindowTests.Run(); TestBranding(); RelayTests.Run(); AgentManagementTests.Run(); CollaborationTests.Run(); RecoveryTests.Run(); AgentCleanupTests.Run();
+            TestCc(); TestDetection(); WindowTests.Run(); TestBranding(); RelayTests.Run(); AgentManagementTests.Run(); AgentStartupTests.Run(); CollaborationTests.Run(); RecoveryTests.Run(); AgentCleanupTests.Run();
             Console.WriteLine("PASS " + Count + " assertions; fixture=" + Root);
             return 0;
         }

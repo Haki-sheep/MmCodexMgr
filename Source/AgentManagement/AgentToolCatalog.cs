@@ -7,7 +7,7 @@ public static class AgentToolCatalog
         Tool("agent_instances", "列出 Codex 实例及 Cursor CLI 执行端 Cursor 的固定 ID 为 cursor", new { }, Array.Empty<string>()),
         Tool("agent_projects", "读取指定实例的本地项目目录 不会启动模型", new { instance = Text() }, new[] { "instance" }),
         Tool("agent_sessions", "在指定实例中按会话完整名称或 ID 查找 project 可选 省略时包含无项目会话 会话按页读取 重名时需使用 ID", new { instance = Text(), project = Text(), session = Text(), offset = Number(0) }, new[] { "instance" }),
-        Tool("agent_start", "按用户指定的执行端启动联调 instance=cursor 使用 Cursor CLI 新建必须提供 cwd 不传 project 可选 model cursor_cli_path Cursor worker_limits 必须全零 默认全零 双方会话不要求关联项目 project 可选 省略时包含无项目会话 session 与 create_title 二选一 仅用户要求新建会话时提供 create_title 不指定项目时创建无项目会话 任务边界和验收必须明确 request_id 重试保持不变 成功后等待事件回传 不要轮询", new
+        Tool("agent_start", "按用户指定或已授权自动协作选择的执行端启动联调 instance=cursor 使用 Cursor CLI 新建必须提供 cwd 不传 project 可选 model cursor_cli_path Cursor worker_limits 必须全零 默认全零 双方会话不要求关联项目 project 可选 省略时包含无项目会话 session 与 create_title 二选一 用户要求新建或已授权自动协作时可用 create_title 自动创建任务所需会话 无需逐次确认 Codex 目标实例未运行时自动启动并等待桥接就绪 不指定项目时创建无项目会话 任务边界和验收必须明确 request_id 重试保持不变 成功后等待事件回传 不要轮询", new
         {
             cwd = Text(), model = Text(), cursor_cli_path = Text(),
             request_id = Text(128), instance = Text(), project = Text(), session = Text(), create_title = Text(120), title = Text(120), instructions = Text(RelayLimits.MaxTextLength), acceptance = Text(RelayLimits.MaxTextLength),

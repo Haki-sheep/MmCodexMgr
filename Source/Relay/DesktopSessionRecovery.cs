@@ -24,7 +24,7 @@ public sealed partial class DesktopRelayBridge
         };
     }
 
-    private static async Task EnsureAvailableAsync(InstanceProfile Instance, CancellationToken Cancellation)
+    internal static async Task EnsureAvailableAsync(InstanceProfile Instance, CancellationToken Cancellation)
     {
         using var Startup = CancellationTokenSource.CreateLinkedTokenSource(Cancellation);
         Startup.CancelAfter(TimeSpan.FromSeconds(25));
