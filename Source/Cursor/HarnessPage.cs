@@ -58,7 +58,7 @@ public sealed class HarnessPage : UserControl
         bool SettingsExpanded = false;
         void RefreshDetailsHeight()
         {
-            float Height = SettingsExpanded ? Math.Min(260 * DeviceDpi / 96f, Root.ClientSize.Height / 3f) : 0;
+            float Height = SettingsExpanded ? Math.Max(0, Math.Min(260 * DeviceDpi / 96f, Root.ClientSize.Height - 320 * DeviceDpi / 96f)) : 0;
             if (DetailsRow.Height != Height) DetailsRow.Height = Height;
         }
         Root.SizeChanged += (_, _) => RefreshDetailsHeight();

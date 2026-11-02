@@ -32,7 +32,7 @@ public sealed class CodexSessionsPage : UserControl
         Tag = eThemeRole.Surface;
         var Root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2 };
         Root.RowStyles.Add(new(SizeType.Percent, 100));
-        Root.RowStyles.Add(new(SizeType.Absolute, 44));
+        Root.RowStyles.Add(new(SizeType.AutoSize));
         SessionGrid.Dock = DockStyle.Fill;
         SessionGrid.ReadOnly = true;
         SessionGrid.AllowUserToAddRows = false;
@@ -51,7 +51,7 @@ public sealed class CodexSessionsPage : UserControl
         SessionGrid.CellContentClick += async (_, Event) => { if (Event.RowIndex >= 0 && Event.ColumnIndex == 3) await OpenAsync(Event.RowIndex); };
         SessionGrid.CellToolTipTextNeeded += (_, Event) => { if (Event.RowIndex >= 0 && Event.RowIndex < SessionList.Count) Event.ToolTipText = SessionList[Event.RowIndex].Id + "\n" + SessionList[Event.RowIndex].Cwd; };
         Root.Controls.Add(SessionGrid);
-        var Actions = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false };
+        var Actions = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false };
         Actions.Controls.Add(InstanceInput);
         Actions.Controls.Add(MainForm.MakeButton("刷新会话", (_, _) => RefreshSessions()));
         Actions.Controls.Add(MainForm.MakeButton("上一页", (_, _) => { Offset = Math.Max(0, Offset - RelayLimits.PageSize); RefreshSessions(); }));
