@@ -46,6 +46,20 @@ public static class AgentCli
           CLI 与实例管理器放在同一目录 目录迁移后重新运行 install 更新 Skill 与 MCP 路径
         compat-install --instance <实例>  安装 OpenCode Go 联调输入适配 保留模型与密钥 重新加载目标实例后生效
         compat-remove --instance <实例>  恢复原服务商地址 保留其余配置 重新加载目标实例后生效
+        library-skills [--source primary|library]  列出主实例或维护源库的 Skill
+        library-config [--repository <仓库根>] [--skill-source <技能源目录>] [--rule-source <规则MD>] [--excluded <name逗号列表|none>]
+          无参数查看本机配置 默认不排除任何 Skill 不限制技能名称或数量
+        library-scan-rules  扫描各 Agent 的全局规则位置 无需启动管理器
+        library-preview-skills --instance <目标实例> [--source primary|library] --plan-file <绝对路径>
+          source 默认 primary 使用 library 可将维护源库完整安装到主实例
+        library-preview-import --skill <包含SKILL.md的目录> --plan-file <绝对路径>
+          导入任意 Skill 到已配置维护源库 保留其他包 不自动安装或推送
+        library-preview-rules --agents <codex,Cursor,Claude Code等扫描名称> [--source <规则源MD>] --plan-file <绝对路径>
+          codex 表示所有已注册 Codex 实例 预览返回原文与新内容
+        library-apply --plan-file <预览JSON绝对路径>
+          先阅读预览再执行 应用前重新核对指纹 变更先备份 非主目标实例需退出
+        library-git-pull  快进拉取配置的源库仓库 有未提交改动则停止
+        library-git-publish  收录所选维护源库与规则源 仅提交 Library 目录并推送
         mcp --instance <实例ID>
         调用方默认取 CODEX_HOME 与 CODEX_THREAD_ID
         在 Codex 外使用时显式提供 --caller-instance <实例> --caller-thread <会话ID>
@@ -66,6 +80,11 @@ public static class AgentCli
             var Call = Parse(ArgumentList);
             if (Call.Command == "help") { await Writer.WriteLineAsync(Help); return 0; }
             var Settings = (LoadSettings ?? SettingsStore.Load)();
+            if (Call.Command.StartsWith("library-", StringComparison.Ordinal))
+            {
+                await Writer.WriteLineAsync(JsonSerializer.Serialize(await LibraryCli.ExecuteAsync(Call, Settings)));
+                return 0;
+            }
             if (Call.Command is "compat-install" or "compat-remove")
             {
                 var Instance = AgentManagementService.ResolveInstance(Settings, Required(Call, "instance"));
@@ -162,6 +181,13 @@ public static class AgentCli
             "install" => new[] { "instance", "skill" },
             "compat-install" or "compat-remove" => new[] { "instance" },
             "mcp" => new[] { "instance" },
+            "library-skills" => new[] { "source" },
+            "library-config" => new[] { "repository", "skill-source", "rule-source", "excluded" },
+            "library-preview-import" => new[] { "skill", "plan-file" },
+            "library-scan-rules" or "library-git-pull" or "library-git-publish" => Array.Empty<string>(),
+            "library-preview-skills" => new[] { "instance", "source", "plan-file" },
+            "library-preview-rules" => new[] { "agents", "source", "plan-file" },
+            "library-apply" => new[] { "plan-file" },
             _ => throw new InvalidOperationException("未知命令 " + Command + " 请执行 help")
         };
         var OptionDict = new Dictionary<string, string>();

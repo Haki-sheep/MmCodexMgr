@@ -23,6 +23,15 @@ public sealed class ManagerSettings
     public string SelectedId { get; set; } = "primary";
     public bool DarkMode { get; set; } = true;
     public CursorHarnessSettings Cursor { get; set; } = new();
+    public LibrarySettings Library { get; set; } = new();
+}
+
+public sealed class LibrarySettings
+{
+    public string RepositoryPath { get; set; } = LibraryGit.FindRepository();
+    public string RuleSource { get; set; } = LibraryGit.DefaultSource("Rule/AI-global-rules.md");
+    public string SkillSource { get; set; } = LibraryGit.DefaultSource("Skills");
+    public List<string> ExcludedNameList { get; set; } = new();
 }
 
 public sealed class CursorHarnessSettings
