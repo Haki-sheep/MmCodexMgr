@@ -70,6 +70,10 @@ public sealed class RelayWorkspace
 public sealed record RelayReservation(string Id, string ParentTaskId, string TreeRootId, int TreeDepth, RelayTreeBudget Budget, string MainInstanceId, string MainThreadId, string WorkerInstanceId, string WorkerThreadId, RelayWorkspace Workspace);
 public sealed record RelayTreeEntry(string Id, string Title, eRelayState State, string Outcome, string ParentTaskId, int ChildCount, string MainName, string WorkerName, string ProgressStage, string ProgressMessage, DateTimeOffset? ProgressAt)
 {
+    public string MainInstanceId { get; init; } = "";
+    public string WorkerInstanceId { get; init; } = "";
+    public string MainThreadId { get; init; } = "";
+    public string WorkerThreadId { get; init; } = "";
     public string MainTitle { get; init; } = "";
     public string WorkerTitle { get; init; } = "";
     public string MainAgent => MainTitle.Length == 0 ? MainName : MainName + " / " + MainTitle;

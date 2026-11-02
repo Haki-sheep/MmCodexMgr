@@ -14,6 +14,7 @@ public sealed class ThemeTabControl : UserControl
     /// <summary> 当前页面 </summary>
     private NavigationPage? Current;
     public AppTheme Theme { get; set; } = new(false);
+    public bool ShowBrand { get; set; } = true;
     public event EventHandler? SelectedIndexChanged;
     public NavigationPage? SelectedTab
     {
@@ -52,7 +53,7 @@ public sealed class ThemeTabControl : UserControl
         float Scale = DeviceDpi / 96f;
         var Colors = Theme.Palette;
         using var BrandFont = new Font(Font.FontFamily, 15, FontStyle.Bold);
-        TextRenderer.DrawText(Event.Graphics, "M", BrandFont, new Rectangle((int)(22 * Scale), (int)(16 * Scale), (int)(32 * Scale), (int)(32 * Scale)), Colors.Accent, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+        if (ShowBrand) TextRenderer.DrawText(Event.Graphics, "M", BrandFont, new Rectangle((int)(22 * Scale), (int)(16 * Scale), (int)(32 * Scale), (int)(32 * Scale)), Colors.Accent, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
         for (int Index = 0; Index < TabPages.Count; Index++)
         {
             var Bounds = TabBounds(Index);
@@ -72,7 +73,7 @@ public sealed class ThemeTabControl : UserControl
     private Rectangle TabBounds(int Index)
     {
         float Scale = DeviceDpi / 96f;
-        return new Rectangle((int)((72 + Index * 156) * Scale), (int)(12 * Scale), (int)(148 * Scale), (int)(38 * Scale));
+        return new Rectangle((int)(((ShowBrand ? 72 : 0) + Index * 156) * Scale), (int)(12 * Scale), (int)(148 * Scale), (int)(38 * Scale));
     }
     protected override void OnMouseDown(MouseEventArgs Event)
     {

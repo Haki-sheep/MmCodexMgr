@@ -22,8 +22,8 @@ public sealed class MainForm : Form
     private readonly System.Windows.Forms.Timer RefreshDelay = new() { Interval = 150 };
     private readonly InstanceActivityMonitor ActivityMonitor = new();
     private readonly ThemeTabControl MainTabs = new() { Dock = DockStyle.Fill };
-    private readonly NavigationPage RelayTab = new("跨 Agent 管理");
-    private readonly NavigationPage HarnessTab = new("跨 Harness 协作");
+    private readonly NavigationPage RelayTab = new("任务看板");
+    private readonly NavigationPage CollaborationTab = new("跨 Agent 协作");
     private readonly NavigationPage LibraryTab = new("规则与技能库");
     private readonly Button ThemeButton = new StudioButton();
     private readonly AppTheme Theme;
@@ -71,11 +71,12 @@ public sealed class MainForm : Form
         Root.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
         var InstancesTab = new NavigationPage("实例管理") { BackColor = BackColor };
         InstancesTab.Controls.Add(Root);
-        MainTabs.TabPages.Add(InstancesTab);
         MainTabs.TabPages.Add(RelayTab);
-        MainTabs.TabPages.Add(HarnessTab);
+        MainTabs.TabPages.Add(InstancesTab);
+        MainTabs.TabPages.Add(CollaborationTab);
         MainTabs.TabPages.Add(LibraryTab);
-        MainTabs.SelectedIndexChanged += (_, _) => { if (MainTabs.SelectedTab == RelayTab) BuildRelayPage(); else if (MainTabs.SelectedTab == HarnessTab) BuildHarnessPage(); else if (MainTabs.SelectedTab == LibraryTab) BuildLibraryPage(); };
+        MainTabs.SelectedTab = InstancesTab;
+        MainTabs.SelectedIndexChanged += (_, _) => { if (MainTabs.SelectedTab == RelayTab) BuildRelayPage(); else if (MainTabs.SelectedTab == CollaborationTab) BuildCollaborationPage(); else if (MainTabs.SelectedTab == LibraryTab) BuildLibraryPage(); };
         Controls.Add(MainTabs);
         StyleButton(ThemeButton, false);
         ThemeButton.Name = AppTheme.ToggleButtonName;
@@ -253,16 +254,17 @@ public sealed class MainForm : Form
     private void BuildRelayPage()
     {
         if (RelayTab.Controls.Count != 0) return;
-        if (TaskStore is null || TaskCoordinator is null) throw new InvalidOperationException("跨Agent管理服务尚未连接");
+        if (TaskStore is null || TaskCoordinator is null) throw new InvalidOperationException("任务看板服务尚未连接");
         var Page = new RelayPage(Settings, TaskStore, TaskCoordinator, Theme, () => SafeAction(ToggleTheme));
         RelayTab.Controls.Add(Page);
         Theme.Apply(Page);
     }
-    private void BuildHarnessPage()
+    private void BuildCollaborationPage()
     {
-        if (HarnessTab.Controls.Count != 0) return;
-        var Page = new HarnessPage(Settings, TaskCoordinator?.Cursor, Theme, () => SafeAction(ToggleTheme));
-        HarnessTab.Controls.Add(Page);
+        if (CollaborationTab.Controls.Count != 0) return;
+        if (TaskCoordinator is null) throw new InvalidOperationException("协作服务尚未连接");
+        var Page = new CollaborationPage(Settings, TaskCoordinator, Theme, () => SafeAction(ToggleTheme), ShowRelayPage);
+        CollaborationTab.Controls.Add(Page);
         Theme.Apply(Page);
     }
     private void BuildLibraryPage()
@@ -279,8 +281,13 @@ public sealed class MainForm : Form
     }
     public void ShowHarnessPage()
     {
-        BuildHarnessPage();
-        MainTabs.SelectedTab = HarnessTab;
+        ShowCollaborationPage();
+        CollaborationTab.Controls.OfType<CollaborationPage>().Single().ShowCursor();
+    }
+    public void ShowCollaborationPage()
+    {
+        BuildCollaborationPage();
+        MainTabs.SelectedTab = CollaborationTab;
     }
     public void ShowRelayPage()
     {
@@ -476,6 +483,7 @@ public sealed class MainForm : Form
         if (Command == "show") { ShowManager(); return; }
         if (Command == "relay") { ShowRelayPage(); ShowManager(); return; }
         if (Command == "harness") { ShowHarnessPage(); ShowManager(); return; }
+        if (Command == "collaboration") { ShowCollaborationPage(); ShowManager(); return; }
         if (Command == "library") { ShowLibraryPage(); ShowManager(); return; }
         var Profile = Settings.InstanceList.FirstOrDefault(Item => Item.Id == Command) ?? throw new InvalidOperationException("找不到指定实例 " + Command);
         InstanceList.SelectedItem = Profile;

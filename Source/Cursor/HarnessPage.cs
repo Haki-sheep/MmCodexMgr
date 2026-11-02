@@ -18,7 +18,7 @@ public sealed class HarnessPage : UserControl
     private bool Busy;
 
     #region Layout
-    public HarnessPage(ManagerSettings Settings, CursorRelayRunner? Cursor, AppTheme Theme, Action ToggleTheme)
+    public HarnessPage(ManagerSettings Settings, CursorRelayRunner? Cursor, AppTheme Theme, Action ToggleTheme, bool Embedded = false)
     {
         SuspendLayout();
         this.Settings = Settings;
@@ -27,24 +27,51 @@ public sealed class HarnessPage : UserControl
         AutoScaleDimensions = new SizeF(96, 96);
         AutoScaleMode = AutoScaleMode.Dpi;
         Dock = DockStyle.Fill;
-        Padding = new Padding(24, 16, 24, 16);
+        Padding = Embedded ? new Padding(0, 8, 0, 0) : new Padding(24, 16, 24, 16);
         Tag = eThemeRole.Background;
-        var Root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4 };
-        Root.RowStyles.Add(new(SizeType.AutoSize));
+        var Root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = Embedded ? 3 : 4 };
+        if (!Embedded) Root.RowStyles.Add(new(SizeType.AutoSize));
         Root.RowStyles.Add(new(SizeType.AutoSize));
         Root.RowStyles.Add(new(SizeType.Percent, 100));
         Root.RowStyles.Add(new(SizeType.AutoSize));
         var Header = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 2, Margin = Padding.Empty };
         Header.ColumnStyles.Add(new(SizeType.Percent, 100));
         Header.ColumnStyles.Add(new(SizeType.AutoSize));
-        Header.Controls.Add(new Label { Text = "跨 Harness 协作", Font = new Font(Font.FontFamily, 17, FontStyle.Bold), AutoSize = true });
+        Header.Controls.Add(new Label { Text = "Cursor", Font = new Font(Font.FontFamily, 17, FontStyle.Bold), AutoSize = true });
         var ThemeButton = MainForm.MakeButton(Theme.IsDark ? "☀ 日间" : "☾ 夜间", (_, _) => ToggleTheme());
         ThemeButton.Name = AppTheme.ToggleButtonName;
         Header.Controls.Add(ThemeButton);
-        Root.Controls.Add(Header);
+        if (!Embedded) Root.Controls.Add(Header);
+        else Header.Dispose();
         var Card = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1, Padding = new Padding(16), Tag = eThemeRole.Surface };
-        Card.Controls.Add(new Label { Text = "Cursor CLI", Font = new Font(Font.FontFamily, 13, FontStyle.Bold), AutoSize = true });
-        Card.Controls.Add(new Label { Text = "Codex 派发任务 · Cursor 独立执行 · 结果回传原主会话验收", AutoSize = true, Tag = eThemeRole.Muted, Margin = new Padding(0, 6, 0, 14) });
+        Card.RowCount = 2;
+        Card.RowStyles.Add(new(SizeType.AutoSize));
+        var DetailsRow = new RowStyle(SizeType.Absolute, 0);
+        Card.RowStyles.Add(DetailsRow);
+        var CardHeader = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 2 };
+        CardHeader.ColumnStyles.Add(new(SizeType.Percent, 100));
+        CardHeader.ColumnStyles.Add(new(SizeType.AutoSize));
+        CardHeader.Controls.Add(new Label { Text = "Cursor CLI · 独立执行与结果回传", Font = new Font(Font.FontFamily, 12, FontStyle.Bold), AutoSize = true, Margin = new Padding(0, 8, 0, 0) });
+        var DetailsScroll = new WheelScrollPanel { Dock = DockStyle.Fill, AutoScroll = true, Visible = false };
+        var Details = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1 };
+        DetailsScroll.Controls.Add(Details);
+        bool SettingsExpanded = false;
+        void RefreshDetailsHeight()
+        {
+            float Height = SettingsExpanded ? Math.Min(260 * DeviceDpi / 96f, Root.ClientSize.Height / 3f) : 0;
+            if (DetailsRow.Height != Height) DetailsRow.Height = Height;
+        }
+        Root.SizeChanged += (_, _) => RefreshDetailsHeight();
+        var ExpandButton = MainForm.MakeButton("连接设置", (Sender, _) =>
+        {
+            SettingsExpanded = !SettingsExpanded;
+            DetailsScroll.Visible = SettingsExpanded;
+            RefreshDetailsHeight();
+            ((Button)Sender!).Text = SettingsExpanded ? "收起设置" : "连接设置";
+        });
+        CardHeader.Controls.Add(ExpandButton);
+        Card.Controls.Add(CardHeader);
+        Card.Controls.Add(DetailsScroll);
         var Fields = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 3 };
         Fields.ColumnStyles.Add(new(SizeType.Absolute, 110));
         Fields.ColumnStyles.Add(new(SizeType.Percent, 100));
@@ -56,21 +83,21 @@ public sealed class HarnessPage : UserControl
         AddField(Fields, "默认模型", ModelInput, 2);
         Fields.Controls.Add(new Label { Text = "执行跟踪", AutoSize = true, Margin = new Padding(0, 7, 0, 8) }, 0, 3);
         Fields.Controls.Add(AutoOpenLog, 1, 3);
-        Card.Controls.Add(Fields);
+        Details.Controls.Add(Fields);
         var Actions = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, WrapContents = true, Margin = new Padding(0, 10, 0, 0) };
         Actions.Controls.Add(MainForm.MakeButton("保存设置", (_, _) => Run(Save), true));
         Actions.Controls.Add(MainForm.MakeButton("检查连接", async (_, _) => await RunAsync(CheckAsync)));
         Actions.Controls.Add(MainForm.MakeButton("登录账号", (_, _) => Run(() => OpenTerminal(true))));
         Actions.Controls.Add(MainForm.MakeButton("启动 Cursor CLI", (_, _) => Run(() => OpenTerminal(false))));
         Actions.Controls.Add(MainForm.MakeButton("打开日志目录", (_, _) => Run(() => (CursorRunner ?? throw new InvalidOperationException("Cursor 执行端未启用")).Logs.OpenDirectory())));
-        Card.Controls.Add(Actions);
-        Card.Controls.Add(new Label { Text = "在 Codex 中指定让 Cursor 执行任务即可联调 已有会话保留其工作目录和模型", AutoSize = true, Tag = eThemeRole.Muted, Margin = new Padding(0, 10, 0, 0) });
+        Details.Controls.Add(Actions);
+        Details.Controls.Add(new Label { Text = "在 Codex 中指定让 Cursor 执行任务即可联调 已有会话保留其工作目录和模型", AutoSize = true, Tag = eThemeRole.Muted, Margin = new Padding(0, 10, 0, 0) });
         Root.Controls.Add(Card);
         var SessionCard = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3, Padding = new Padding(16), Margin = new Padding(0, 12, 0, 12), Tag = eThemeRole.Surface };
         SessionCard.RowStyles.Add(new(SizeType.AutoSize));
         SessionCard.RowStyles.Add(new(SizeType.Percent, 100));
         SessionCard.RowStyles.Add(new(SizeType.AutoSize));
-        SessionCard.Controls.Add(new Label { Text = "管理器登记的 Cursor 会话", Font = new Font(Font.FontFamily, 11, FontStyle.Bold), AutoSize = true });
+        SessionCard.Controls.Add(new Label { Text = "Cursor 会话", Font = new Font(Font.FontFamily, 11, FontStyle.Bold), AutoSize = true });
         SessionGrid.Dock = DockStyle.Fill;
         SessionGrid.ReadOnly = true;
         SessionGrid.AllowUserToAddRows = false;
@@ -84,7 +111,7 @@ public sealed class HarnessPage : UserControl
         SessionGrid.RowTemplate.Height = 36;
         SessionGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "会话名称", FillWeight = 27, MinimumWidth = 120 });
         SessionGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "工作目录", FillWeight = 45, MinimumWidth = 180 });
-        SessionGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "模型", FillWeight = 18, MinimumWidth = 85 });
+        SessionGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "来源", FillWeight = 12, MinimumWidth = 65 });
         SessionGrid.Columns.Add(new DataGridViewButtonColumn { HeaderText = "执行日志", FillWeight = 12, MinimumWidth = 85, FlatStyle = FlatStyle.Flat });
         SessionGrid.Columns.Add(new DataGridViewButtonColumn { HeaderText = "会话", FillWeight = 10, MinimumWidth = 70, FlatStyle = FlatStyle.Flat });
         SessionGrid.CellContentClick += async (_, Event) =>
@@ -108,6 +135,7 @@ public sealed class HarnessPage : UserControl
         DirectoryInput.Text = Settings.Cursor.WorkingDirectory;
         ModelInput.Text = Settings.Cursor.Model;
         AutoOpenLog.Checked = Settings.Cursor.ShowExecutionWindow;
+        VisibleChanged += (_, _) => { if (Visible) Run(RefreshSessions); };
         RefreshSessions();
         Status.Text = CursorRunner is null ? "当前管理器未启用 Cursor 执行端" : "Cursor 执行端已启用 · 请检查连接确认 CLI 与账号状态";
         ResumeLayout(false);
@@ -178,7 +206,7 @@ public sealed class HarnessPage : UserControl
     {
         SessionList = CursorRunner?.List(null, Offset) ?? new();
         SessionGrid.Rows.Clear();
-        foreach (var Item in SessionList) SessionGrid.Rows.Add(Item.Title, Item.Cwd, Item.Model.Length == 0 ? "默认" : Item.Model, "查看日志", CursorRunner!.IsRunning(Item.Id) ? "执行中" : "打开");
+        foreach (var Item in SessionList) SessionGrid.Rows.Add(Item.Title, Item.Cwd, "Cursor", "查看日志", CursorRunner!.IsRunning(Item.Id) ? "执行中" : "打开");
         PageLabel.Text = "第 " + (Offset / RelayLimits.PageSize + 1) + " 页";
     }
 

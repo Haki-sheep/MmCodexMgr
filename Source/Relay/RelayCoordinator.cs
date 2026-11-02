@@ -68,7 +68,7 @@ public sealed partial class RelayCoordinator : IDisposable
         await Gate.WaitAsync(Lifetime.Token);
         try
         {
-            var Current = Route ?? Channel ?? throw new InvalidOperationException("请先在跨Agent管理页保存通道");
+            var Current = Route ?? Channel ?? throw new InvalidOperationException("请先在跨 Agent 协作的 Codex 栏保存通道");
             if (Route is null) TreeBudget ??= Current.TreeBudget;
             WorkerLimits ??= new() { SubagentMax = SubagentMax, SessionMax = SessionMax, CrossAgentMax = CrossAgentMax };
             RequireCaller(Current.MainInstance.Id, Current.MainThreadId, InstanceId, ThreadId);

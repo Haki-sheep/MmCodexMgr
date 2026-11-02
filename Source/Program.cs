@@ -50,7 +50,7 @@ public static class Program
                 }
                 return;
             }
-            string Command = ArgumentList.Length == 2 && ArgumentList[0] == "--launch" ? ArgumentList[1] : ArgumentList.Contains("--relay") ? "relay" : ArgumentList.Contains("--harness") ? "harness" : ArgumentList.Contains("--library") ? "library" : "show";
+            string Command = ArgumentList.Length == 2 && ArgumentList[0] == "--launch" ? ArgumentList[1] : ArgumentList.Contains("--board") || ArgumentList.Contains("--relay") ? "relay" : ArgumentList.Contains("--collaboration") ? "collaboration" : ArgumentList.Contains("--harness") || ArgumentList.Contains("--cursor") ? "harness" : ArgumentList.Contains("--library") ? "library" : "show";
             using var Mutex = new Mutex(true, "Local\\" + PipeName, out bool Created);
             if (!Created)
             {

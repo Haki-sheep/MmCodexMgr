@@ -111,15 +111,17 @@ CLI 从 `CODEX_HOME` 和 `CODEX_THREAD_ID` 读取当前身份 不要填写另一
 
 用户指定 Cursor 时使用同一套 `agent_start` 或 CLI `start` 目标固定为 `instance="cursor"` 不将 Cursor 添加为 Codex 实例 不提取模型 Key 不反代 Cursor
 
-管理器的“跨 Harness 协作”页提供 Cursor CLI 路径 默认工作目录 默认模型 登录检查与交互终端 任务状态和验收仍在“跨Agent管理”页 DeepSeek Harness 尚未接入 不冒充 Cursor 或 Codex 实例代替它
+管理器的“跨 Agent 协作”页按 Codex Cursor DSH 区分来源 Codex 栏管理实例会话与通道 Cursor 栏通过“连接设置”展开 CLI 路径 默认工作目录 默认模型 登录检查 交互终端及登记会话 DSH 尚未接入 不冒充 Cursor 或 Codex 实例代替它
+
+“任务看板”位于实例管理前 汇总所有来源的协作任务 列表为任务名 协调者：会话名 执行者：会话名 执行状态 操作 参与者使用实例名或 Cursor DSH 不使用模型名 会话列表与任务看板分别管理会话和任务 不维护第二份任务列表 管理器支持 `--board` `--collaboration` `--cursor` 直接打开对应页面 兼容旧 `--relay` 与 `--harness` 入口
 
 - 先检查 `agent_instances` 中的 `kind=cursor_cli` 或执行 `doctor --instance cursor` 只检查 CLI 版本和登录 不启动模型 未安装或未登录时先按 [Cursor 官方说明](https://cursor.com/docs/cli/installation) 安装并执行 `cursor-agent login` 命令名冲突时使用官方 CLI 完整路径 不调用含义不确定的 `agent`
-- 首次执行不要求打开 Cursor 编辑器 使用 CLI 的本机账号认证 新建会话必须有 `cwd` 绝对目录 或已在跨 Harness 页配置默认工作目录 不提供 Codex `project`
+- 首次执行不要求打开 Cursor 编辑器 使用 CLI 的本机账号认证 新建会话必须有 `cwd` 绝对目录 或已在跨 Agent 协作的 Cursor 栏配置默认工作目录 不提供 Codex `project`
 - `create_title` 与 `session` 二选一 新建仍须符合用户授权 查找已有会话使用 `sessions --instance cursor [--session <完整名称或ID>]` 只查询管理器登记的 Cursor CLI 会话 不表示接管编辑器中已有聊天
 - 可选 `model` 与 `cursor_cli_path` 覆盖新会话默认值 CLI 路径必须为绝对路径 留空模型沿用 Cursor 默认 已有会话保留登记的目录 模型和 CLI 不得在返工中静默更换
 - Cursor 执行端本次只直接完成交付任务 `worker_limits` 默认全部为 0 显式提供时三项均须为 0 不创建下级 Agent 不使用或伪造 `CODEX_THREAD_ID` / `CODEX_HOME` 不要求 Cursor 调用 Codex 的 report progress 或 accept
 - 占用主会话的 `cross_agent_max` 与整棵树槽位 只读任务使用 Cursor ask 模式 写入任务使用 `--force` 自动执行已授权范围内的操作 并声明 `workspace.access=write` 与绝对 `write_paths` 并行修改仓库仍需独立 worktree `cwd` 指向对应工作区 写入路径声明用于冲突检查 不是文件系统沙箱
-- Cursor 任务默认在开始时自动弹出只读执行日志窗口 在“跨 Harness 协作”页取消勾选自动弹出并保存即可默认后台运行 关闭日志窗口不会停止任务 正在执行或已完成的会话均可通过“查看日志”重新打开 任务详情也可查看该任务日志 “打开日志目录”可查阅历史文件 日志包含 CLI 提供的输出 工具调用及参数 结果和 stderr 每个任务同时保留可读 `.log` 与原始 `.jsonl` 清理联调记录时日志保留 不从日志窗口启动另一个执行会话
+- Cursor 任务默认在开始时自动弹出只读执行日志窗口 在“跨 Agent 协作”的 Cursor 栏取消勾选自动弹出并保存即可默认后台运行 关闭日志窗口不会停止任务 正在执行或已完成的会话均可通过“查看日志”重新打开 任务详情也可查看该任务日志 “打开日志目录”可查阅历史文件 日志包含 CLI 提供的输出 工具调用及参数 结果和 stderr 每个任务同时保留可读 `.log` 与原始 `.jsonl` 清理联调记录时日志保留 不从日志窗口启动另一个执行会话
 - 管理器在 Cursor 初始化事件确认会话 ID 后上报 started 最终回复必须仅为 JSON `{"outcome":"completed|needs_decision|failed","summary":"实际修改 检查结果与未解决项","artifacts":["产物绝对路径"]}` 管理器负责校验 保存到发件箱并回传原主会话 非法回复 命令失败或会话 ID 不匹配不能当作 completed
 - 派发后结束当前回合 等待回传 不轮询 原主会话按原标准验收 验收不通过时以新的 `request_id` 和原 `session` 派发返工 重试原请求保持同一个 `request_id` 不重复创建或启动
 - `open --instance cursor --session-id <ID>` 打开登记会话的交互终端 正在执行的会话不能另开交互进程 `cancel` 和超时会停止管理器启动的 Cursor CLI 进程树 已生成产物保留 管理器退出也会关闭该进程树 重启后原执行任务标为已阻塞 不自动重复执行 核对历史与产物后可 `resume --task-id <原ID>` 继续原会话
@@ -197,6 +199,6 @@ CLI 的 library-skills 与 library-scan-rules 无需启动管理器 library-prev
 
 用户要求清理记录时使用 `agent_cleanup` 或 `cleanup --state interrupted|blocked|finished` interrupted 只清理实例退出后阻塞的记录 blocked 清理所有阻塞记录 finished 只清理已验收或已撤销的记录 CLI 与 MCP 仅清理当前调用会话作为主会话的任务 覆盖所有分页 不清理其他主会话的记录
 
-跨Agent管理页的“检查并清空无效任务”检查主会话与所有未结束下级的实际活跃状态 仍在执行或无法确认时保留 只有全部没有活动执行才列为可清理 用户确认后再次核对再清理 不用记录的执行中标签代替实际活动状态
+任务看板右下角“任务看板”菜单收纳无效任务检查 清空已阻塞与清空已结束 其中“检查并清空无效任务”检查主会话与所有未结束下级的实际活跃状态 仍在执行或无法确认时保留 只有全部没有活动执行才列为可清理 用户确认后再次核对再清理 不用记录的执行中标签代替实际活动状态
 
 清理未结束记录会中断其下级联调并保留下级历史 正在执行 恢复中和已成功回传待验收的记录不会作为已结束清理 Codex 对话 项目文件与产物保留 Codex 模型和脚本不会因此停止 Cursor CLI 进程树会停止 删除 Codex 对话本身不属于此清理命令的能力范围

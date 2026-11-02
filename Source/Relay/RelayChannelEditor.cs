@@ -27,12 +27,12 @@ public sealed class RelayChannelEditor : UserControl
         Table.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
         for (int Index = 0; Index < 2; Index++) Table.RowStyles.Add(new RowStyle(SizeType.Absolute, 33));
         Table.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        var Title = new Label { Text = "通道设置", AutoSize = true, ForeColor = Color.FromArgb(53, 59, 77) };
+        var Title = new Label { Text = "Codex 实例协作通道", AutoSize = true, ForeColor = Color.FromArgb(53, 59, 77) };
         Table.Controls.Add(Title, 0, 0);
         Table.SetColumnSpan(Title, 4);
-        AddField(Table, "主实例", MainInstanceInput, 0, 1);
+        AddField(Table, "协调实例", MainInstanceInput, 0, 1);
         AddField(Table, "执行实例", WorkerInstanceInput, 2, 1);
-        AddField(Table, "主会话", MainThreadInput, 0, 2);
+        AddField(Table, "协调会话", MainThreadInput, 0, 2);
         AddField(Table, "执行会话", WorkerThreadInput, 2, 2);
         var Actions = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false };
         Actions.Controls.Add(MainForm.MakeButton("读取运行实例会话", async (_, _) => await RunAsync(LoadThreadsAsync)));

@@ -17,6 +17,7 @@ internal static class Tests
         if (ArgumentList.Contains("--activity-live")) return Task.Run(RelayInvalidTaskTests.LiveProbeAsync).GetAwaiter().GetResult();
         if (ArgumentList.Contains("--invalid-tasks")) { Task.Run(RelayInvalidTaskTests.RunAsync).GetAwaiter().GetResult(); return 0; }
         if (ArgumentList.Contains("--harness-ui")) return HarnessUiTests.Run();
+        if (ArgumentList.Length == 2 && ArgumentList[0] == "--collaboration-ui-preview") return HarnessUiTests.Run(ArgumentList[1]);
         if (ArgumentList.Contains("--cursor-relay")) { Task.Run(() => CursorRelayTests.RunAsync()).GetAwaiter().GetResult(); return 0; }
         if (ArgumentList.Contains("--cursor-live")) { Task.Run(() => CursorRelayTests.RunAsync(true)).GetAwaiter().GetResult(); return 0; }
         if (ArgumentList.Contains("--app-path")) return AppPathTests.Run(ArgumentList.Contains("--app-launch"));

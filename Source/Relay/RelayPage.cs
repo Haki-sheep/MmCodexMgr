@@ -10,6 +10,8 @@ public sealed class RelayPage : UserControl
     private readonly Label Status = new() { Dock = DockStyle.Fill, AutoSize = true, AutoEllipsis = true, Tag = eThemeRole.Muted, Visible = false };
     private readonly Label PageLabel = new() { AutoSize = true, Margin = new Padding(8, 10, 8, 0) };
     private readonly RelayTreeView TreeView;
+    /// <summary> 任务记录维护菜单 </summary>
+    private readonly ContextMenuStrip BoardMenu = new();
     private int Offset;
     private bool Busy;
 
@@ -27,23 +29,19 @@ public sealed class RelayPage : UserControl
         Tag = eThemeRole.Background;
         Dock = DockStyle.Fill;
         Padding = new Padding(24, 16, 24, 16);
-        var Root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4 };
-        Root.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
-        Root.RowStyles.Add(new RowStyle(SizeType.Absolute, 170));
+        var Root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3 };
+        Root.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
         Root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         Root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        var Header = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, Margin = Padding.Empty };
+        var Header = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Margin = Padding.Empty };
         Header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         Header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        Header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        Header.Controls.Add(new Label { Text = "跨Agent管理", Font = new Font(Font.FontFamily, 17, FontStyle.Bold), AutoSize = true });
+        Header.Controls.Add(new Label { Text = "任务看板", Font = new Font(Font.FontFamily, 17, FontStyle.Bold), AutoSize = true });
         var ThemeButton = MainForm.MakeButton(Theme.IsDark ? "☀ 日间" : "☾ 夜间", (_, _) => ToggleTheme());
         ThemeButton.Name = AppTheme.ToggleButtonName;
         ThemeButton.Margin = new Padding(0, 0, 0, 4);
-        Header.Controls.Add(MainForm.MakeButton("健康检查", async (_, _) => await RunAsync(ShowDoctorAsync)));
         Header.Controls.Add(ThemeButton);
         Root.Controls.Add(Header);
-        Root.Controls.Add(new RelayChannelEditor(Settings, Coordinator, SetStatus) { Dock = DockStyle.Fill, Tag = eThemeRole.Surface });
         var ListPanel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, Padding = new Padding(12), Margin = new Padding(0, 8, 0, 0), Tag = eThemeRole.Surface };
         ListPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         ListPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
@@ -61,10 +59,9 @@ public sealed class RelayPage : UserControl
         TaskGrid.RowTemplate.Height = 44;
         TaskGrid.ColumnHeadersHeight = 34;
         TaskGrid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
-        TaskGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "序号", FillWeight = 5, MinimumWidth = 45, SortMode = DataGridViewColumnSortMode.NotSortable });
         TaskGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "任务名", FillWeight = 32, MinimumWidth = 160, SortMode = DataGridViewColumnSortMode.NotSortable });
-        TaskGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "主Agent", FillWeight = 20, MinimumWidth = 145, SortMode = DataGridViewColumnSortMode.NotSortable });
-        TaskGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "子Agent", FillWeight = 20, MinimumWidth = 145, SortMode = DataGridViewColumnSortMode.NotSortable });
+        TaskGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "协调者：会话名", FillWeight = 24, MinimumWidth = 180, SortMode = DataGridViewColumnSortMode.NotSortable });
+        TaskGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "执行者：会话名", FillWeight = 24, MinimumWidth = 180, SortMode = DataGridViewColumnSortMode.NotSortable });
         TaskGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "执行状态", FillWeight = 13, MinimumWidth = 110, SortMode = DataGridViewColumnSortMode.NotSortable });
         TaskGrid.Columns.Add(new DataGridViewButtonColumn { HeaderText = "操作", FillWeight = 10, MinimumWidth = 90, FlatStyle = FlatStyle.Flat });
         TaskGrid.CellValueNeeded += (_, Event) =>
@@ -75,18 +72,17 @@ public sealed class RelayPage : UserControl
             string Prefix = new string(' ', Row.Depth * 3);
             Event.Value = Event.ColumnIndex switch
             {
-                0 => Row.More ? "" : (object)(Offset + Event.RowIndex + 1),
-                1 => Prefix + (Row.More ? "加载更多下级…" : (Item.ChildCount == 0 ? "  " : TreeView.IsExpanded(Item.Id) ? "▼ " : "▶ ") + Item.Title),
-                2 => Row.More ? "" : Item.MainTitle,
-                3 => Row.More ? "" : Item.WorkerTitle,
-                4 => Row.More ? "" : RelayLimits.ProgressStateText(Item.State, Item.Outcome, Item.ProgressStage),
-                5 => Row.More ? "" : Item.State is eRelayState.Accepted or eRelayState.Cancelled ? "删除" : "中断任务",
+                0 => Prefix + (Row.More ? "加载更多下级…" : (Item.ChildCount == 0 ? "  " : TreeView.IsExpanded(Item.Id) ? "▼ " : "▶ ") + Item.Title),
+                1 => Row.More ? "" : AgentDisplay.Session(Settings, Item.MainInstanceId, Item.MainName, Item.MainTitle, Item.MainThreadId),
+                2 => Row.More ? "" : AgentDisplay.Session(Settings, Item.WorkerInstanceId, Item.WorkerName, Item.WorkerTitle, Item.WorkerThreadId),
+                3 => Row.More ? "" : RelayLimits.ProgressStateText(Item.State, Item.Outcome, Item.ProgressStage).Replace("主Agent", "协调者").Replace("子Agent", "执行者"),
+                4 => Row.More ? "" : Item.State is eRelayState.Accepted or eRelayState.Cancelled ? "删除" : "中断任务",
                 _ => throw new ArgumentOutOfRangeException(nameof(Event.ColumnIndex))
             };
         };
         TaskGrid.CellFormatting += (_, Event) =>
         {
-            if (Event.ColumnIndex != 4 || Event.RowIndex < 0 || Event.RowIndex >= TreeView.RowList.Count) return;
+            if (Event.ColumnIndex != 3 || Event.RowIndex < 0 || Event.RowIndex >= TreeView.RowList.Count) return;
             var Item = TreeView.RowList[Event.RowIndex].Entry;
             Event.CellStyle!.ForeColor = Item.State == eRelayState.Running && Item.ProgressStage == "blocked" ? Theme.Palette.Warning : Item.State switch
             {
@@ -101,17 +97,17 @@ public sealed class RelayPage : UserControl
             if (Event.RowIndex < 0 || Event.RowIndex >= TreeView.RowList.Count) return;
             var Row = TreeView.RowList[Event.RowIndex];
             var Item = Row.Entry;
-            if (Event.ColumnIndex == 1)
+            if (Event.ColumnIndex == 0)
             {
                 if (Row.More) TreeView.LoadMore(Item.Id);
                 else if (Item.ChildCount > 0) TreeView.Toggle(Item.Id);
                 RefreshTasks();
             }
-            if (Event.ColumnIndex == 5 && !Row.More) await RunAsync(() => Item.State is eRelayState.Accepted or eRelayState.Cancelled ? DeleteHistoryAsync(new(Item.Id, Item.Title, Item.State, DateTimeOffset.UtcNow, Item.Outcome)) : CancelAsync(Item.Id));
+            if (Event.ColumnIndex == 4 && !Row.More) await RunAsync(() => Item.State is eRelayState.Accepted or eRelayState.Cancelled ? DeleteHistoryAsync(new(Item.Id, Item.Title, Item.State, DateTimeOffset.UtcNow, Item.Outcome)) : CancelAsync(Item.Id));
         };
         TaskGrid.CellDoubleClick += async (_, Event) =>
         {
-            if (Event.ColumnIndex == 5 || Event.RowIndex < 0 || Event.RowIndex >= TreeView.RowList.Count) return;
+            if (Event.ColumnIndex == 4 || Event.RowIndex < 0 || Event.RowIndex >= TreeView.RowList.Count) return;
             var Row = TreeView.RowList[Event.RowIndex];
             if (!Row.More) await RunAsync(() => { using var Dialog = new RelayTaskDialog(Store, Coordinator, Row.Entry.Id, Theme); Dialog.ShowDialog(this); return Task.CompletedTask; });
         };
@@ -119,22 +115,24 @@ public sealed class RelayPage : UserControl
         {
             if (Event.RowIndex < 0 || Event.RowIndex >= TreeView.RowList.Count) return;
             var Item = TreeView.RowList[Event.RowIndex].Entry;
-            Event.ToolTipText = $"{Item.Title}\n主Agent {Item.MainAgent}\n子Agent {Item.WorkerAgent}\n{(Item.ProgressStage.Length == 0 ? "等待执行方开始确认" : Item.ProgressMessage)}\n单击任务名展开下级 双击查看详情与异常恢复";
+            Event.ToolTipText = $"{Item.Title}\n协调者 {AgentDisplay.Session(Settings, Item.MainInstanceId, Item.MainName, Item.MainTitle, Item.MainThreadId)}\n执行者 {AgentDisplay.Session(Settings, Item.WorkerInstanceId, Item.WorkerName, Item.WorkerTitle, Item.WorkerThreadId)}\n{(Item.ProgressStage.Length == 0 ? "等待执行方开始确认" : Item.ProgressMessage)}\n单击任务名展开下级 双击查看详情与异常恢复";
         };
         ListPanel.Controls.Add(TaskGrid);
         var Pages = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false };
         Pages.Controls.Add(MainForm.MakeButton("上一页", (_, _) => { if (Offset > 0) { Offset -= RelayLimits.PageSize; TreeView.CollapseAll(); RefreshTasks(); } }));
         Pages.Controls.Add(PageLabel);
         Pages.Controls.Add(MainForm.MakeButton("下一页", (_, _) => { if (TreeView.RootPageCount == RelayLimits.PageSize) { Offset += RelayLimits.PageSize; TreeView.CollapseAll(); RefreshTasks(); } }));
-        var Footer = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 1, Margin = Padding.Empty };
+        var Footer = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Margin = Padding.Empty };
         Footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         Footer.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        Footer.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        Footer.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         Footer.Controls.Add(Pages, 0, 0);
-        Footer.Controls.Add(MainForm.MakeButton("检查并清空无效任务", async (_, _) => await RunAsync(ClearInvalidTasksAsync)), 1, 0);
-        Footer.Controls.Add(MainForm.MakeButton("清空已阻塞", async (_, _) => await RunAsync(ClearBlockedHistoryAsync)), 2, 0);
-        Footer.Controls.Add(MainForm.MakeButton("清空已结束", async (_, _) => await RunAsync(ClearHistoryAsync)), 3, 0);
+        BoardMenu.Items.Add("检查并清空无效任务", null, async (_, _) => await RunAsync(ClearInvalidTasksAsync));
+        BoardMenu.Items.Add("清空已阻塞", null, async (_, _) => await RunAsync(ClearBlockedHistoryAsync));
+        BoardMenu.Items.Add("清空已结束", null, async (_, _) => await RunAsync(ClearHistoryAsync));
+        var BoardButton = MainForm.MakeButton("任务看板", (Sender, _) => { var Button = (Button)Sender!; BoardMenu.BackColor = Theme.Palette.Surface; BoardMenu.ForeColor = Theme.Palette.Text; BoardMenu.Show(Button, new Point(0, Button.Height)); });
+        BoardButton.AccessibleDescription = "打开任务检查与清理菜单";
+        BoardButton.ContextMenuStrip = BoardMenu;
+        Footer.Controls.Add(BoardButton, 1, 0);
         ListPanel.Controls.Add(Footer);
         Root.Controls.Add(ListPanel);
         Root.Controls.Add(Status);
@@ -148,7 +146,7 @@ public sealed class RelayPage : UserControl
 
     protected override void Dispose(bool Disposing)
     {
-        if (Disposing) Coordinator.Changed -= OnChanged;
+        if (Disposing) { Coordinator.Changed -= OnChanged; BoardMenu.Dispose(); }
         base.Dispose(Disposing);
     }
     #endregion
@@ -184,7 +182,7 @@ public sealed class RelayPage : UserControl
         }
         TaskGrid.RowCount = TreeView.RowList.Count;
         int SelectedIndex = TreeView.RowList.FindIndex(Row => !Row.More && Row.Entry.Id == SelectedId);
-        if (SelectedIndex >= 0) TaskGrid.CurrentCell = TaskGrid.Rows[SelectedIndex].Cells[1];
+        if (SelectedIndex >= 0) TaskGrid.CurrentCell = TaskGrid.Rows[SelectedIndex].Cells[0];
         TaskGrid.Invalidate();
         PageLabel.Text = "第 " + (Offset / RelayLimits.PageSize + 1) + " 页" + (TreeView.Limited ? " · 显示达上限 请收起其他分支" : "");
     }
@@ -198,29 +196,6 @@ public sealed class RelayPage : UserControl
     #endregion
 
     #region Actions
-    private Task ShowDoctorAsync()
-    {
-        using var Dialog = new Form { Text = "健康检查 · " + Settings.InstanceList.First(Item => Item.Id == Settings.SelectedId).Name, Font = Font, ClientSize = new Size(760, 420), StartPosition = FormStartPosition.CenterParent };
-        using var Cancellation = new CancellationTokenSource();
-        var Body = new TextBox { Dock = DockStyle.Fill, Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical, Text = "正在检查 CLI MCP Skill 路径与桌面桥接…" };
-        Dialog.Controls.Add(Body);
-        Dialog.Shown += async (_, _) =>
-        {
-            try
-            {
-                var Report = await AgentDoctor.RunAsync(Settings, AgentCliDeployment.LoadPath(), Settings.SelectedId, Cancellation.Token);
-                if (!Dialog.IsDisposed) { Body.Text = string.Join("\r\n\r\n", Report.CheckList.Select(Check => (Check.Passed ? "✓ " : "× ") + Check.Name + "\r\n" + Check.Detail)); Body.Select(0, 0); }
-            }
-            catch (OperationCanceledException) when (Cancellation.IsCancellationRequested) { }
-            catch (Exception Error) { Program.LogError(Error); if (!Dialog.IsDisposed) Body.Text = Error.Message; }
-        };
-        Dialog.FormClosed += (_, _) => Cancellation.Cancel();
-        Theme.Apply(Dialog);
-        Dialog.HandleCreated += (_, _) => Theme.ApplyTitleBar(Dialog);
-        Dialog.ShowDialog(this);
-        return Task.CompletedTask;
-    }
-
     private async Task ClearInvalidTasksAsync()
     {
         var Validator = new RelayTaskValidator(SettingsStore.Load(), Store, Coordinator.Cursor);
