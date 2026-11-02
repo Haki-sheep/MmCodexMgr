@@ -1,0 +1,4 @@
+interface:
+  display_name: "MmMoneyFucker"
+  short_description: "识别持仓截图并长期保存反馈 结合事件费用生成基金与黄金研究日报"
+  default_prompt: "使用 $mm-money-fucker 先读取并保存我的截图或文字反馈及持久状态 需要日报时联网研究至少10只基金 按四列表格输出建议"

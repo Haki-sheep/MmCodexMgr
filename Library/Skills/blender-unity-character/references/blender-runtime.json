@@ -1,0 +1,8 @@
+{
+  "repository": "C:\\Users\\fmz\\Desktop\\AiWrok\\GithubWork\\blender-agent-sdk",
+  "command": "C:\\Users\\fmz\\.local\\bin\\blender-agent.exe",
+  "blender": "C:\\Program Files\\Blender Foundation\\Blender 5.2\\blender.exe",
+  "upstream": "https://github.com/yazzang-homelab/blender-agent-sdk",
+  "upstream_revision": "706c86a45706bb6743fc6e63800d9860c359f725",
+  "revision": "9c21ac40c4b177f7b0e9e698cbf0e6e536f6d711"
+}

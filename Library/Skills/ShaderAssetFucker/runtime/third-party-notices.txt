@@ -1,0 +1,17 @@
+ShaderRipper source: https://github.com/StArraySharp/ShaderRipper
+Patched source commit: 3e3860dc2d20743d277d519814f23ae7235a4929
+Dependency notices below are copied from the source repository documentation
+
+| 库                                                                                                                                                                                               | 用途                        | 许可                      |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- | ----------------------- |
+| [AssetRipper.Tpk](https://github.com/AssetRipper/Tpk) / [AssetRipper.IO.Endian](https://github.com/AssetRipper/IO.Endian) / [AssetRipper.Primitives](https://github.com/AssetRipper/Primitives) | Unity 类型树解析 / 序列化文件读取     | LGPL-3.0                |
+| [YamlDotNet](https://github.com/aaubry/YamlDotNet) | Unity 文本 Shader 资产解析 | MIT |
+| [K4os.Compression.LZ4](https://github.com/MiloszKrajewski/K4os.Compression.LZ4)                                                                                                                 | Unity LZ4 压缩 blob 解压      | MIT                     |
+| [DXDecompiler-ly](https://github.com/AssetRipper/DXDecompiler)                                                                                                                                  | 纯托管 SM4/5 DXBC 反汇编（跨平台后备） | MIT                     |
+| d3dcompiler_47.dll（Microsoft，随 Windows 分发，内嵌）                                                                                                                                                   | Windows 上 SM4/5 DXBC 反汇编  | 随附于 Windows SDK 许可      |
+| dxcompiler / dxil（[Microsoft DirectXShaderCompiler](https://github.com/microsoft/DirectXShaderCompiler)，内嵌 Linux 版）                                                                             | DXIL（D3D12/SM6）反汇编        | Apache-2.0（含 LLVM 例外条款） |
+
+Additional managed dependencies declared by ShaderRipper.csproj:
+Antlr4.Runtime.Standard 4.13.1
+LZMA-SDK 22.1.1
+.NET runtime 10.0.13

@@ -1,0 +1,79 @@
+using System;
+using System.IO;
+using System.Linq;
+using System.Security.Cryptography;
+using UnityEditor;
+using UnityEngine;
+using Newtonsoft.Json.Linq;
+public static class ValidateShaderReplacement
+{
+    private const string Backup = __BACKUP__;
+    private const string ExpectedProject = __PROJECT__;
+    private const bool CompileOnly = __CHECK_ONLY__;
+
+    public static object Execute()
+    {
+        if (CompileOnly) return new { status = "compiled_not_executed" };
+        if (!string.Equals(Path.GetFullPath(Path.GetDirectoryName(Application.dataPath)).TrimEnd('\\', '/'), Path.GetFullPath(ExpectedProject).TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Editor belongs to another project");
+        string Root=Path.GetDirectoryName(Application.dataPath);
+        var Rows=File.ReadAllLines(Path.Combine(Backup,"identities.tsv")).Select(Line=>Line.Split('\t')).ToArray();
+        var ShaderResults=Rows.Select(Row=>{
+            if(File.Exists(Path.Combine(Root,Row[0])) || File.Exists(Path.Combine(Root,Row[0]+".meta"))) throw new InvalidOperationException("Old native Shader still exists "+Row[0]);
+            var Shader=AssetDatabase.LoadAssetAtPath<Shader>(Row[1]);
+            if(!Shader || !Shader.isSupported || !AssetDatabase.TryGetGUIDAndLocalFileIdentifier(Shader,out string Guid,out long Id) || Guid!=Row[3]) throw new InvalidOperationException("Invalid Shader identity "+Row[1]);
+            if(!(AssetImporter.GetAtPath(Row[1]) is ShaderImporter) || Hash(Path.Combine(Root,Row[1]))!=HashRestoredSource(Row[2]) || Hash(Path.Combine(Backup,Row[0]))!=Row[5]) throw new InvalidOperationException("Shader source or backup differs "+Row[1]);
+            var Errors=ShaderUtil.GetShaderMessages(Shader).Where(Message=>Message.severity.ToString()=="Error").Select(Message=>Message.message).ToArray();
+            if(Errors.Length>0) throw new InvalidOperationException(Row[1]+"\n"+string.Join("\n",Errors));
+            return new { path=Row[1], guid=Guid, localId=Id, supported=Shader.isSupported, errors=Errors.Length };
+        }).ToArray();
+        var MaterialResults=File.ReadAllLines(Path.Combine(Backup,"materials.tsv")).Select(Line=>Line.Split('\t')).Select(Row=>{
+            var Material=AssetDatabase.LoadAssetAtPath<Material>(Row[0]);
+            string MaterialGuid=AssetDatabase.AssetPathToGUID(Row[0]);
+            var ExpectedShader=AssetDatabase.LoadAssetAtPath<Shader>(AssetDatabase.GUIDToAssetPath(Row[1]));
+            AssetDatabase.TryGetGUIDAndLocalFileIdentifier(ExpectedShader,out string ExpectedGuid,out long ExpectedId);
+            if(!Material || !Material.shader || !AssetDatabase.TryGetGUIDAndLocalFileIdentifier(Material.shader,out string Guid,out long Id) || Guid!=ExpectedGuid || Id!=ExpectedId) throw new InvalidOperationException("Broken material Shader "+Row[0]);
+            var Before=(JObject)JObject.Parse(File.ReadAllText(Path.Combine(Backup,"material-snapshots",MaterialGuid+".json")))["Material"];
+            var After=(JObject)JObject.Parse(EditorJsonUtility.ToJson(Material))["Material"];
+            NormalizeSnapshotNumbers(Before); NormalizeSnapshotNumbers(After);
+            foreach(string Field in new[]{"m_SavedProperties","m_Name","m_CustomRenderQueue","m_LightmapFlags","m_EnableInstancingVariants","m_DoubleSidedGI","stringTagMap","disabledShaderPasses","m_Parent","m_LockedProperties"})
+                if(!JToken.DeepEquals(Before[Field],After[Field])) throw new InvalidOperationException("Material payload mismatch "+Row[0]+" field "+Field);
+            var BeforeKeywords=Before["m_ValidKeywords"].Concat(Before["m_InvalidKeywords"]).Select(Value=>(string)Value).OrderBy(Value=>Value,StringComparer.Ordinal);
+            var AfterKeywords=After["m_ValidKeywords"].Concat(After["m_InvalidKeywords"]).Select(Value=>(string)Value).OrderBy(Value=>Value,StringComparer.Ordinal);
+            if(!BeforeKeywords.SequenceEqual(AfterKeywords) || (int)After["m_Shader"]["type"]!=3) throw new InvalidOperationException("Material keyword or pointer type mismatch "+Row[0]);
+            int Passes=0;
+            for(int Index=0;Index<Material.passCount;Index++)
+            {
+                string PassName=Material.GetPassName(Index);
+                if(!Material.GetShaderPassEnabled(PassName)) continue;
+                if(!Material.SetPass(Index)) throw new InvalidOperationException("Material pass failed "+Row[0]+" "+PassName);
+                Passes++;
+            }
+            return new { path=Row[0], shaderPath=AssetDatabase.GetAssetPath(Material.shader), guid=Guid, localId=Id, payloadPreserved=true, keywordSetPreserved=true, compiledPasses=Passes };
+        }).ToArray();
+        var Result=new { status="passed", shaders=ShaderResults, shaderCount=ShaderResults.Length, materials=MaterialResults, materialCount=MaterialResults.Length, materialPasses=MaterialResults.Sum(Item=>Item.compiledPasses), backup=Backup };
+        string Report=Path.Combine(Backup,"verify-result.json");
+        File.WriteAllText(Report,Newtonsoft.Json.JsonConvert.SerializeObject(Result,Newtonsoft.Json.Formatting.Indented));
+        return new { status="passed", shaderCount=ShaderResults.Length, materialCount=MaterialResults.Length, materialPasses=MaterialResults.Sum(Item=>Item.compiledPasses), report=Report };
+    }
+    private static void NormalizeSnapshotNumbers(JObject Material)
+    {
+        foreach(var Value in ((JContainer)Material["m_SavedProperties"]).Descendants().OfType<JValue>().Where(Value=>Value.Type==JTokenType.String).ToArray())
+        {
+            if(!(Value.Parent is JProperty Property) || !(new[]{"r","g","b","a","x","y","z","w","second"}).Contains(Property.Name)) continue;
+            string Text=(string)Value;
+            if(Text=="Infinity") Value.Replace(new JValue(double.PositiveInfinity));
+            else if(Text=="-Infinity") Value.Replace(new JValue(double.NegativeInfinity));
+            else if(Text=="NaN") Value.Replace(new JValue(double.NaN));
+        }
+    }
+    private static string HashRestoredSource(string Path)
+    {
+        byte[] Bytes=System.Text.Encoding.UTF8.GetBytes(File.ReadAllText(Path).Replace("\r\n","\n").Replace("\r","\n"));
+        using(var Algorithm=SHA256.Create()) return BitConverter.ToString(Algorithm.ComputeHash(Bytes)).Replace("-","").ToLowerInvariant();
+    }
+    private static string Hash(string Path)
+    {
+        using(var Algorithm=SHA256.Create()) return BitConverter.ToString(Algorithm.ComputeHash(File.ReadAllBytes(Path))).Replace("-","").ToLowerInvariant();
+    }
+}
+

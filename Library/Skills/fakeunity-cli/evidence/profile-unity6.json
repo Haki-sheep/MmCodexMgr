@@ -1,0 +1,337 @@
+{
+  "schema_version": "1.0",
+  "command": "selfcheck profile-unity6",
+  "ok": true,
+  "dry_run": false,
+  "data": {
+    "all_passed": true,
+    "passed": 58,
+    "total": 58,
+    "checks": [
+      {
+        "name": "6000.3.26f1.limited",
+        "passed": true,
+        "detail": {}
+      },
+      {
+        "name": "6000.4.10f1.limited",
+        "passed": true,
+        "detail": {}
+      },
+      {
+        "name": "6000.5.1f1.limited",
+        "passed": true,
+        "detail": {}
+      },
+      {
+        "name": "6000.6.4f1.limited",
+        "passed": true,
+        "detail": {}
+      },
+      {
+        "name": "6000.0.1f1.unverified_denied",
+        "passed": true,
+        "detail": {}
+      },
+      {
+        "name": "6000.1.1f1.unverified_denied",
+        "passed": true,
+        "detail": {}
+      },
+      {
+        "name": "6000.2.1f1.unverified_denied",
+        "passed": true,
+        "detail": {}
+      },
+      {
+        "name": "6000.7.1f1.unverified_denied",
+        "passed": true,
+        "detail": {}
+      },
+      {
+        "name": "6000.12.1f1.unverified_denied",
+        "passed": true,
+        "detail": {}
+      },
+      {
+        "name": "research_snapshot_preserved",
+        "passed": true,
+        "detail": {}
+      },
+      {
+        "name": "sealed_limited_package",
+        "passed": true,
+        "detail": {}
+      },
+      {
+        "name": "6000.3.26f1-oracle-prefab.byte_roundtrip",
+        "passed": true,
+        "detail": {}
+      },
+      {
+        "name": "6000.3.26f1-oracle-unity.byte_roundtrip",
+        "passed": true,
+        "detail": {}
+      },
+      {
+        "name": "6000.3.26f1-mixed-prefab.byte_roundtrip",
+        "passed": true,
+        "detail": {}
+      },
+      {
+        "name": "6000.3.26f1-mixed-unity.byte_roundtrip",
+        "passed": true,
+        "detail": {}
+      },
+      {
+        "name": "6000.4.10f1-oracle-prefab.byte_roundtrip",
+        "passed": true,
+        "detail": {}
+      },
+      {
+        "name": "6000.4.10f1-oracle-unity.byte_roundtrip",
+        "passed": true,
+        "detail": {}
+      },
+      {
+        "name": "6000.4.10f1-mixed-prefab.byte_roundtrip",
+        "passed": true,
+        "detail": {}
+      },
+      {
+        "name": "6000.4.10f1-mixed-unity.byte_roundtrip",
+        "passed": true,
+        "detail": {}
+      },
+      {
+        "name": "6000.5.1f1-oracle-prefab.byte_roundtrip",
+        "passed": true,
+        "detail": {}
+      },
+      {
+        "name": "6000.5.1f1-oracle-unity.byte_roundtrip",
+        "passed": true,
+        "detail": {}
+      },
+      {
+        "name": "6000.5.1f1-mixed-prefab.byte_roundtrip",
+        "passed": true,
+        "detail": {}
+      },
+      {
+        "name": "6000.5.1f1-mixed-unity.byte_roundtrip",
+        "passed": true,
+        "detail": {}
+      },
+      {
+        "name": "6000.6.4f1-oracle-prefab.byte_roundtrip",
+        "passed": true,
+        "detail": {}
+      },
+      {
+        "name": "6000.6.4f1-oracle-unity.byte_roundtrip",
+        "passed": true,
+        "detail": {}
+      },
+      {
+        "name": "6000.6.4f1-mixed-prefab.byte_roundtrip",
+        "passed": true,
+        "detail": {}
+      },
+      {
+        "name": "6000.6.4f1-mixed-unity.byte_roundtrip",
+        "passed": true,
+        "detail": {}
+      },
+      {
+        "name": "exact_editor_import_evidence",
+        "passed": true,
+        "detail": {}
+      },
+      {
+        "name": "6000.3.26f1.dryrun",
+        "passed": true,
+        "detail": {}
+      },
+      {
+        "name": "6000.3.26f1.write_readback",
+        "passed": true,
+        "detail": {}
+      },
+      {
+        "name": "6000.4.10f1.dryrun",
+        "passed": true,
+        "detail": {}
+      },
+      {
+        "name": "6000.4.10f1.write_readback",
+        "passed": true,
+        "detail": {}
+      },
+      {
+        "name": "6000.5.1f1.dryrun",
+        "passed": true,
+        "detail": {}
+      },
+      {
+        "name": "6000.5.1f1.write_readback",
+        "passed": true,
+        "detail": {}
+      },
+      {
+        "name": "6000.6.4f1.dryrun",
+        "passed": true,
+        "detail": {}
+      },
+      {
+        "name": "6000.6.4f1.write_readback",
+        "passed": true,
+        "detail": {}
+      },
+      {
+        "name": "2022.3.62f3.dryrun",
+        "passed": true,
+        "detail": {}
+      },
+      {
+        "name": "2022.3.62f3.write_readback",
+        "passed": true,
+        "detail": {}
+      },
+      {
+        "name": "unknown_output_field",
+        "passed": true,
+        "detail": {
+          "error_code": "FUC_VERSION_UNSUPPORTED",
+          "error_message": "Profile unity-6000-core 拒绝 C:\\Users\\fmz\\AppData\\Local\\Temp\\fuc-unity6-core-9249cc598f7c4563a7012bd701217f55\\Assets\\Core.prefab: &805838392605110698 字段集合发生漂移"
+        }
+      },
+      {
+        "name": "serialized_version_drift",
+        "passed": true,
+        "detail": {
+          "error_code": "FUC_VERSION_UNSUPPORTED",
+          "error_message": "Profile unity-6000-core 拒绝 C:\\Users\\fmz\\AppData\\Local\\Temp\\fuc-unity6-core-9249cc598f7c4563a7012bd701217f55\\Assets\\Core.prefab: &805838392605110698.serializedVersion 发生漂移"
+        }
+      },
+      {
+        "name": "invalid_vector_shape",
+        "passed": true,
+        "detail": {
+          "error_code": "FUC_VERSION_UNSUPPORTED",
+          "error_message": "Profile unity-6000-core 拒绝 C:\\Users\\fmz\\AppData\\Local\\Temp\\fuc-unity6-core-9249cc598f7c4563a7012bd701217f55\\Assets\\Core.prefab: &1589564907104586023.m_LocalPosition 的值或序列化形态未验证"
+        }
+      },
+      {
+        "name": "unverified_component",
+        "passed": true,
+        "detail": {
+          "error_code": "FUC_VERSION_UNSUPPORTED",
+          "error_message": "Profile unity-6000-core 拒绝 C:\\Users\\fmz\\AppData\\Local\\Temp\\fuc-unity6-core-9249cc598f7c4563a7012bd701217f55\\Assets\\Core.prefab: &4345970813772065076 classID 114 未验证 或其原文与本地引用发生变化"
+        }
+      },
+      {
+        "name": "component_closure",
+        "passed": true,
+        "detail": {
+          "error_code": "FUC_VERSION_UNSUPPORTED",
+          "error_message": "Profile unity-6000-core 拒绝 C:\\Users\\fmz\\AppData\\Local\\Temp\\fuc-unity6-core-9249cc598f7c4563a7012bd701217f55\\Assets\\Core.prefab: GameObject &805838392605110698 与 Transform 引用不闭合"
+        }
+      },
+      {
+        "name": "source_drift_rejected_before_callback",
+        "passed": true,
+        "detail": {}
+      },
+      {
+        "name": "atomic_prefab_and_meta_create",
+        "passed": true,
+        "detail": {}
+      },
+      {
+        "name": "asset_delete_denied",
+        "passed": true,
+        "detail": {}
+      },
+      {
+        "name": "unverified_asset_kind_denied",
+        "passed": true,
+        "detail": {}
+      },
+      {
+        "name": "orphan_meta_denied",
+        "passed": true,
+        "detail": {}
+      },
+      {
+        "name": "scene_manager_write_denied",
+        "passed": true,
+        "detail": {}
+      },
+      {
+        "name": "mixed_graph_core_edit_preserves_unknown_bytes",
+        "passed": true,
+        "detail": {}
+      },
+      {
+        "name": "unknown_component_field_write_denied",
+        "passed": true,
+        "detail": {}
+      },
+      {
+        "name": "unknown_component_delete_denied",
+        "passed": true,
+        "detail": {}
+      },
+      {
+        "name": "unknown_component_owner_rebind_denied",
+        "passed": true,
+        "detail": {}
+      },
+      {
+        "name": "component_table_rebind_denied",
+        "passed": true,
+        "detail": {}
+      },
+      {
+        "name": "preserved_component_target_delete_denied",
+        "passed": true,
+        "detail": {}
+      },
+      {
+        "name": "invalid_utf8_does_not_reencode_opaque_component",
+        "passed": true,
+        "detail": {}
+      },
+      {
+        "name": "project_refresh_does_not_borrow_2022_profile",
+        "passed": true,
+        "detail": {}
+      },
+      {
+        "name": "unverified_series_before_callback",
+        "passed": true,
+        "detail": {}
+      }
+    ],
+    "acceptance": {
+      "support_level": "limited",
+      "write_supported": true,
+      "unity_editor_required_for_selfcheck": false,
+      "unsupported_shapes_fail_closed": true,
+      "scope": "ordinary-prefab-create; existing-scene-prefab GameObject Transform SceneRoots"
+    }
+  },
+  "error": null,
+  "meta": {
+    "warnings": [],
+    "truncation": {
+      "truncated": false,
+      "total_count": 0,
+      "cursor": null,
+      "full_output_path": null
+    },
+    "artifacts": null,
+    "project": null
+  }
+}

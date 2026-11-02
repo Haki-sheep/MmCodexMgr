@@ -1,0 +1,170 @@
+{
+  "manifest_version": "1.0",
+  "profile_id": "unity-6000-core",
+  "package_version": "1.0.1",
+  "covered_versions": [
+    "6000.3",
+    "6000.4",
+    "6000.5",
+    "6000.6"
+  ],
+  "content_policy": "offline-only; no Unity DLL, UnityEditor, license, Console log, Profiler data, or internal corpus",
+  "files": [
+    {
+      "path": "classid-map.json",
+      "role": "format_snapshot",
+      "size": 358,
+      "sha256": "007a3a42e91479352b119d4fa7752ef95f05d8b829e5200487d4489c45bcac75"
+    },
+    {
+      "path": "golden/6000.3.26f1/Mixed.prefab",
+      "role": "golden_sample",
+      "size": 2895,
+      "sha256": "506c56acf7492b0d28f5bf1e6ed48080af96886af3be037ba31e757ec4372f23"
+    },
+    {
+      "path": "golden/6000.3.26f1/Mixed.unity",
+      "role": "golden_sample",
+      "size": 6260,
+      "sha256": "c111ea89764b80a0bb5fa9bf1bb67dcf3d34b85833d2e0cdec1601e2f8ffa9af"
+    },
+    {
+      "path": "golden/6000.3.26f1/Oracle.prefab",
+      "role": "golden_sample",
+      "size": 1814,
+      "sha256": "415e1ae37598e78daec3c9a6dcf292070cf8f943d85accd01f4716a397945220"
+    },
+    {
+      "path": "golden/6000.3.26f1/Oracle.unity",
+      "role": "golden_sample",
+      "size": 5253,
+      "sha256": "3b40e2c725605bb491000452961bd12b98bb230a1c5605a5581b45704db336c9"
+    },
+    {
+      "path": "golden/6000.4.10f1/Mixed.prefab",
+      "role": "golden_sample",
+      "size": 2895,
+      "sha256": "8a664c8aca40908861bb0c7d23736c147245768799144b1fdd5508a98a7a6d64"
+    },
+    {
+      "path": "golden/6000.4.10f1/Mixed.unity",
+      "role": "golden_sample",
+      "size": 6254,
+      "sha256": "54bf88b5c01a34cc015184717b10be8acdf40651f9cf69aed78e76f3c9dacfea"
+    },
+    {
+      "path": "golden/6000.4.10f1/Oracle.prefab",
+      "role": "golden_sample",
+      "size": 1819,
+      "sha256": "c8668d363f008a3c89dd729877e0295b5680bfd74f1e4a1e558d0ec7fa019898"
+    },
+    {
+      "path": "golden/6000.4.10f1/Oracle.unity",
+      "role": "golden_sample",
+      "size": 5242,
+      "sha256": "d3730b2748c90d7cdd7c481f7fe86ae0ad36277dc6332381677bff951a3dbdfa"
+    },
+    {
+      "path": "golden/6000.5.1f1/Mixed.prefab",
+      "role": "golden_sample",
+      "size": 2893,
+      "sha256": "02d22b4bc7ee37b8154819c6b5d7815cdb1b56dbbb8bd4ed36e70d4ea9df8cd4"
+    },
+    {
+      "path": "golden/6000.5.1f1/Mixed.unity",
+      "role": "golden_sample",
+      "size": 6248,
+      "sha256": "fa8d28d42e15af9f21fd9f32b587dd833f0d15bbed4b5453b8ed385789fe3897"
+    },
+    {
+      "path": "golden/6000.5.1f1/Oracle.prefab",
+      "role": "golden_sample",
+      "size": 1819,
+      "sha256": "48c6953c7c13003aa3955e672502d96c05b3af02f962278e29785481a2f4f856"
+    },
+    {
+      "path": "golden/6000.5.1f1/Oracle.unity",
+      "role": "golden_sample",
+      "size": 5242,
+      "sha256": "23f882b55c0cb20e89183e66155476a2a9e615a1a33c4d1ab4c8c25a6afda0f1"
+    },
+    {
+      "path": "golden/6000.6.4f1/Mixed.prefab",
+      "role": "golden_sample",
+      "size": 2892,
+      "sha256": "27ae50090314a14eb1f1fcdf06689aa2ee689924e62ad01c7a2ce5ac5debec3d"
+    },
+    {
+      "path": "golden/6000.6.4f1/Mixed.unity",
+      "role": "golden_sample",
+      "size": 6266,
+      "sha256": "8a2402756349af31a2a3afdf20b5134b7377da9f2b5d92e2b00d1e65cbeeb194"
+    },
+    {
+      "path": "golden/6000.6.4f1/Oracle.prefab",
+      "role": "golden_sample",
+      "size": 1819,
+      "sha256": "412315d5eb277cd912d81688af4448024e40707a7c6e9d80dbe08d72b10b705a"
+    },
+    {
+      "path": "golden/6000.6.4f1/Oracle.unity",
+      "role": "golden_sample",
+      "size": 5243,
+      "sha256": "4e90b19e3232046031b07712600855d85c07ea745a281e6c549b0ce771ead7db"
+    },
+    {
+      "path": "golden/catalog.json",
+      "role": "golden_sample",
+      "size": 8386,
+      "sha256": "651beb6316944da16e0c5185f32d4002113311f5136ac71cde68489889223e0a"
+    },
+    {
+      "path": "golden/manifest.json",
+      "role": "golden_sample",
+      "size": 4203,
+      "sha256": "35d11e981cbc738c3bfa488703bf087711e14541448ea915efd62bb9c6a912e3"
+    },
+    {
+      "path": "profile.json",
+      "role": "format_snapshot",
+      "size": 2178,
+      "sha256": "345ab92a141d965d96ce4c6ea0d177e6aba600ea9d6c8bffb9c5d2d8f9f66d62"
+    },
+    {
+      "path": "struct-features.json",
+      "role": "format_snapshot",
+      "size": 633,
+      "sha256": "b6eae94e4e32d453e298618a0c2959cdcc8bebe55e669c242b9013287a42fe6c"
+    },
+    {
+      "path": "tests/console-tests.json",
+      "role": "console_test_description",
+      "size": 977,
+      "sha256": "148661eb3b617f6b60300e9f82c13f8042f9e3c02d7d6cd8e09742df19c408c9"
+    },
+    {
+      "path": "typetree/components/gameobject.json",
+      "role": "typetree",
+      "size": 1328,
+      "sha256": "5f30d4fb418576e5fab98bf80b5860869cc94a1989ac0f170afc73c591d9d5ab"
+    },
+    {
+      "path": "typetree/components/sceneroots.json",
+      "role": "typetree",
+      "size": 266,
+      "sha256": "9cf1e5037dfc007cdee1960c38095937dd8103924b2322152218036f0b1aca3c"
+    },
+    {
+      "path": "typetree/components/transform.json",
+      "role": "typetree",
+      "size": 1379,
+      "sha256": "4666c2dd8741acb27367d98ad56aa77f5ce4ffbba10fafd1db458c82620e465e"
+    },
+    {
+      "path": "typetree/manifest.json",
+      "role": "typetree",
+      "size": 614,
+      "sha256": "1c6bc6720d64af152abe2a629a6f5f8860e57f31f347c6d962fcf795a2896afe"
+    }
+  ]
+}

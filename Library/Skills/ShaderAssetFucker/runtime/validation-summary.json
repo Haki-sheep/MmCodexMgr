@@ -1,0 +1,46 @@
+{
+  "checkedAtUtc": "2026-10-25T09:12:29.983846+00:00",
+  "name": "ShaderAssetFucker",
+  "workflowTests": {
+    "passed": 14
+  },
+  "compilerValidatorTests": {
+    "passed": 17,
+    "liveCompilerTestsIncluded": true
+  },
+  "standaloneExport": {
+    "shaders": 2,
+    "partial": 0,
+    "failed": 0,
+    "outsideSourceRepository": true
+  },
+  "standaloneCompilation": {
+    "shaders": 2,
+    "shader_passed": 2,
+    "shader_failed": 0,
+    "shader_not_run": 0,
+    "stage_attempts": 16,
+    "stage_passed": 16,
+    "stage_failed": 0,
+    "program_not_run": 0
+  },
+  "editorTemplateApiChecks": {
+    "plan": "compiled_not_executed",
+    "apply": "compiled_not_executed",
+    "verify": "compiled_not_executed"
+  },
+  "existingReplacementReadback": {
+    "materialCount": 197,
+    "materialPasses": 368,
+    "shaderCount": 37,
+    "status": "passed"
+  },
+  "freshGenericPlanAndApplyExecution": "not_run; project assets were not mutated again during Skill packaging",
+  "officialQuickValidator": {
+    "status": "failed",
+    "message": "Name 'ShaderAssetFucker' should be hyphen-case (lowercase letters, digits, and hyphens only)",
+    "reason": "Preserved the explicit user-requested mixed-case Skill name; this environment already loads mixed-case skill names"
+  },
+  "otherFrontmatterAndUiMetadataChecks": "passed",
+  "cacheCleanup": "Automatic review blocked cleanup; generated Python caches retained without affecting runtime"
+}

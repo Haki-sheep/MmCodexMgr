@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "timezone": "Asia/Shanghai",
+  "currency": "CNY",
+  "experiment_budget_yuan": "1000.00",
+  "holding_horizon": "资金可放约一个月 每日可评估 不保证日内存取",
+  "loss_tolerance": "用户表示可接受实验本金全部亏损",
+  "channel": "支付宝 手动操作",
+  "leverage_authorized": false,
+  "additional_capital_authorized": false,
+  "min_report_products": 10,
+  "report_style": "中文 简短日期说明 四列表格 少量必要补充",
+  "notification_mode": "按需 用户将另行接入bot 未创建定时任务",
+  "last_confirmed_state": {
+    "as_of_date": "2026-10-31",
+    "settled_cash_yuan": "1000.00",
+    "positions": [],
+    "source": "用户在本会话确认当前无持仓并提供1000元试验预算",
+    "account_balance_verified": false
+  },
+  "state_policy": "last_confirmed_state仅为历史起点 每次读取持久快照和后续反馈 不恢复初始余额 清晰截图或文字事实可直接追加 模糊冲突字段保留未知 建议与成交分开 更正保留原始记录 不将建议推定为成交",
+  "state_directory": "C:/Users/fmz/.codex/skill-data/mm-money-fucker"
+}

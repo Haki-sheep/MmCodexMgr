@@ -1,0 +1,81 @@
+{
+  "date": "2026-10-04",
+  "python_behavior_tests": 14,
+  "native_results": [
+    {
+      "unity_version": "2022.3.62f3",
+      "native_success": true,
+      "strict_json_capture_and_audit": true,
+      "analyze_and_detail_success": true,
+      "samples": 24268,
+      "max_frames": 300000,
+      "probe_counters": [
+        {
+          "key": "gc_alloc_bytes",
+          "name": "GC Allocated In Frame",
+          "unit": "Bytes",
+          "available": true
+        },
+        {
+          "key": "main_thread_ns",
+          "name": "Main Thread",
+          "unit": "TimeNanoseconds",
+          "available": true
+        },
+        {
+          "key": "draw_calls",
+          "name": "Draw Calls Count",
+          "unit": "Count",
+          "available": true
+        },
+        {
+          "key": "total_used_memory_bytes",
+          "name": "Total Used Memory",
+          "unit": "Bytes",
+          "available": true
+        }
+      ],
+      "evidence_fixture": "E:\\AAAA学习资料\\Demo\\UnityFakeCLI\\out\\mm-performance-validation\\final2022\\fixture-6b78d898a7cd46d5850fdadb6dce105d"
+    },
+    {
+      "unity_version": "6000.4.10f1",
+      "native_success": true,
+      "strict_json_capture_and_audit": true,
+      "analyze_and_detail_success": true,
+      "samples": 20143,
+      "max_frames": 300000,
+      "probe_counters": [
+        {
+          "key": "gc_alloc_bytes",
+          "name": "GC Allocated In Frame",
+          "unit": "Bytes",
+          "available": true
+        },
+        {
+          "key": "main_thread_ns",
+          "name": "Main Thread",
+          "unit": "TimeNanoseconds",
+          "available": true
+        },
+        {
+          "key": "draw_calls",
+          "name": "Draw Calls Count",
+          "unit": "",
+          "available": false
+        },
+        {
+          "key": "total_used_memory_bytes",
+          "name": "Total Used Memory",
+          "unit": "Bytes",
+          "available": true
+        }
+      ],
+      "evidence_fixture": "E:\\AAAA学习资料\\Demo\\UnityFakeCLI\\out\\mm-performance-validation\\final6000\\fixture-76588739c3cf478cbfbfa90e2b55bb9a"
+    }
+  ],
+  "not_verified": [
+    "full Bridge transport and guard integration",
+    "dynamic Domain Reload during capture",
+    "business project instrumentation budget"
+  ]
+}

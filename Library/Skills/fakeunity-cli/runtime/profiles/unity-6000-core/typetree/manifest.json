@@ -1,0 +1,24 @@
+{
+  "status": "supported-limited",
+  "source": "Editor-generated text serialization shape Only core field metadata not a native binary type tree",
+  "components": [
+    {
+      "file": "components/gameobject.json",
+      "full_name": "UnityEngine.GameObject",
+      "type_id": 1,
+      "field_count": 13
+    },
+    {
+      "file": "components/transform.json",
+      "full_name": "UnityEngine.Transform",
+      "type_id": 4,
+      "field_count": 13
+    },
+    {
+      "file": "components/sceneroots.json",
+      "full_name": "UnityEngine.SceneRoots",
+      "type_id": 1660057539,
+      "field_count": 2
+    }
+  ]
+}

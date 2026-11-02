@@ -1,0 +1,153 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
+using UnityEditor;
+using UnityEngine;
+using Newtonsoft.Json.Linq;
+public static class ReplaceCharacterShaderAssets
+{
+    private const string Backup = __BACKUP__;
+    private const string ExpectedProject = __PROJECT__;
+    private const bool CompileOnly = __CHECK_ONLY__;
+
+    public static object Execute()
+    {
+        if (CompileOnly) return new { status = "compiled_not_executed" };
+        if (!string.Equals(Path.GetFullPath(Path.GetDirectoryName(Application.dataPath)).TrimEnd('\\', '/'), Path.GetFullPath(ExpectedProject).TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Editor belongs to another project");
+        if (EditorApplication.isPlayingOrWillChangePlaymode || EditorApplication.isCompiling || EditorApplication.isUpdating) throw new InvalidOperationException("Editor must be idle in Edit Mode");
+        string Root = Path.GetDirectoryName(Application.dataPath);
+        int Start = __INDEX__;
+        int Count = 1;
+        if(!File.Exists(Path.Combine(Backup,"plan-result.json"))) throw new IOException("Complete plan and backup are required");
+        var AllRows = File.ReadAllLines(Path.Combine(Backup, "identities.tsv")).Select(Line => Line.Split('\t')).ToArray();
+        var Rows = AllRows.Skip(Start).Take(Count).ToArray();
+        if (Rows.Length != Count) throw new InvalidOperationException("Invalid batch range");
+        var MaterialRows = File.ReadAllLines(Path.Combine(Backup, "materials.tsv")).Select(Line => Line.Split('\t')).ToArray();
+        foreach(var Row in MaterialRows)
+        {
+            string Target=Path.Combine(Backup,Row[0]);
+            if(Hash(Target)!=Row[3] || Hash(Target+".meta")!=Row[4]) throw new IOException("Original material backup changed "+Row[0]);
+        }
+        foreach (var Row in Rows)
+        {
+            string OriginalPath=Path.GetFullPath(Path.Combine(Root,Row[0]));
+            string ReplacementPath=Path.GetFullPath(Path.Combine(Root,Row[1]));
+            string AssetRoot=Path.Combine(Root,"Assets")+Path.DirectorySeparatorChar;
+            if(!OriginalPath.StartsWith(AssetRoot,StringComparison.OrdinalIgnoreCase) || !ReplacementPath.StartsWith(AssetRoot,StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Replacement path escapes project Assets");
+            if (!Row[0].StartsWith("Assets/", StringComparison.Ordinal) || Path.GetDirectoryName(Row[0]) != Path.GetDirectoryName(Row[1]) || Path.ChangeExtension(Row[0], ".shader").Replace('\\', '/') != Row[1]) throw new InvalidOperationException("Unexpected move target " + Row[1]);
+            bool Converted = !File.Exists(Path.Combine(Root, Row[0])) && File.Exists(Path.Combine(Root, Row[1]));
+            string Current = Converted ? Row[1] : Row[0];
+            string ExpectedHash = Converted ? HashRestoredSource(Row[2]) : Row[5];
+            if (AssetDatabase.AssetPathToGUID(Current) != Row[3] || Hash(Path.Combine(Root, Current)) != ExpectedHash || Hash(Row[2]) != Row[6]) throw new IOException("Asset changed since plan " + Current);
+            if (!Converted)
+            {
+                foreach(var MaterialRow in MaterialRows.Where(Item=>Item[1]==Row[3]))
+                {
+                    var ExistingMaterial=AssetDatabase.LoadAssetAtPath<Material>(MaterialRow[0]);
+                    if(EditorUtility.IsDirty(ExistingMaterial) || Hash(Path.Combine(Root,MaterialRow[0]))!=MaterialRow[3]) throw new IOException("Material changed since plan "+MaterialRow[0]);
+                }
+            }
+            if (!Converted && (File.Exists(Path.Combine(Root, Row[1])) || File.Exists(Path.Combine(Root, Row[1] + ".meta")))) throw new IOException("Destination exists " + Row[1]);
+        }
+        var ResultList = new List<object>();
+        foreach (var Row in Rows)
+        {
+            if (File.Exists(Path.Combine(Root, Row[0])))
+            {
+            AssetDatabase.StartAssetEditing();
+            try
+            {
+                string Error = AssetDatabase.MoveAsset(Row[0], Row[1]);
+                if (!string.IsNullOrEmpty(Error)) throw new IOException(Error);
+                File.WriteAllText(Path.Combine(Root, Row[1]), File.ReadAllText(Row[2]).Replace("\r\n","\n").Replace("\r","\n"), new UTF8Encoding(false));
+            }
+            finally { AssetDatabase.StopAssetEditing(); }
+            }
+            AssetDatabase.ImportAsset(Row[1], ImportAssetOptions.ForceUpdate | ImportAssetOptions.ForceSynchronousImport);
+            var Shader = AssetDatabase.LoadAssetAtPath<Shader>(Row[1]);
+            if (!Shader || !AssetDatabase.TryGetGUIDAndLocalFileIdentifier(Shader, out string Guid, out long LocalId) || Guid != Row[3]) throw new InvalidOperationException("Replacement identity mismatch " + Row[1]);
+            if (Hash(Path.Combine(Root, Row[1])) != HashRestoredSource(Row[2])) throw new IOException("Imported source differs from restored output " + Row[1]);
+            var Material = new Material(Shader) { hideFlags = HideFlags.HideAndDontSave };
+            int PassCount = Material.passCount;
+            try
+            {
+                for (int Pass = 0; Pass < PassCount; Pass++) if (!Material.SetPass(Pass)) throw new InvalidOperationException("Shader pass unavailable " + Row[1] + " #" + Pass);
+            }
+            finally { UnityEngine.Object.DestroyImmediate(Material); }
+            var Errors = ShaderUtil.GetShaderMessages(Shader).Where(Message => Message.severity.ToString() == "Error").Select(Message => Message.message).ToArray();
+            if (Errors.Length > 0) throw new InvalidOperationException(Row[1] + "\n" + string.Join("\n", Errors));
+            ResultList.Add(new { oldPath = Row[0], newPath = Row[1], guid = Guid, localId = LocalId, importer = AssetImporter.GetAtPath(Row[1]).GetType().Name, supported = Shader.isSupported, passes = PassCount });
+            File.AppendAllText(Path.Combine(Backup, "completed.tsv"), Row[0] + "\t" + Row[1] + "\t" + Guid + "\t" + LocalId + "\n", new UTF8Encoding(false));
+        }
+        var TargetGuids = Rows.Select(Row => Row[3]).ToHashSet(StringComparer.Ordinal);
+        int MigratedMaterials = 0;
+        foreach (var Row in MaterialRows.Where(Item => TargetGuids.Contains(Item[1])))
+        {
+            string MaterialGuid = AssetDatabase.AssetPathToGUID(Row[0]);
+            var Before = (JObject)JObject.Parse(File.ReadAllText(Path.Combine(Backup,"material-snapshots",MaterialGuid+".json")))["Material"];
+            var Material = AssetDatabase.LoadAssetAtPath<Material>(Row[0]);
+            var Snapshot = new Material(Material) { hideFlags = HideFlags.HideAndDontSave };
+            var Shader = AssetDatabase.LoadAssetAtPath<Shader>(AssetDatabase.GUIDToAssetPath(Row[1]));
+            try
+            {
+                Material.shader = Shader;
+                Material.CopyPropertiesFromMaterial(Snapshot);
+                Material.renderQueue = (int)Before["m_CustomRenderQueue"];
+                Material.shaderKeywords = Before["m_ValidKeywords"].Concat(Before["m_InvalidKeywords"]).Select(Value => (string)Value).Distinct(StringComparer.Ordinal).ToArray();
+            }
+            finally { UnityEngine.Object.DestroyImmediate(Snapshot); }
+            var After = (JObject)JObject.Parse(EditorJsonUtility.ToJson(Material))["Material"];
+            NormalizeSnapshotNumbers(Before);
+            NormalizeSnapshotNumbers(After);
+            foreach (string Field in new[] { "m_SavedProperties", "m_Name", "m_CustomRenderQueue", "m_LightmapFlags", "m_EnableInstancingVariants", "m_DoubleSidedGI", "stringTagMap", "disabledShaderPasses", "m_Parent", "m_LockedProperties" })
+                if (!JToken.DeepEquals(Before[Field],After[Field])) throw new InvalidOperationException("Material state changed " + Row[0] + " field " + Field);
+            var OldKeywords = Before["m_ValidKeywords"].Concat(Before["m_InvalidKeywords"]).Select(Value => (string)Value).OrderBy(Value => Value,StringComparer.Ordinal).ToArray();
+            var NewKeywords = After["m_ValidKeywords"].Concat(After["m_InvalidKeywords"]).Select(Value => (string)Value).OrderBy(Value => Value,StringComparer.Ordinal).ToArray();
+            if (!OldKeywords.SequenceEqual(NewKeywords)) throw new InvalidOperationException("Material keywords changed " + Row[0]);
+            EditorUtility.SetDirty(Material);
+            AssetDatabase.SaveAssetIfDirty(Material);
+            AssetDatabase.ImportAsset(Row[0],ImportAssetOptions.ForceSynchronousImport | ImportAssetOptions.ForceUpdate);
+            Material = AssetDatabase.LoadAssetAtPath<Material>(Row[0]);
+            AssetDatabase.TryGetGUIDAndLocalFileIdentifier(Shader,out string ExpectedGuid,out long ExpectedId);
+            if (!Material.shader || !AssetDatabase.TryGetGUIDAndLocalFileIdentifier(Material.shader,out string Guid,out long Id) || Guid!=ExpectedGuid || Id!=ExpectedId) throw new InvalidOperationException("Migrated Shader reference invalid " + Row[0]);
+            File.AppendAllText(Path.Combine(Backup,"migrated-materials.tsv"), Row[0] + "\t" + Guid + "\t" + Id + "\n",new UTF8Encoding(false));
+            MigratedMaterials++;
+        }
+        int VerifiedMaterials = 0;
+        foreach (var Row in MaterialRows)
+        {
+            var Material = AssetDatabase.LoadAssetAtPath<Material>(Row[0]);
+            var CurrentShader=AssetDatabase.LoadAssetAtPath<Shader>(AssetDatabase.GUIDToAssetPath(Row[1]));
+            AssetDatabase.TryGetGUIDAndLocalFileIdentifier(CurrentShader,out string ExpectedGuid,out long ExpectedId);
+            if (!Material || !Material.shader || !AssetDatabase.TryGetGUIDAndLocalFileIdentifier(Material.shader, out string Guid, out long LocalId) || Guid != ExpectedGuid || LocalId!=ExpectedId) throw new InvalidOperationException("Material Shader reference changed " + Row[0]);
+            VerifiedMaterials++;
+        }
+        var Result=new { status="applied", index = Start, replaced = ResultList.Count, migratedMaterials = MigratedMaterials, verifiedMaterials = VerifiedMaterials, results = ResultList, backup = Backup };
+        File.WriteAllText(Path.Combine(Backup,"apply-"+Start.ToString("D4")+".json"),Newtonsoft.Json.JsonConvert.SerializeObject(Result,Newtonsoft.Json.Formatting.Indented));
+        return new { status="applied", index=Start, migratedMaterials=MigratedMaterials, report=Path.Combine(Backup,"apply-"+Start.ToString("D4")+".json") };
+    }
+    private static void NormalizeSnapshotNumbers(JObject Material)
+    {
+        foreach (var Value in ((JContainer)Material["m_SavedProperties"]).Descendants().OfType<JValue>().Where(Value => Value.Type==JTokenType.String).ToArray())
+        {
+            if (!(Value.Parent is JProperty Property) || !(new[] { "r", "g", "b", "a", "x", "y", "z", "w", "second" }).Contains(Property.Name)) continue;
+            string Text = (string)Value;
+            if (Text=="Infinity") Value.Replace(new JValue(double.PositiveInfinity));
+            else if (Text=="-Infinity") Value.Replace(new JValue(double.NegativeInfinity));
+            else if (Text=="NaN") Value.Replace(new JValue(double.NaN));
+        }
+    }
+    private static string HashRestoredSource(string Path)
+    {
+        byte[] Bytes=Encoding.UTF8.GetBytes(File.ReadAllText(Path).Replace("\r\n","\n").Replace("\r","\n"));
+        using(var Algorithm=SHA256.Create()) return BitConverter.ToString(Algorithm.ComputeHash(Bytes)).Replace("-","").ToLowerInvariant();
+    }
+    private static string Hash(string Path)
+    {
+        using (var Algorithm = SHA256.Create()) return BitConverter.ToString(Algorithm.ComputeHash(File.ReadAllBytes(Path))).Replace("-", "").ToLowerInvariant();
+    }
+}
+
