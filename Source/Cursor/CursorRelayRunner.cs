@@ -11,15 +11,21 @@ public sealed class CursorRelayRunner : IDisposable
     private readonly ICursorCli Cli;
     private readonly string OutboxRoot;
     private readonly Action<Exception> LogError;
+    private readonly Func<bool> AutoOpenLog;
+    private readonly Action<string, string> OpenLogWindow;
+    public CursorExecutionLogs Logs { get; }
     private readonly ConcurrentDictionary<string, (string Session, CancellationTokenSource Cancellation)> RunningDict = new();
 
     #region Lifecycle
-    public CursorRelayRunner(string? Root = null, ICursorCli? Cli = null, string? OutboxRoot = null, Action<Exception>? LogError = null)
+    public CursorRelayRunner(string? Root = null, ICursorCli? Cli = null, string? OutboxRoot = null, Action<Exception>? LogError = null, Func<bool>? AutoOpenLog = null, Action<string, string>? OpenLogWindow = null)
     {
         Sessions = new(Path.Combine(Root ?? Path.Combine(RelayLimits.Root, "cursor"), "sessions"));
         this.Cli = Cli ?? new CursorCli();
         this.OutboxRoot = OutboxRoot ?? RelayOutbox.Root;
         this.LogError = LogError ?? Program.LogError;
+        Logs = new(Path.Combine(Root ?? Path.Combine(RelayLimits.Root, "cursor"), "logs"));
+        this.AutoOpenLog = AutoOpenLog ?? (() => SettingsStore.Load().Cursor.ShowExecutionWindow);
+        this.OpenLogWindow = OpenLogWindow ?? CursorExecutionLogs.OpenTerminal;
     }
 
     public void Dispose()
@@ -31,6 +37,20 @@ public sealed class CursorRelayRunner : IDisposable
     public List<CursorSession> List(string? Selector, int Offset) => Sessions.List(Selector, Offset);
     public CursorSession Session(string Id) => Sessions.Get(Id);
     public bool IsRunning(string SessionId) => RunningDict.Values.Any(Entry => Entry.Session == SessionId);
+
+    public void OpenSessionLog(string SessionId)
+    {
+        var Item = Sessions.Get(SessionId);
+        if (Item.LastTaskId.Length == 0) throw new InvalidOperationException("该会话尚无管理器执行日志");
+        OpenTaskLog(Item.LastTaskId, Item.Title);
+    }
+
+    public void OpenTaskLog(string TaskId, string Title)
+    {
+        string PathValue = Logs.PathFor(TaskId);
+        if (!File.Exists(PathValue)) throw new FileNotFoundException("该任务尚无 Cursor 执行日志", PathValue);
+        OpenLogWindow(PathValue, Title);
+    }
 
     public void Stop(string TaskId)
     {
@@ -106,16 +126,37 @@ public sealed class CursorRelayRunner : IDisposable
     {
         var Lifetime = CancellationTokenSource.CreateLinkedTokenSource(Cancellation);
         if (!RunningDict.TryAdd(Item.Id, (Item.Channel.WorkerThreadId, Lifetime))) { Lifetime.Dispose(); throw new InvalidOperationException("Cursor 任务已经启动 " + Item.Id); }
-        _ = Task.Run(() => RunAsync(Item, Progress, Report, Lifetime));
+        CursorExecutionLog? Trace = null;
+        try
+        {
+            Trace = Logs.Create(Item);
+            Sessions.Save(Sessions.Get(Item.Channel.WorkerThreadId) with { LastTaskId = Item.Id });
+            if (AutoOpenLog()) OpenLogWindow(Trace.PathValue, Item.Title);
+            var ExecutionTrace = Trace;
+            _ = Task.Run(() => RunAsync(Item, Progress, Report, Lifetime, ExecutionTrace));
+        }
+        catch
+        {
+            Trace?.Dispose();
+            Release(Item.Id, Lifetime);
+            throw;
+        }
     }
 
-    private async Task RunAsync(RelayTask Item, Func<string, string, Task> Progress, Func<CursorReport, Task> Report, CancellationTokenSource Lifetime)
+    private async Task RunAsync(RelayTask Item, Func<string, string, Task> Progress, Func<CursorReport, Task> Report, CancellationTokenSource Lifetime, CursorExecutionLog Trace)
+    {
+        try { using (Trace) await ExecuteAsync(Item, Progress, Report, Lifetime, Trace); }
+        finally { Release(Item.Id, Lifetime); }
+    }
+
+    private async Task ExecuteAsync(RelayTask Item, Func<string, string, Task> Progress, Func<CursorReport, Task> Report, CancellationTokenSource Lifetime, CursorExecutionLog Trace)
     {
         CursorReport Result;
         try
         {
             Lifetime.Token.ThrowIfCancellationRequested();
             string? Final = null;
+            string? FinalAssistant = null;
             bool Started = false;
             var ArgumentList = new List<string> { "-p", "--trust", "--resume", Item.Channel.WorkerThreadId, "--workspace", Item.Channel.WorkingDirectory, "--output-format", "stream-json" };
             if (Item.Workspace.Access == "read_only") ArgumentList.Add("--mode=ask");
@@ -126,6 +167,7 @@ public sealed class CursorRelayRunner : IDisposable
             var Execution = await Cli.RunAsync(Item.Channel.CursorCliPath, Item.Channel.WorkingDirectory, ArgumentList, async Line =>
             {
                 if (string.IsNullOrWhiteSpace(Line)) return;
+                Trace.Append(Line);
                 using var Message = JsonDocument.Parse(Line);
                 var Data = Message.RootElement;
                 string Type = Data.GetProperty("type").GetString()!;
@@ -134,24 +176,26 @@ public sealed class CursorRelayRunner : IDisposable
                     if (Data.GetProperty("session_id").GetString() != Item.Channel.WorkerThreadId) throw new InvalidDataException("Cursor 初始化了不同会话");
                     if (!Started) { Started = true; await Progress("started", "Cursor CLI 已确认启动原执行会话"); }
                 }
+                if (Type == "assistant") FinalAssistant = string.Concat(Data.GetProperty("message").GetProperty("content").EnumerateArray().Where(Part => Part.GetProperty("type").GetString() == "text").Select(Part => Part.GetProperty("text").GetString()));
                 if (Type == "result")
                 {
                     if (Final is not null) throw new InvalidDataException("Cursor 返回了多个最终结果");
                     Final = Line;
                 }
-            }, Lifetime.Token);
+            }, Lifetime.Token, Error => { Trace.Note("stderr", Error); return Task.CompletedTask; });
             if (Execution.ExitCode != 0) throw new IOException("Cursor 执行失败 exit=" + Execution.ExitCode + " " + Execution.Error);
             if (Final is null) throw new InvalidDataException("Cursor 退出但未返回最终结果 " + Execution.Error);
-            Result = ParseResult(Final, Item.Channel.WorkerThreadId);
+            Result = ParseResult(Final, Item.Channel.WorkerThreadId, FinalAssistant);
         }
         catch (OperationCanceledException) when (Lifetime.IsCancellationRequested)
         {
-            Release(Item.Id, Lifetime);
+            Trace.Note("停止", "任务执行已停止 日志保留 关闭此日志窗口不影响其他任务");
             return;
         }
         catch (Exception Error)
         {
             LogError(Error);
+            Trace.Note("执行失败", Error.ToString());
             string Summary = "Cursor 执行或结果协议失败 未确认任务完成 " + Error.Message;
             Result = new("failed", Summary.Length > RelayLimits.MaxTextLength ? Summary[..RelayLimits.MaxTextLength] : Summary, new());
         }
@@ -160,15 +204,13 @@ public sealed class CursorRelayRunner : IDisposable
             Lifetime.Token.ThrowIfCancellationRequested();
             var Request = new RelayRequest(InstanceId, Item.Channel.WorkerThreadId, "relay_report", JsonSerializer.SerializeToElement(new { task_id = Item.Id, outcome = Result.Outcome, summary = Result.Summary, artifacts = Result.Artifacts }));
             string Saved = RelayOutbox.Save(Request, OutboxRoot);
+            Trace.Note("回传", "结果已保存 正在回传原主会话");
             await Report(Result);
             File.Delete(Saved);
+            Trace.Note("回传完成", "结果已送达原主会话 等待验收 outcome=" + Result.Outcome);
         }
-        catch (OperationCanceledException) when (Lifetime.IsCancellationRequested) { }
-        catch (Exception Error) { LogError(Error); }
-        finally
-        {
-            Release(Item.Id, Lifetime);
-        }
+        catch (OperationCanceledException) when (Lifetime.IsCancellationRequested) { Trace.Note("停止", "任务执行已停止 日志保留"); }
+        catch (Exception Error) { LogError(Error); Trace.Note("回传未确认", Error.ToString()); }
     }
 
     private void Release(string TaskId, CancellationTokenSource Lifetime)
@@ -180,12 +222,15 @@ public sealed class CursorRelayRunner : IDisposable
         }
     }
 
-    public static CursorReport ParseResult(string Line, string SessionId)
+    public static CursorReport ParseResult(string Line, string SessionId, string? FinalAssistant = null)
     {
         using var Outer = JsonDocument.Parse(Line);
         var Data = Outer.RootElement;
         if (Data.GetProperty("type").GetString() != "result" || Data.GetProperty("subtype").GetString() != "success" || Data.GetProperty("is_error").GetBoolean() || Data.GetProperty("session_id").GetString() != SessionId) throw new InvalidDataException("Cursor 最终结果状态或会话 ID 不匹配");
-        using var Inner = JsonDocument.Parse(Data.GetProperty("result").GetString()!);
+        // 终端结果会聚合多段回复 结构化回报取最后一条完整消息
+        string Aggregate = Data.GetProperty("result").GetString()!;
+        if (FinalAssistant is not null && !Aggregate.TrimEnd().EndsWith(FinalAssistant.TrimEnd(), StringComparison.Ordinal)) throw new InvalidDataException("Cursor 最终消息与终端结果不一致");
+        using var Inner = JsonDocument.Parse(FinalAssistant ?? Aggregate);
         var Payload = Inner.RootElement;
         string Outcome = Payload.GetProperty("outcome").GetString()!;
         string Summary = Payload.GetProperty("summary").GetString()!;

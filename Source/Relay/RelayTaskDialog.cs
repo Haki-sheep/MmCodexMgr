@@ -48,6 +48,7 @@ public sealed class RelayTaskDialog : Form
         if (Item.State == eRelayState.DispatchUncertain) AddAction("核对执行会话已开始", () => ReconcileAsync(Item));
         if (Item.State == eRelayState.Interrupted) AddAction("恢复原任务", () => Coordinator.ResumeAsync(Item.Channel.MainInstance.Id, Item.Channel.MainThreadId, Item.Id));
         if (Item.State == eRelayState.Returned && Item.Outcome == "completed") AddAction("确认验收通过", () => Coordinator.ReviewAsync(Item.Channel.MainInstance.Id, Item.Channel.MainThreadId, Item.Id));
+        if (Item.Channel.WorkerInstance.Id == CursorRelayRunner.InstanceId && Coordinator.Cursor is not null) AddAction("查看 Cursor 执行日志", () => { Coordinator.Cursor.OpenTaskLog(Item.Id, Item.Title); return Task.CompletedTask; });
         AddAction("打开主会话", () => OpenThreadAsync(Item.Channel.MainInstance, Item.Channel.MainThreadId));
         if (Item.Channel.WorkerThreadId.Length != 0) AddAction("打开执行会话", () => OpenThreadAsync(Item.Channel.WorkerInstance, Item.Channel.WorkerThreadId));
         Theme.Apply(this);

@@ -2,7 +2,10 @@ using System.Text.Json;
 
 namespace CodexInstanceManager;
 
-public sealed record CursorSession(string Id, string Title, string Cwd, string Model, string CliPath);
+public sealed record CursorSession(string Id, string Title, string Cwd, string Model, string CliPath)
+{
+    public string LastTaskId { get; init; } = "";
+}
 public sealed record CursorReport(string Outcome, string Summary, List<string> Artifacts);
 
 public sealed class CursorSessionStore

@@ -13,7 +13,10 @@ internal static class CursorRelayTests
         string CliPath = Path.Combine(Root, "cursor-fixture.exe");
         File.WriteAllText(CliPath, "fixture");
         var Fake = new FakeCli();
-        using var Cursor = new CursorRelayRunner(Path.Combine(Root, "cursor"), Live ? null : Fake, Path.Combine(Root, "outbox"), Error => Console.Error.WriteLine(Error.Message));
+        var OpenedLogList = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        bool AutoOpen = true;
+        File.WriteAllText(Path.Combine(Root, "trace-fixture.txt"), "CURSOR_TRACE_FIXTURE");
+        using var Cursor = new CursorRelayRunner(Path.Combine(Root, "cursor"), Live ? null : Fake, Path.Combine(Root, "outbox"), Error => Console.Error.WriteLine(Error.Message), AutoOpenLog: () => AutoOpen, OpenLogWindow: Live ? null : (PathValue, Title) => OpenedLogList.Enqueue(PathValue));
         var Store = new RelayStore(Path.Combine(Root, "relay"));
         var Bridge = new FakeBridge();
         using var Coordinator = new RelayCoordinator(Store, Bridge, Cursor);
@@ -22,7 +25,7 @@ internal static class CursorRelayTests
         Dictionary<string, object> Request(string Key, string? Session = null) => new()
         {
             ["request_id"] = Key, ["instance"] = "cursor", [Session is null ? "create_title" : "session"] = Session ?? "Cursor 验证",
-            ["title"] = "只读通信验证", ["instructions"] = "目的：验证通信\n方式与数量：直接执行 不继续分工\n任务分析：不要调用工具 不读取或修改文件 summary 只填写 CURSOR_MANAGER_OK\n验收规范：返回指定 summary",
+            ["title"] = Live ? "Cursor 日志验证 " + Key : "只读通信验证", ["instructions"] = Live ? "只读验证 请使用工具读取当前工作目录的 trace-fixture.txt 不修改文件 不继续分工 最终 summary 只填写 CURSOR_MANAGER_OK" : "目的：验证通信\n方式与数量：直接执行 不继续分工\n任务分析：不要调用工具 不读取或修改文件 summary 只填写 CURSOR_MANAGER_OK\n验收规范：返回指定 summary",
             ["acceptance"] = "summary 为 CURSOR_MANAGER_OK", ["workspace"] = new { access = "read_only" }, ["cwd"] = Root,
             ["cursor_cli_path"] = Live ? CursorCli.ResolvePath() : CliPath
         };
@@ -47,6 +50,11 @@ internal static class CursorRelayTests
         Require(Returned.Result == "CURSOR_MANAGER_OK" && Returned.Outcome == "completed", "Cursor result automatically returns through coordinator");
         Require(Returned.Channel.WorkerThreadId == SessionId && Returned.ProgressStage == "started", "started event binds the expected session");
         Require(Bridge.PromptList.Count == 1 && Bridge.PromptList[0].Contains("CURSOR_MANAGER_OK"), "main callback carries actual Cursor result");
+        string LogPath = Cursor.Logs.PathFor(FirstId);
+        string TraceText = File.ReadAllText(LogPath);
+        string[] EventList = File.ReadAllLines(Path.ChangeExtension(LogPath, ".jsonl"));
+        Require(TraceText.Contains("最终输出") && EventList.Any(Line => { using var Event = JsonDocument.Parse(Line); return Event.RootElement.GetProperty("type").GetString() == "tool_call"; }), "persisted execution trace records actual tool events before result return");
+        Require(Cursor.Session(SessionId).LastTaskId == FirstId, "session links to its latest task log");
         await Coordinator.ReviewAsync("main", "main-thread", FirstId);
         var Retry = await StartAsync(Request("first"));
         Require(Retry.GetProperty("task_id").GetString() == FirstId && Store.Count() == 1, "request retry does not create a second task");
@@ -55,6 +63,7 @@ internal static class CursorRelayTests
         Require(Second.Channel.WorkerThreadId == SessionId && Second.Result == "CURSOR_MANAGER_OK", "follow-up reuses the same Cursor conversation");
         await Coordinator.ReviewAsync("main", "main-thread", Second.Id);
         if (Live) { Console.WriteLine($"PASS Cursor LIVE {Count} assertions; fixture={Root}; session={SessionId}"); return; }
+        Require(OpenedLogList.Count == 2 && TraceText.Contains("TRACE_COMMAND") && TraceText.Contains("fixture stderr"), "each execution opens one readable log and retains commands stderr and tool results");
         Require(Fake.CreateCount == 1 && Fake.RunCount == 2, "idempotent retry and follow-up do not create or execute extra sessions");
         Require(Fake.ArgumentList.Contains("--mode=ask") && !Fake.ArgumentList.Contains("--force"), "read-only dispatch uses ask mode without force");
         var Changed = Request("first");
@@ -67,6 +76,7 @@ internal static class CursorRelayTests
         BadDirectory["cwd"] = "relative";
         await RejectAsync(() => StartAsync(BadDirectory), "relative working directory rejected before delivery");
         Require(Store.Count() == 2, "invalid requests have no task or subprocess side effects");
+        AutoOpen = false;
         Fake.BadPayload = true;
         await StartAsync(Request("bad-payload"));
         var Bad = await AwaitAsync("bad-payload", Item => Item.State == eRelayState.Returned);
@@ -89,6 +99,10 @@ internal static class CursorRelayTests
         Bridge.FailReturn = false;
         await Coordinator.RetryReturnAsync(FailedReturn.Id);
         await Coordinator.ReviewAsync("main", "main-thread", FailedReturn.Id);
+        Require(OpenedLogList.Count == 2 && File.Exists(Cursor.Logs.PathFor(Bad.Id)), "background mode keeps durable logs without opening another window");
+        var LegacySettings = JsonSerializer.Deserialize<CursorHarnessSettings>("{}");
+        var BackgroundSettings = JsonSerializer.Deserialize<CursorHarnessSettings>("{\"ShowExecutionWindow\":false}");
+        Require(LegacySettings!.ShowExecutionWindow && !BackgroundSettings!.ShowExecutionWindow, "legacy settings default to popup while explicit background selection persists");
         await VerifyRestartAsync(Root, Settings, CliPath);
         VerifyProtocol(SessionId);
         await VerifyProcessCancellationAsync(Root);
@@ -100,7 +114,7 @@ internal static class CursorRelayTests
     private static async Task VerifyRestartAsync(string Root, ManagerSettings Settings, string CliPath)
     {
         var Fake = new FakeCli { Hold = true };
-        using var Cursor = new CursorRelayRunner(Path.Combine(Root, "restart-cursor"), Fake, Path.Combine(Root, "restart-outbox"));
+        using var Cursor = new CursorRelayRunner(Path.Combine(Root, "restart-cursor"), Fake, Path.Combine(Root, "restart-outbox"), AutoOpenLog: () => false);
         string SessionId = Guid.NewGuid().ToString();
         new CursorSessionStore(Path.Combine(Root, "restart-cursor", "sessions")).Save(new(SessionId, "原会话", Root, "", CliPath));
         var Store = new RelayStore(Path.Combine(Root, "restart-store"));
@@ -123,6 +137,10 @@ internal static class CursorRelayTests
             try { CursorRelayRunner.ParseResult(Input, SessionId); } catch (Exception Error) when (Error is InvalidDataException or JsonException) { Rejected = true; }
             Require(Rejected, "wrong session malformed output and relative artifacts fail closed");
         }
+        Require(CursorRelayRunner.ParseResult(Outer("工具前的说明" + Valid, SessionId), SessionId, Valid).Summary == "verified", "terminal narration does not corrupt the final structured assistant response");
+        bool MismatchRejected = false;
+        try { CursorRelayRunner.ParseResult(Outer(Valid, SessionId), SessionId, "different final response"); } catch (InvalidDataException) { MismatchRejected = true; }
+        Require(MismatchRejected, "terminal result must agree with the final assistant response");
         bool PathRejected = false;
         try { new CursorSessionStore(Path.GetTempPath()).Get("../outside"); } catch (InvalidDataException) { PathRejected = true; }
         Require(PathRejected, "session selector cannot escape metadata directory");
@@ -161,7 +179,7 @@ internal static class CursorRelayTests
         public List<string> ArgumentList = new();
         public TaskCompletionSource Cancelled = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        public async Task<CursorCliResult> RunAsync(string CliPath, string Cwd, IReadOnlyList<string> Arguments, Func<string, Task>? OnLine, CancellationToken Cancellation)
+        public async Task<CursorCliResult> RunAsync(string CliPath, string Cwd, IReadOnlyList<string> Arguments, Func<string, Task>? OnLine, CancellationToken Cancellation, Func<string, Task>? OnError = null)
         {
             if (Arguments[0] == "--version") return new(0, "2026.10.22-fixture", "");
             if (Arguments[0] == "status") return new(0, "Logged in", "");
@@ -170,13 +188,18 @@ internal static class CursorRelayTests
             ArgumentList = Arguments.ToList();
             string SessionId = Arguments[ArgumentList.IndexOf("--resume") + 1];
             await OnLine!(JsonSerializer.Serialize(new { type = "system", subtype = "init", session_id = SessionId }));
+            await OnLine(JsonSerializer.Serialize(new { type = "assistant", message = new { content = new[] { new { type = "text", text = "开始检查文件" } } }, session_id = SessionId }));
+            await OnLine(JsonSerializer.Serialize(new { type = "tool_call", subtype = "started", tool_call = new { function = new { name = "shell", arguments = "TRACE_COMMAND" } }, session_id = SessionId }));
+            await OnLine(JsonSerializer.Serialize(new { type = "tool_call", subtype = "completed", tool_call = new { readToolCall = new { args = new { path = "trace-fixture.txt" }, result = new { success = new { content = "CURSOR_TRACE_FIXTURE" } } } }, session_id = SessionId }));
+            if (OnError is not null) await OnError("fixture stderr");
             if (Hold)
             {
                 try { await Task.Delay(Timeout.Infinite, Cancellation); }
                 catch (OperationCanceledException) { Cancelled.TrySetResult(); throw; }
             }
             string Result = BadPayload ? "invalid result" : JsonSerializer.Serialize(new { outcome = "completed", summary = "CURSOR_MANAGER_OK", artifacts = Array.Empty<string>() });
-            await OnLine(JsonSerializer.Serialize(new { type = "result", subtype = "success", is_error = false, result = Result, session_id = SessionId }));
+            await OnLine(JsonSerializer.Serialize(new { type = "assistant", message = new { content = new[] { new { type = "text", text = Result } } }, session_id = SessionId }));
+            await OnLine(JsonSerializer.Serialize(new { type = "result", subtype = "success", is_error = false, result = "工具前的说明" + Result, session_id = SessionId }));
             return new(0, "", "");
         }
     }

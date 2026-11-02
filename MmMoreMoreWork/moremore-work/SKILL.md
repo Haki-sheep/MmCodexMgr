@@ -109,6 +109,7 @@ CLI 从 `CODEX_HOME` 和 `CODEX_THREAD_ID` 读取当前身份 不要填写另一
 - 可选 `model` 与 `cursor_cli_path` 覆盖新会话默认值 CLI 路径必须为绝对路径 留空模型沿用 Cursor 默认 已有会话保留登记的目录 模型和 CLI 不得在返工中静默更换
 - Cursor 执行端本次只直接完成交付任务 `worker_limits` 默认全部为 0 显式提供时三项均须为 0 不创建下级 Agent 不使用或伪造 `CODEX_THREAD_ID` / `CODEX_HOME` 不要求 Cursor 调用 Codex 的 report progress 或 accept
 - 占用主会话的 `cross_agent_max` 与整棵树槽位 只读任务使用 Cursor ask 模式 写入任务使用 `--force` 自动执行已授权范围内的操作 并声明 `workspace.access=write` 与绝对 `write_paths` 并行修改仓库仍需独立 worktree `cwd` 指向对应工作区 写入路径声明用于冲突检查 不是文件系统沙箱
+- Cursor 任务默认在开始时自动弹出只读执行日志窗口 在“跨 Harness 协作”页取消勾选自动弹出并保存即可默认后台运行 关闭日志窗口不会停止任务 正在执行或已完成的会话均可通过“查看日志”重新打开 任务详情也可查看该任务日志 “打开日志目录”可查阅历史文件 日志包含 CLI 提供的输出 工具调用及参数 结果和 stderr 每个任务同时保留可读 `.log` 与原始 `.jsonl` 清理联调记录时日志保留 不从日志窗口启动另一个执行会话
 - 管理器在 Cursor 初始化事件确认会话 ID 后上报 started 最终回复必须仅为 JSON `{"outcome":"completed|needs_decision|failed","summary":"实际修改 检查结果与未解决项","artifacts":["产物绝对路径"]}` 管理器负责校验 保存到发件箱并回传原主会话 非法回复 命令失败或会话 ID 不匹配不能当作 completed
 - 派发后结束当前回合 等待回传 不轮询 原主会话按原标准验收 验收不通过时以新的 `request_id` 和原 `session` 派发返工 重试原请求保持同一个 `request_id` 不重复创建或启动
 - `open --instance cursor --session-id <ID>` 打开登记会话的交互终端 正在执行的会话不能另开交互进程 `cancel` 和超时会停止管理器启动的 Cursor CLI 进程树 已生成产物保留 管理器退出也会关闭该进程树 重启后原执行任务标为已阻塞 不自动重复执行 核对历史与产物后可 `resume --task-id <原ID>` 继续原会话

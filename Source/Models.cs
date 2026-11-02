@@ -27,6 +27,7 @@ public sealed class ManagerSettings
 
 public sealed class CursorHarnessSettings
 {
+    public bool ShowExecutionWindow { get; set; } = true;
     public string CliPath { get; set; } = "";
     public string WorkingDirectory { get; set; } = "";
     public string Model { get; set; } = "";

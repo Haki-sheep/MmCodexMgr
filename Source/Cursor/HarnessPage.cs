@@ -8,6 +8,7 @@ public sealed class HarnessPage : UserControl
     private readonly TextBox CliInput = new() { PlaceholderText = "留空自动查找 cursor-agent" };
     private readonly TextBox DirectoryInput = new() { PlaceholderText = "新建联调会话的默认工作目录" };
     private readonly TextBox ModelInput = new() { PlaceholderText = "留空沿用 Cursor 默认模型" };
+    private readonly CheckBox AutoOpenLog = new() { Text = "任务开始时自动弹出日志窗口", AutoSize = true };
     private readonly Label Status = new() { AutoSize = true, Dock = DockStyle.Fill, Tag = eThemeRole.Muted };
     private readonly DataGridView SessionGrid = new();
     private readonly Label PageLabel = new() { AutoSize = true, Margin = new Padding(8, 10, 8, 0) };
@@ -53,12 +54,15 @@ public sealed class HarnessPage : UserControl
         AddField(Fields, "工作目录", DirectoryInput, 1);
         Fields.Controls.Add(MainForm.MakeButton("选择目录", (_, _) => SelectDirectory()), 2, 1);
         AddField(Fields, "默认模型", ModelInput, 2);
+        Fields.Controls.Add(new Label { Text = "执行跟踪", AutoSize = true, Margin = new Padding(0, 7, 0, 8) }, 0, 3);
+        Fields.Controls.Add(AutoOpenLog, 1, 3);
         Card.Controls.Add(Fields);
         var Actions = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, WrapContents = true, Margin = new Padding(0, 10, 0, 0) };
         Actions.Controls.Add(MainForm.MakeButton("保存设置", (_, _) => Run(Save), true));
         Actions.Controls.Add(MainForm.MakeButton("检查连接", async (_, _) => await RunAsync(CheckAsync)));
         Actions.Controls.Add(MainForm.MakeButton("登录账号", (_, _) => Run(() => OpenTerminal(true))));
         Actions.Controls.Add(MainForm.MakeButton("启动 Cursor CLI", (_, _) => Run(() => OpenTerminal(false))));
+        Actions.Controls.Add(MainForm.MakeButton("打开日志目录", (_, _) => Run(() => (CursorRunner ?? throw new InvalidOperationException("Cursor 执行端未启用")).Logs.OpenDirectory())));
         Card.Controls.Add(Actions);
         Card.Controls.Add(new Label { Text = "在 Codex 中指定让 Cursor 执行任务即可联调 已有会话保留其工作目录和模型", AutoSize = true, Tag = eThemeRole.Muted, Margin = new Padding(0, 10, 0, 0) });
         Root.Controls.Add(Card);
@@ -81,8 +85,14 @@ public sealed class HarnessPage : UserControl
         SessionGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "会话名称", FillWeight = 27, MinimumWidth = 120 });
         SessionGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "工作目录", FillWeight = 45, MinimumWidth = 180 });
         SessionGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "模型", FillWeight = 18, MinimumWidth = 85 });
-        SessionGrid.Columns.Add(new DataGridViewButtonColumn { HeaderText = "操作", FillWeight = 10, MinimumWidth = 70, FlatStyle = FlatStyle.Flat });
-        SessionGrid.CellContentClick += async (_, Event) => { if (Event.ColumnIndex == 3 && Event.RowIndex >= 0) await RunAsync(() => CursorRunner!.OpenAsync(SessionList[Event.RowIndex].Id, Lifetime.Token)); };
+        SessionGrid.Columns.Add(new DataGridViewButtonColumn { HeaderText = "执行日志", FillWeight = 12, MinimumWidth = 85, FlatStyle = FlatStyle.Flat });
+        SessionGrid.Columns.Add(new DataGridViewButtonColumn { HeaderText = "会话", FillWeight = 10, MinimumWidth = 70, FlatStyle = FlatStyle.Flat });
+        SessionGrid.CellContentClick += async (_, Event) =>
+        {
+            if (Event.RowIndex < 0) return;
+            if (Event.ColumnIndex == 3) Run(() => CursorRunner!.OpenSessionLog(SessionList[Event.RowIndex].Id));
+            else if (Event.ColumnIndex == 4) await RunAsync(() => CursorRunner!.OpenAsync(SessionList[Event.RowIndex].Id, Lifetime.Token));
+        };
         SessionGrid.CellToolTipTextNeeded += (_, Event) => { if (Event.RowIndex >= 0 && Event.RowIndex < SessionList.Count) Event.ToolTipText = SessionList[Event.RowIndex].Id + "\n" + SessionList[Event.RowIndex].Cwd; };
         SessionCard.Controls.Add(SessionGrid);
         var Pages = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, WrapContents = false };
@@ -97,6 +107,7 @@ public sealed class HarnessPage : UserControl
         CliInput.Text = Settings.Cursor.CliPath;
         DirectoryInput.Text = Settings.Cursor.WorkingDirectory;
         ModelInput.Text = Settings.Cursor.Model;
+        AutoOpenLog.Checked = Settings.Cursor.ShowExecutionWindow;
         RefreshSessions();
         Status.Text = CursorRunner is null ? "当前管理器未启用 Cursor 执行端" : "Cursor 执行端已启用 · 请检查连接确认 CLI 与账号状态";
         ResumeLayout(false);
@@ -126,7 +137,7 @@ public sealed class HarnessPage : UserControl
         string Cwd = DirectoryInput.Text.Trim();
         if (CliPath.Length != 0) CursorCli.ResolvePath(CliPath);
         if (Cwd.Length != 0 && (!Path.IsPathFullyQualified(Cwd) || !Directory.Exists(Cwd))) throw new DirectoryNotFoundException("工作目录必须是存在的绝对路径");
-        Settings.Cursor = new() { CliPath = CliPath, WorkingDirectory = Cwd, Model = ModelInput.Text.Trim() };
+        Settings.Cursor = new() { CliPath = CliPath, WorkingDirectory = Cwd, Model = ModelInput.Text.Trim(), ShowExecutionWindow = AutoOpenLog.Checked };
         SettingsStore.Save(Settings);
         Status.Text = "Cursor 设置已保存 新建联调会话立即使用 已有会话保持原设置";
     }
@@ -167,7 +178,7 @@ public sealed class HarnessPage : UserControl
     {
         SessionList = CursorRunner?.List(null, Offset) ?? new();
         SessionGrid.Rows.Clear();
-        foreach (var Item in SessionList) SessionGrid.Rows.Add(Item.Title, Item.Cwd, Item.Model.Length == 0 ? "默认" : Item.Model, CursorRunner!.IsRunning(Item.Id) ? "执行中" : "打开");
+        foreach (var Item in SessionList) SessionGrid.Rows.Add(Item.Title, Item.Cwd, Item.Model.Length == 0 ? "默认" : Item.Model, "查看日志", CursorRunner!.IsRunning(Item.Id) ? "执行中" : "打开");
         PageLabel.Text = "第 " + (Offset / RelayLimits.PageSize + 1) + " 页";
     }
 

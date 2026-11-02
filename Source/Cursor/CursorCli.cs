@@ -7,7 +7,7 @@ public sealed record CursorCliResult(int ExitCode, string Output, string Error);
 
 public interface ICursorCli
 {
-    Task<CursorCliResult> RunAsync(string CliPath, string Cwd, IReadOnlyList<string> ArgumentList, Func<string, Task>? OnLine, CancellationToken Cancellation);
+    Task<CursorCliResult> RunAsync(string CliPath, string Cwd, IReadOnlyList<string> ArgumentList, Func<string, Task>? OnLine, CancellationToken Cancellation, Func<string, Task>? OnError = null);
 }
 
 public sealed class CursorCli : ICursorCli
@@ -67,7 +67,7 @@ public sealed class CursorCli : ICursorCli
         using var Terminal = Process.Start(Info) ?? throw new InvalidOperationException("无法打开 Cursor 交互终端");
     }
 
-    public async Task<CursorCliResult> RunAsync(string CliPath, string Cwd, IReadOnlyList<string> ArgumentList, Func<string, Task>? OnLine, CancellationToken Cancellation)
+    public async Task<CursorCliResult> RunAsync(string CliPath, string Cwd, IReadOnlyList<string> ArgumentList, Func<string, Task>? OnLine, CancellationToken Cancellation, Func<string, Task>? OnError = null)
     {
         Cancellation.ThrowIfCancellationRequested();
         using var Process = new Process { StartInfo = StartInfo(CliPath, Cwd, ArgumentList) };
@@ -84,6 +84,11 @@ public sealed class CursorCli : ICursorCli
             {
                 Error.Append(BufferList, 0, Length);
                 if (Error.Length > 16000) Error.Remove(0, Error.Length - 16000);
+                if (OnError is not null)
+                {
+                    try { await OnError(new string(BufferList, 0, Length)); }
+                    catch { if (!Process.HasExited) Process.Kill(true); throw; }
+                }
             }
         }
         var ErrorTask = ReadErrorAsync();
