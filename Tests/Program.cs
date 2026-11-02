@@ -68,6 +68,11 @@ internal static class Tests
             return 0;
         }
         catch (Exception Error) { Console.Error.WriteLine(Error); return 1; }
+        finally
+        {
+            if (!ManagerPaths.IsUnder(Root, Path.GetTempPath())) throw new IOException("测试清理路径越界");
+            if (Directory.Exists(Root)) Directory.Delete(Root, true);
+        }
     }
     private static void Check(bool Condition, string Message)
     {
@@ -103,17 +108,18 @@ internal static class Tests
         string Source = Path.Combine(Root, "source"); string Target = Path.Combine(Root, "target");
         Directory.CreateDirectory(Path.Combine(Source, "skills", "mine"));
         Directory.CreateDirectory(Path.Combine(Source, "skills", ".system")); Directory.CreateDirectory(Target);
-        File.WriteAllText(Path.Combine(Source, "skills", "mine", "SKILL.md"), "my skill");
+        string SkillText = "---\nname: mine\ndescription: fixture\n---\nmy skill";
+        File.WriteAllText(Path.Combine(Source, "skills", "mine", "SKILL.md"), SkillText);
         File.WriteAllText(Path.Combine(Source, "skills", ".system", "SKILL.md"), "do not copy");
         File.WriteAllText(Path.Combine(Source, "auth.json"), "source auth");
         File.WriteAllText(Path.Combine(Target, "auth.json"), "target auth");
         File.WriteAllText(Path.Combine(Source, "config.toml"), "model='source'\n[mcp_servers.new]\ncommand='npx'\n");
         File.WriteAllText(Path.Combine(Target, "config.toml"), "model='target'\n");
         var Plan = ConfigSync.Preview(new() { HomePath = Source }, new() { HomePath = Target }, new());
-        Check(Plan.FileList.Count == 2, "only desired files planned");
+        Check(Plan.FileList.Count == 1 && Plan.Skills is { HasChanges: true, PackageList.Count: 1 }, "only desired config and one skill planned");
         string Backup = ConfigSync.Apply(Plan, Path.Combine(Root, "backups"));
         Check(File.ReadAllText(Path.Combine(Target, "auth.json")) == "target auth", "auth bytes preserved");
-        Check(File.ReadAllText(Path.Combine(Target, "skills", "mine", "SKILL.md")) == "my skill", "skill copied");
+        Check(File.ReadAllText(Path.Combine(Target, "skills", "mine", "SKILL.md")) == SkillText, "skill copied");
         Check(!Directory.Exists(Path.Combine(Target, "skills", ".system")), "built-in system skills skipped");
         Check(File.ReadAllText(Path.Combine(Backup, "config.toml")) == "model='target'\n", "original config backed up");
         File.WriteAllText(Path.Combine(Source, "config.toml"), "model='source'\n[mcp_servers.changed]\ncommand='x'\n");
@@ -134,7 +140,7 @@ internal static class Tests
         {
             string FilePath = Path.Combine(Source, Relative);
             Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
-            File.WriteAllText(FilePath, "source tool " + Relative);
+            File.WriteAllText(FilePath, Relative == "skills/mine/SKILL.md" ? "---\nname: mine\ndescription: fixture\n---\nsource tool " + Relative : "source tool " + Relative);
         }
         foreach (string Relative in ProtectedFileList)
         {
@@ -152,10 +158,10 @@ internal static class Tests
         var TargetHashDict = ProtectedFileList.ToDictionary(Relative => Relative, Relative => SettingsStore.FileHash(Path.Combine(Target, Relative)));
         var Plan = ConfigSync.Preview(new() { HomePath = Source }, new() { HomePath = Target }, new() { Skills = true, Mcp = true, Instructions = true, Plugins = true });
         var PlannedRelativeHashList = Plan.FileList.Select(File => Path.GetRelativePath(Target, File.Destination).Replace('\\', '/')).ToHashSet();
-        Check(PlannedRelativeHashList.SetEquals(ToolFileList.Append("config.toml")), "all sync options preview only selected tools and configuration");
+        Check(PlannedRelativeHashList.SetEquals(ToolFileList.Where(Item => !Item.StartsWith("skills/")).Append("config.toml")) && Plan.Skills is { PackageList.Count: 1, HasChanges: true }, "all sync options preview only selected tools and configuration");
         Check(ProtectedFileList.All(Relative => SettingsStore.FileHash(Path.Combine(Target, Relative)) == TargetHashDict[Relative]), "sync preview leaves destination conversation and project data unchanged");
         ConfigSync.Apply(Plan, Path.Combine(Root, "scope-backups"));
-        Check(ToolFileList.All(Relative => File.ReadAllText(Path.Combine(Target, Relative)) == "source tool " + Relative), "all selected tool categories synchronize successfully");
+        Check(ToolFileList.All(Relative => File.ReadAllText(Path.Combine(Target, Relative)) == File.ReadAllText(Path.Combine(Source, Relative))), "all selected tool categories synchronize successfully");
         Check(ProtectedFileList.All(Relative => SettingsStore.FileHash(Path.Combine(Target, Relative)) == TargetHashDict[Relative]), "sync execution preserves destination auth conversation databases history and sidebar state byte for byte");
         Check(ProtectedFileList.All(Relative => SettingsStore.FileHash(Path.Combine(Source, Relative)) == SourceHashDict[Relative]), "sync leaves source conversation and project data unchanged");
         Check(!File.Exists(Path.Combine(Target, "sessions", "source-only.jsonl")), "source-only conversations are not imported by configuration sync");

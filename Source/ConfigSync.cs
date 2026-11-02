@@ -12,6 +12,7 @@ public sealed class SyncOptions
     public bool Mcp { get; set; } = true;
     public bool Instructions { get; set; } = true;
     public bool Plugins { get; set; }
+    public IReadOnlyCollection<string> ExcludedSkillNameList { get; set; } = Array.Empty<string>();
 }
 
 public sealed record PlannedFile(string Destination, string? Source, byte[]? Content, string? OriginalHash);
@@ -21,6 +22,7 @@ public sealed class SyncPlan
     public string DestinationRoot { get; init; } = "";
     public List<PlannedFile> FileList { get; } = new();
     public long TotalBytes { get; set; }
+    public SkillMirrorPlan? Skills { get; set; }
 }
 
 public static class ConfigSync
@@ -34,7 +36,7 @@ public static class ConfigSync
             throw new InvalidOperationException("源目录与目标目录不能相同或互相包含");
         if (!Directory.Exists(SourceRoot)) throw new DirectoryNotFoundException("源实例目录不存在 " + SourceRoot);
         var Plan = new SyncPlan { DestinationRoot = DestinationRoot };
-        if (Options.Skills) AddTree(Plan, Path.Combine(SourceRoot, "skills"), Path.Combine(DestinationRoot, "skills"), true);
+        if (Options.Skills) Plan.Skills = SkillMirror.Preview(Path.Combine(SourceRoot, "skills"), Path.Combine(DestinationRoot, "skills"), ExcludedNameList: Options.ExcludedSkillNameList);
         if (Options.Instructions)
         {
             AddFile(Plan, Path.Combine(SourceRoot, "AGENTS.md"), Path.Combine(DestinationRoot, "AGENTS.md"));
@@ -43,14 +45,14 @@ public static class ConfigSync
         if (Options.Plugins) AddTree(Plan, Path.Combine(SourceRoot, "plugins", "cache"), Path.Combine(DestinationRoot, "plugins", "cache"), false);
         string SourceConfig = Path.Combine(SourceRoot, "config.toml");
         string DestinationConfig = Path.Combine(DestinationRoot, "config.toml");
-        if (File.Exists(SourceConfig))
+        if (File.Exists(SourceConfig) || Options.Skills && File.Exists(DestinationConfig))
         {
             var RootList = new HashSet<string>(StringComparer.Ordinal);
             if (Options.Mcp) RootList.Add("mcp_servers");
             if (Options.Skills) RootList.Add("skills");
             if (Options.Plugins) { RootList.Add("plugins"); RootList.Add("marketplaces"); }
             string ExistingText = File.Exists(DestinationConfig) ? File.ReadAllText(DestinationConfig) : "";
-            string NewText = MergeConfig(File.ReadAllText(SourceConfig), ExistingText, RootList, SourceRoot, DestinationRoot);
+            string NewText = MergeConfig(File.Exists(SourceConfig) ? File.ReadAllText(SourceConfig) : "", ExistingText, RootList, SourceRoot, DestinationRoot);
             if (NewText != ExistingText) AddContent(Plan, DestinationConfig, Encoding.UTF8.GetBytes(NewText));
         }
         return Plan;
@@ -63,8 +65,12 @@ public static class ConfigSync
         var SelectedModel = new TomlTable();
         foreach (string Root in RootList)
         {
-            if (!SourceModel.TryGetValue(Root, out object? Incoming)) continue;
-            if (Incoming is TomlTable IncomingTable && DestinationModel.TryGetValue(Root, out object? Current) && Current is TomlTable CurrentTable)
+            if (!SourceModel.TryGetValue(Root, out object? Incoming))
+            {
+                if (Root == "skills" && DestinationModel.ContainsKey(Root)) SelectedModel[Root] = new TomlTable();
+                continue;
+            }
+            if (Root != "skills" && Incoming is TomlTable IncomingTable && DestinationModel.TryGetValue(Root, out object? Current) && Current is TomlTable CurrentTable)
             {
                 var MergedTable = new TomlTable();
                 foreach (var Item in CurrentTable) MergedTable[Item.Key] = Item.Value;
@@ -183,6 +189,7 @@ public static class ConfigSync
     {
         string BackupPath = Path.Combine(BackupRoot, DateTime.Now.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N")[..6]);
         var AppliedList = new List<(PlannedFile File, string Backup)>();
+        SkillMirrorTransaction? SkillTransaction = null;
         foreach (var File in Plan.FileList)
         {
             EnsureDestination(Plan, File.Destination);
@@ -208,6 +215,7 @@ public static class ConfigSync
                 else SettingsStore.AtomicCopy(File.Source!, File.Destination);
                 Progress?.Report($"同步 {Index + 1}/{Plan.FileList.Count}　{Path.GetRelativePath(Plan.DestinationRoot, File.Destination)}");
             }
+            if (Plan.Skills is not null) SkillTransaction = SkillMirror.Apply(Plan.Skills, Path.Combine(BackupPath, "skills"));
             Directory.CreateDirectory(BackupPath);
             System.IO.File.WriteAllText(Path.Combine(BackupPath, "manifest.json"), System.Text.Json.JsonSerializer.Serialize(new { DestinationRoot = Plan.DestinationRoot, Files = Plan.FileList.Select(File => new { File.Destination, Existed = File.OriginalHash is not null }) }));
             return BackupPath;
@@ -215,6 +223,8 @@ public static class ConfigSync
         catch (Exception Error)
         {
             var ErrorList = new List<Exception> { Error };
+            try { SkillTransaction?.Rollback(); }
+            catch (Exception RestoreError) { ErrorList.Add(RestoreError); }
             foreach (var Item in AppliedList.AsEnumerable().Reverse())
             {
                 try

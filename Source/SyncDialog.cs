@@ -13,11 +13,14 @@ public sealed class SyncDialog : Form
     private readonly Button PreviewButton;
     private readonly InstanceProfile Destination;
     private SyncPlan? CurrentPlan;
+    /// <summary> 本机不参与同步的技能名称 </summary>
+    private readonly IReadOnlyCollection<string> ExcludedNameList;
 
-    public SyncDialog(List<InstanceProfile> ProfileList, InstanceProfile Destination)
+    public SyncDialog(List<InstanceProfile> ProfileList, InstanceProfile Destination, IReadOnlyCollection<string>? ExcludedNameList = null)
     {
         SuspendLayout();
         this.Destination = Destination;
+        this.ExcludedNameList = ExcludedNameList ?? Array.Empty<string>();
         AutoScaleDimensions = new SizeF(96, 96);
         AutoScaleMode = AutoScaleMode.Dpi;
         Text = "同步 Skills / MCP 配置 → " + Destination.Name;
@@ -35,13 +38,14 @@ public sealed class SyncDialog : Form
         Root.RowStyles.Add(new RowStyle(SizeType.Absolute, 45));
         Controls.Add(Root);
         Root.Controls.Add(new Label { Text = "来源实例 → " + Destination.Name, AutoSize = true, Font = new Font(Font, FontStyle.Bold) });
-        foreach (var Profile in ProfileList.Where(Item => Item.Id != Destination.Id)) SourceInput.Items.Add(Profile);
+        foreach (var Profile in ProfileList.Where(Item => Item.IsPrimary && Item.Id != Destination.Id)) SourceInput.Items.Add(Profile);
+        if (SourceInput.Items.Count != 1) throw new InvalidOperationException("同步必须指定唯一的主实例作为来源");
         SourceInput.SelectedIndex = 0;
         Root.Controls.Add(SourceInput);
         var Options = new FlowLayoutPanel { Dock = DockStyle.Fill };
         Options.Controls.AddRange(new Control[] { SkillsOption, McpOption, RulesOption, PluginsOption });
         Root.Controls.Add(Options);
-        Root.Controls.Add(new Label { Dock = DockStyle.Fill, Text = "同名配置以来源为准，目标独有配置保留；覆盖前备份。\n对话、项目、置顶和排序请使用“导入对话与项目”。\n目标账号与模型保留，MCP OAuth 可能需要重新授权。", ForeColor = Color.DimGray });
+        Root.Controls.Add(new Label { Dock = DockStyle.Fill, Text = "用户 Skills 按主实例去重镜像，移除目标多余项，保留 .system；变更前备份。\nMCP 保留目标独有配置；对话与项目请使用专用导入。\n目标账号与模型保留，MCP OAuth 可能需要重新授权。", ForeColor = Color.DimGray });
         Root.Controls.Add(PreviewText);
         Root.Controls.Add(Summary);
         var Actions = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft };
@@ -69,11 +73,13 @@ public sealed class SyncDialog : Form
         {
             Summary.Text = "正在扫描文件与配置…";
             var Source = (InstanceProfile)SourceInput.SelectedItem!;
-            var Options = new SyncOptions { Skills = SkillsOption.Checked, Mcp = McpOption.Checked, Instructions = RulesOption.Checked, Plugins = PluginsOption.Checked };
+            var Options = new SyncOptions { Skills = SkillsOption.Checked, Mcp = McpOption.Checked, Instructions = RulesOption.Checked, Plugins = PluginsOption.Checked, ExcludedSkillNameList = ExcludedNameList };
             CurrentPlan = await Task.Run(() => ConfigSync.Preview(Source, Destination, Options));
             PreviewText.Text = string.Join(Environment.NewLine, CurrentPlan.FileList.Select(File => (File.OriginalHash is null ? "新增  " : "覆盖  ") + Path.GetRelativePath(CurrentPlan.DestinationRoot, File.Destination)));
-            Summary.Text = $"{CurrentPlan.FileList.Count} 个文件需要更新  ·  {CurrentPlan.TotalBytes / 1024d / 1024d:F2} MB";
-            ApplyButton.Enabled = CurrentPlan.FileList.Count > 0;
+            if (CurrentPlan.Skills is { } Skills)
+                PreviewText.AppendText(Environment.NewLine + (Skills.HasChanges ? "镜像 Skills  删除目标自定义多余项并移除重复目录" : "Skills 已一致") + Environment.NewLine + string.Join(Environment.NewLine, Skills.PackageList.Select(Item => "  " + Item.Name)) + Environment.NewLine + "目标现有条目  " + string.Join(" / ", SkillMirror.Entries(Skills.DestinationRoot).Select(Path.GetFileName)));
+            Summary.Text = $"{CurrentPlan.FileList.Count} 个配置文件  ·  Skills {(CurrentPlan.Skills?.HasChanges == true ? "需要镜像" : "无变化")}";
+            ApplyButton.Enabled = CurrentPlan.FileList.Count > 0 || CurrentPlan.Skills?.HasChanges == true;
         }
         catch (Exception Error) { CurrentPlan = null; Program.LogError(Error); Summary.Text = Error.Message; MessageBox.Show(this, Error.Message, "预览失败"); }
         finally { PreviewButton.Enabled = true; }
@@ -87,7 +93,7 @@ public sealed class SyncDialog : Form
             MessageBox.Show(this, "请先退出目标 Codex 实例，再执行同步。\n这样可以避免运行中的配置被覆盖或写回。", "目标实例正在运行");
             return;
         }
-        if (MessageBox.Show(this, $"将更新 {Destination.Name} 的 {CurrentPlan.FileList.Count} 个文件\n同名文件会覆盖，原内容会备份。", "确认同步", MessageBoxButtons.OKCancel) != DialogResult.OK) return;
+        if (MessageBox.Show(this, $"将同步 {Destination.Name}\nSkills 与主实例完全一致 目标多余自定义 Skill 将移入备份\n配置覆盖前备份 请核对预览", "确认同步", MessageBoxButtons.OKCancel) != DialogResult.OK) return;
         PreviewButton.Enabled = false;
         ApplyButton.Enabled = false;
         var Progress = new Progress<string>(Text => Summary.Text = Text);
