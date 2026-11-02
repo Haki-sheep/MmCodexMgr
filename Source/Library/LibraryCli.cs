@@ -3,7 +3,7 @@ using System.Text.Json;
 
 namespace CodexInstanceManager;
 
-public sealed record LibraryCliPlan(string Kind, SkillMirrorPlan? Skills, RuleSyncPlan? Rules, SkillPackage? ImportPackage = null);
+public sealed record LibraryCliPlan(string Kind, SkillMirrorPlan? Skills, RuleSyncPlan? Rules, SkillPackage? ImportPackage = null, SkillDistributionPlan? Distribution = null);
 
 public static class LibraryCli
 {
@@ -38,6 +38,15 @@ public static class LibraryCli
                 return Settings.Library;
             case "library-scan-rules":
                 return GlobalRules.Scan(Settings).Select(Item => new { Item.Agent, path = Item.PathValue, Item.Available, Item.Format, Item.Note, exists = File.Exists(Item.PathValue) }).ToList();
+            case "library-scan-skills":
+                return SkillDistribution.Scan();
+            case "library-preview-agent-skills":
+            {
+                var Target = SkillDistribution.Scan().SingleOrDefault(Item => Item.Agent == Required("agent")) ?? throw new InvalidOperationException("--agent 必须为 cursor dsh 或 shared");
+                var Plan = SkillDistribution.Preview(SourceSkills(), Target, Settings.Library.ExcludedNameList);
+                Save(Required("plan-file"), new("distribution", null, null, Distribution: Plan));
+                return new { plan_file = Required("plan-file"), Plan.HasChanges, source = Plan.SourceRoot, destination = Plan.Target.PathValue, packages = Plan.PackageList.Select(Item => Item.Name), replaced = Plan.ReplacedList, behavior = "覆盖源中技能及其旧别名 原内容先备份 保留第三方技能与 .system 不修改 Rule MCP 或账号" };
+            }
             case "library-preview-skills":
             {
                 var Destination = AgentManagementService.ResolveInstance(Settings, Required("instance"));
@@ -72,7 +81,18 @@ public static class LibraryCli
             {
                 string PathValue = Required("plan-file");
                 var Plan = JsonSerializer.Deserialize<LibraryCliPlan>(File.ReadAllText(PathValue)) ?? throw new InvalidDataException("预览计划为空");
-                if (Plan.Kind is "skills" or "import" && Plan.Skills is { } Skills && Plan.Rules is null)
+                if (Plan.Kind == "distribution" && Plan.Distribution is { } Distribution && Plan.Skills is null && Plan.Rules is null && Plan.ImportPackage is null)
+                {
+                    var Target = SkillDistribution.Scan().SingleOrDefault(Item => Item.Agent == Distribution.Target.Agent && ManagerPaths.Same(Item.PathValue, Distribution.Target.PathValue)) ?? throw new IOException("目标不在当前 Skill 扫描结果中");
+                    if (!ManagerPaths.Same(Distribution.SourceRoot, PrimarySkills()) && !ManagerPaths.Same(Distribution.SourceRoot, Settings.Library.SkillSource)) throw new IOException("Skill 分发源不是主实例或维护源库");
+                    var Current = SkillDistribution.Preview(Distribution.SourceRoot, Target, Settings.Library.ExcludedNameList);
+                    if (JsonSerializer.Serialize(Current) != JsonSerializer.Serialize(Distribution)) throw new IOException("分发预览计划或 Skill 已变化 请重新预览");
+                    if (!Current.HasChanges) return new { applied = false, unchanged = true };
+                    string Backup = Path.Combine(ManagerPaths.BackupRoot, "agent-skills-" + Guid.NewGuid().ToString("N"));
+                    SkillDistribution.Apply(Current, Backup);
+                    return new { applied = true, kind = Plan.Kind, count = Current.PackageList.Count, backup = Backup };
+                }
+                if (Plan.Kind is "skills" or "import" && Plan.Skills is { } Skills && Plan.Rules is null && Plan.Distribution is null)
                 {
                     var Destination = Settings.InstanceList.SingleOrDefault(Item => ManagerPaths.Same(Path.Combine(Item.HomePath, "skills"), Skills.DestinationRoot));
                     if (Plan.Kind == "skills" && Destination is null) throw new IOException("计划目标不是已注册实例");
@@ -86,7 +106,7 @@ public static class LibraryCli
                     SkillMirror.Apply(Skills, Backup);
                     return new { applied = true, kind = Plan.Kind, count = Skills.PackageList.Count, backup = Backup };
                 }
-                if (Plan.Kind == "rules" && Plan.Rules is { } Rules && Plan.Skills is null)
+                if (Plan.Kind == "rules" && Plan.Rules is { } Rules && Plan.Skills is null && Plan.Distribution is null)
                 {
                     var ScanList = GlobalRules.Scan(Settings);
                     foreach (var Change in Rules.ChangeList)

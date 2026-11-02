@@ -12,6 +12,7 @@ internal static class LibraryTests
         try
         {
             VerifyMirror(Root);
+            VerifyDistribution(Root);
             VerifyRules(Root);
             VerifyRollback(Root);
             VerifyCliAsync(Root).GetAwaiter().GetResult();
@@ -70,6 +71,44 @@ internal static class LibraryTests
         Reject<InvalidDataException>(() => SkillMirror.Preview(Conflict, Target), "ambiguous versions rejected");
         string Config = ConfigSync.MergeConfig("model='source'\n[skills]\nconfig=[]\n", "model='target'\n[skills]\nextra='remove'\n", new() { "skills" }, Source, Target);
         Require(!Config.Contains("extra") && (string)Toml.ToModel(Config)["model"] == "target", "skills config replaced while model preserved");
+    }
+
+    private static void VerifyDistribution(string Root)
+    {
+        string Home = Path.Combine(Root, "distribution-home");
+        string Source = Path.Combine(Root, "distribution-source");
+        string Target = Path.Combine(Home, ".cursor", "skills");
+        Package(Source, "mm-coding-fucker", "mm-coding-fucker", "new payload");
+        Package(Source, "external-skill", "external-skill", "any third party source");
+        Package(Target, "MmCodingFucker", "MmCodingFucker", "legacy");
+        Package(Target, "alias", "MmCodingFucker", "duplicate alias");
+        Package(Target, "preserve", "foreign-target-skill", "foreign");
+        Package(Target, ".system", "builtin", "protected");
+        File.WriteAllText(Path.Combine(Target, "MmCodingFucker.md"), "flat legacy");
+        var Targets = SkillDistribution.Scan(Home);
+        Require(Targets.Select(Item => Item.Agent).SequenceEqual(new[] { "cursor", "dsh", "shared" }), "skill targets include Cursor DSH and the common root");
+        Require(Targets.Single(Item => Item.Agent == "cursor").Available && !Targets.Single(Item => Item.Agent == "dsh").Available, "missing DSH installation is explicit");
+        var Cursor = Targets.Single(Item => Item.Agent == "cursor");
+        var Plan = SkillDistribution.Preview(Source, Cursor);
+        Require(Plan.HasChanges && Plan.PackageList.Count == 2 && Plan.ReplacedList.Count == 3, "distribution includes arbitrary source packages and recognizes aliases and flat skills");
+        SkillDistribution.Apply(Plan, Path.Combine(Root, "distribution-backup"));
+        Require(File.ReadAllText(Path.Combine(Target, "mm-coding-fucker", "data.txt")) == "new payload", "distribution copies canonical payload");
+        Require(File.Exists(Path.Combine(Target, "preserve", "SKILL.md")) && File.Exists(Path.Combine(Target, ".system", "SKILL.md")), "distribution preserves target-only and system skills");
+        Require(!Directory.Exists(Path.Combine(Target, "MmCodingFucker")) && !Directory.Exists(Path.Combine(Target, "alias")) && !File.Exists(Path.Combine(Target, "MmCodingFucker.md")), "old duplicate names leave active roots");
+        Require(Directory.Exists(Path.Combine(Root, "distribution-backup", "MmCodingFucker")), "legacy skill is backed up");
+        Require(!SkillDistribution.Preview(Source, Cursor).HasChanges, "distribution is repeatable without rewriting unchanged packages");
+        var Stale = SkillDistribution.Preview(Source, Cursor);
+        File.WriteAllText(Path.Combine(Source, "mm-coding-fucker", "data.txt"), "updated");
+        Stale = Stale with { HasChanges = true };
+        Reject<IOException>(() => SkillDistribution.Apply(Stale, Path.Combine(Root, "distribution-stale")), "changed source rejects distribution before writing");
+        Plan = SkillDistribution.Preview(Source, Cursor);
+        File.WriteAllText(Path.Combine(Target, "preserve", "data.txt"), "user edit");
+        Reject<IOException>(() => SkillDistribution.Apply(Plan, Path.Combine(Root, "distribution-target-stale")), "target changes after preview reject distribution");
+        Package(Source, "UpperCase", "UpperCase", "invalid identifier");
+        Reject<InvalidDataException>(() => SkillDistribution.Preview(Source, Cursor), "unsupported identifier casing is surfaced rather than silently renamed");
+        Require(AgentCli.Parse(new[] { "library-preview-agent-skills", "--agent", "dsh", "--source", "library", "--plan-file", Path.Combine(Root, "plan.json") }).Command == "library-preview-agent-skills", "CLI exposes distribution preview");
+        Require(SkillNames.Collaboration == "mm-more-more-fucker", "installer and doctor use the renamed collaboration identity");
+        Require(SkillDistribution.Scan(Home, Path.Combine(Home, "custom-dsh"), Path.Combine(Home, "custom-agents")).Single(Item => Item.Agent == "shared").PathValue == Path.Combine(Home, "custom-agents", "skills"), "custom shared root is respected");
     }
 
     private static void VerifyRules(string Root)
@@ -162,6 +201,15 @@ internal static class LibraryTests
         string ImportPlan = Path.Combine(Root, "cli-import-plan.json");
         Preview = await Call("library-preview-import", "--skill", Path.Combine(Foreign, "new"), "--plan-file", ImportPlan);
         Require(Preview.Exit == 0 && System.Text.Json.JsonSerializer.Deserialize<LibraryCliPlan>(File.ReadAllText(ImportPlan))!.Kind == "import", "CLI previews import of a skill outside the shipped collection");
+        string DistributionFile = Path.Combine(Root, "cli-distribution-plan.json");
+        Preview = await Call("library-preview-agent-skills", "--agent", "shared", "--plan-file", DistributionFile);
+        Require(Preview.Exit == 0 && System.Text.Json.JsonSerializer.Deserialize<LibraryCliPlan>(File.ReadAllText(DistributionFile))!.Kind == "distribution", "CLI previews shared distribution without modifying the target");
+        var DistributionPlan = System.Text.Json.JsonSerializer.Deserialize<LibraryCliPlan>(File.ReadAllText(DistributionFile))!;
+        var InvalidTarget = DistributionPlan.Distribution!.Target with { PathValue = Path.Combine(Root, "unregistered-target") };
+        DistributionPlan = DistributionPlan with { Distribution = DistributionPlan.Distribution with { Target = InvalidTarget } };
+        File.WriteAllText(DistributionFile, System.Text.Json.JsonSerializer.Serialize(DistributionPlan));
+        Rejected = await Call("library-apply", "--plan-file", DistributionFile);
+        Require(Rejected.Exit == 1 && !Directory.Exists(InvalidTarget.PathValue), "CLI rejects altered distribution destination before creating files");
     }
     private static void Reject(Action Action, string Message)
         => Reject<IOException>(Action, Message);

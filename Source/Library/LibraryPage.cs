@@ -57,6 +57,7 @@ public sealed class LibraryPage : UserControl
         SkillActions.Controls.Add(Action("选择源库", ChooseSkillSource));
         SkillActions.Controls.Add(Action("安装到主实例", async () => await InstallAsync()));
         SkillActions.Controls.Add(Action("安装整库", InstallLibraryAsync));
+        SkillActions.Controls.Add(Action("同步到 Agent", DistributeSkillsAsync));
         SkillActions.Controls.Add(Action("导入 Skill", ImportSkillAsync));
         SkillActions.Controls.Add(Action("排除项", EditExclusions));
         Root.Controls.Add(SkillActions);
@@ -232,6 +233,38 @@ public sealed class LibraryPage : UserControl
         SkillView.SelectedIndex = 1;
         RefreshSkills();
         Status.Text = "已导入维护源库 可另行安装或发布到 Git 备份 " + Backup;
+    }
+
+    private async Task DistributeSkillsAsync()
+    {
+        using var Dialog = new Form { Text = "Skill 分发", Font = Font, AutoScaleDimensions = new SizeF(96, 96), AutoScaleMode = AutoScaleMode.Dpi, ClientSize = new Size(700, 190), StartPosition = FormStartPosition.CenterParent, MinimizeBox = false, MaximizeBox = false };
+        var Root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3, Padding = new Padding(18) };
+        Root.RowStyles.Add(new(SizeType.Absolute, 40));
+        Root.RowStyles.Add(new(SizeType.Percent, 100));
+        Root.RowStyles.Add(new(SizeType.Absolute, 46));
+        var Choice = new ThemeComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList, DisplayMember = nameof(SkillTarget.Agent) };
+        var TargetList = SkillDistribution.Scan();
+        Choice.Items.AddRange(TargetList.Cast<object>().ToArray());
+        Choice.SelectedIndex = 0;
+        var Hint = new Label { Dock = DockStyle.Fill, AutoEllipsis = true };
+        Choice.SelectedIndexChanged += (_, _) => { var Target = (SkillTarget)Choice.SelectedItem!; Hint.Text = Target.PathValue + "\n" + (Target.Available ? "shared 为 Cursor 与 DSH 的共享目录 同名覆盖前备份 第三方技能保留" : "未发现配置目录 请先安装或启动目标软件"); };
+        Hint.Text = TargetList[0].PathValue + "\n选择目标后预览 不修改账号 Rule MCP 或项目";
+        Root.Controls.Add(Choice);
+        Root.Controls.Add(Hint);
+        Root.Controls.Add(MainForm.MakeButton("预览同步", (_, _) => Dialog.DialogResult = DialogResult.OK, true));
+        Dialog.Controls.Add(Root);
+        Theme.Apply(Dialog);
+        if (Dialog.ShowDialog(this) != DialogResult.OK) return;
+        var Selected = (SkillTarget)Choice.SelectedItem!;
+        string Source = SkillView.SelectedIndex == 0 ? Path.Combine(PrimaryProfile().HomePath, "skills") : Settings.Library.SkillSource;
+        var Plan = await Task.Run(() => SkillDistribution.Preview(Source, Selected, Settings.Library.ExcludedNameList));
+        if (!Plan.HasChanges) { Status.Text = "目标 Skill 已一致"; return; }
+        string Names = string.Join("\n", Plan.PackageList.Select(Item => Item.Name));
+        if (MessageBox.Show(this, "来源 " + Plan.SourceRoot + "\n目标 " + Plan.Target.PathValue + "\n\n" + Names + "\n\n覆盖目标同名技能并清理对应旧别名 共 " + Plan.ReplacedList.Count + " 项\n原内容先备份 其他技能和 .system 保留 Skill 所需工具仍须在目标环境可用", "Skill 分发预览", MessageBoxButtons.OKCancel) != DialogResult.OK) return;
+        if (PreviewOnly) throw new InvalidOperationException("预览模式不写入技能");
+        string Backup = Path.Combine(ManagerPaths.BackupRoot, "agent-skills-" + Guid.NewGuid().ToString("N"));
+        await Task.Run(() => SkillDistribution.Apply(Plan, Backup));
+        Status.Text = "已同步到 " + Selected.Agent + " 请刷新目标技能列表或开启新会话 备份 " + Backup;
     }
 
     private void EditExclusions()

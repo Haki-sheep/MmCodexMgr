@@ -172,6 +172,8 @@ public static class SkillMirror
         if (Directory.Exists(Staging)) Directory.Delete(Staging, true);
     }
 
+    internal static void CopyPackage(string Source, string Destination) => CopyTree(Source, Destination, new(StringComparer.OrdinalIgnoreCase));
+
     private static void CopyTree(string Source, string Destination, HashSet<string> AncestorHashList)
     {
         var Info = new DirectoryInfo(Source);

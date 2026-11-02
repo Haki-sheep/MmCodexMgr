@@ -193,6 +193,10 @@ Git 源库位于所选仓库的 Library 目录 可导入库外任意包含 SKILL
 
 自维护 Skill 统一使用 `mm-xxx-fucker` 小写连字符命名 目录名 YAML name 标题和显示名一致 更名同时更新安装器 健康检查与交叉引用 资金历史状态与工具输出协议不随 Skill 改名迁移
 
+跨工具分发在“规则与技能库”选择主实例或维护源库 点击“同步到 Agent”后选择 cursor dsh 或 shared 预览后同步 shared 对应共享 `~/.agents/skills` Cursor 与 DSH 均可发现 不创建目录链接 不自动更改 MCP 或账号 只覆盖源中技能和对应旧别名 目标第三方技能与 `.system` 保留 同步 Skill 文件不代表目标工具拥有 Codex 桌面桥接等能力 必须按实际可用工具执行
+
+CLI 可用 `library-scan-skills` 查看本机目标 `library-preview-agent-skills --agent cursor|dsh|shared --source primary|library --plan-file <绝对路径>` 生成计划 阅读计划后执行 `library-apply --plan-file <同一文件>` 目标目录支持 DSH_HOME 与 DSH_AGENTS_HOME 环境配置 完整参数以 `mmcodex help` 为准
+
 CLI 的 library-skills 与 library-scan-rules 无需启动管理器 library-preview-skills 与 library-preview-rules 将预览保存到指定的新 JSON 文件 核对后使用 library-apply --plan-file 应用 预览后文件变化或计划被修改时拒绝执行 完整参数以 mmcodex help 为准 发布与拉取不会自动安装 Skill 或覆盖全局 Rule
 
 分发包不预填某台电脑的 CLI 路径 scripts/mmcodex.ps1 优先使用有效的本机配置 否则从管理器选择的仓库 包所在仓库或 PATH 定位 CLI 新设备可直接在规则与技能库页选择仓库 并采用 Git 库
