@@ -30,6 +30,8 @@ internal static class LibraryUiTests
                 var Grid = Descendants(Page).OfType<DataGridView>().Single(Item => Item.Columns.Contains("name"));
                 if (Grid.Columns.Count != 2 || Grid.Columns[1].Name != "des" || Grid.RowCount != 1) throw new Exception("Skill table must show name and des");
                 Count++;
+                if (Grid.CellBorderStyle != DataGridViewCellBorderStyle.Single || Grid.GridColor == new AppTheme(Dark).Palette.Border) throw new Exception("Skill columns must have visible contrasting separators");
+                Count++;
                 var RuleGrid = Descendants(Page).OfType<DataGridView>().Single(Item => Item.Columns.Contains("agent"));
                 if (RuleGrid.Rows.Cast<DataGridViewRow>().Any(Row => ((RuleTarget)Row.Tag!).Format == "manual" && !Row.Cells[0].ReadOnly)) throw new Exception("Manual targets must not be writable sync choices");
                 Count++;

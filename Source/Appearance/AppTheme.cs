@@ -85,7 +85,7 @@ public sealed class AppTheme
             case DataGridView Grid:
                 Grid.EnableHeadersVisualStyles = false;
                 Grid.BackgroundColor = Colors.Surface;
-                Grid.GridColor = Colors.Border;
+                Grid.GridColor = Grid.Name == "SkillLibraryGrid" ? IsDark ? Color.FromArgb(94, 108, 130) : Color.FromArgb(166, 178, 197) : Colors.Border;
                 Grid.DefaultCellStyle.BackColor = Colors.Surface;
                 Grid.DefaultCellStyle.ForeColor = Colors.Text;
                 Grid.DefaultCellStyle.SelectionBackColor = Colors.Selection;

@@ -39,7 +39,7 @@ public sealed class LibraryPage : UserControl
         this.PreviewOnly = PreviewOnly;
         Dock = DockStyle.Fill;
         var Root = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(24, 20, 24, 12), ColumnCount = 1, RowCount = 7 };
-        foreach (var Style in new[] { new RowStyle(SizeType.Absolute, 58), new RowStyle(SizeType.AutoSize), new RowStyle(SizeType.Percent, 52), new RowStyle(SizeType.Absolute, 54), new RowStyle(SizeType.Absolute, 42), new RowStyle(SizeType.Percent, 48), new RowStyle(SizeType.Absolute, 32) }) Root.RowStyles.Add(Style);
+        foreach (var Style in new[] { new RowStyle(SizeType.Absolute, 58), new RowStyle(SizeType.AutoSize), new RowStyle(SizeType.Percent, 52), new RowStyle(SizeType.AutoSize), new RowStyle(SizeType.AutoSize), new RowStyle(SizeType.Percent, 48), new RowStyle(SizeType.Absolute, 32) }) Root.RowStyles.Add(Style);
         Controls.Add(Root);
         var Header = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false };
         Header.Controls.Add(new Label { Text = "规则与技能库", Font = new Font(Font.FontFamily, 20, FontStyle.Bold), AutoSize = true, Margin = new Padding(0, 0, 24, 0) });
@@ -61,6 +61,9 @@ public sealed class LibraryPage : UserControl
         SkillActions.Controls.Add(Action("导入 Skill", ImportSkillAsync));
         SkillActions.Controls.Add(Action("排除项", EditExclusions));
         Root.Controls.Add(SkillActions);
+        SkillGrid.Name = "SkillLibraryGrid";
+        SkillGrid.CellBorderStyle = DataGridViewCellBorderStyle.Single;
+        SkillGrid.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.Single;
         SkillGrid.Columns.Add("name", "name");
         SkillGrid.Columns[0].FillWeight = 28;
         SkillGrid.Columns.Add("des", "des");
@@ -68,7 +71,7 @@ public sealed class LibraryPage : UserControl
         SkillGrid.DefaultCellStyle.WrapMode = DataGridViewTriState.True;
         SkillGrid.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.AllCells;
         Root.Controls.Add(SkillGrid);
-        var RuleHeader = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, Padding = new Padding(0, 10, 0, 0) };
+        var RuleHeader = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, ColumnCount = 3, RowCount = 1, Padding = new Padding(0, 10, 0, 0) };
         RuleHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 92));
         RuleHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         RuleHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112));
@@ -77,7 +80,7 @@ public sealed class LibraryPage : UserControl
         RuleHeader.Controls.Add(RuleSource);
         RuleHeader.Controls.Add(Action("选择源文件", ChooseRuleSource));
         Root.Controls.Add(RuleHeader);
-        var RuleActions = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false };
+        var RuleActions = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = true };
         RuleActions.Controls.Add(Action("打开源 MD", () => OpenFile(Settings.Library.RuleSource)));
         RuleActions.Controls.Add(Action("扫描全局 Rule", ScanRules));
         RuleActions.Controls.Add(Action("打开目标 MD", OpenTarget));
