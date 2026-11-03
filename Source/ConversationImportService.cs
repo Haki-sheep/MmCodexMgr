@@ -133,7 +133,12 @@ public static class ConversationImportService
                 var Payload = Header.RootElement.GetProperty("payload");
                 string? Id = Payload.TryGetProperty("session_id", out var SessionId) ? SessionId.GetString() : Payload.GetProperty("id").GetString();
                 if (Id is null || !ThreadHashList.Contains(Id)) continue;
-                if (File.Exists(ImportPaths.Resolve(Plan.Destination.HomePath, Relative))) throw new IOException("目标存在同路径的历史分段 " + Relative);
+                string DestinationPath = ImportPaths.Resolve(Plan.Destination.HomePath, Relative);
+                if (File.Exists(DestinationPath))
+                {
+                    if (SettingsStore.FileHash(PathValue) == SettingsStore.FileHash(DestinationPath)) continue;
+                    throw new IOException("目标存在内容不同的同路径历史分段 " + Relative);
+                }
                 var Stream = new FileStream(PathValue, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 65536, FileOptions.SequentialScan);
                 HeldList.Add(Stream);
                 var Info = new FileInfo(PathValue);

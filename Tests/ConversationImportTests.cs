@@ -32,8 +32,13 @@ internal static class ConversationImportTests
             string LockPath = Path.Combine(Source.HomePath, "thread-writer-locks", "active.lock");
             using var Lock = new FileStream(LockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.ReadWrite);
             Lock.Lock(0, 1);
+            string ExistingSegment = Path.Combine(Target.HomePath, "sessions", "root-old-segment.jsonl");
+            File.WriteAllText(ExistingSegment, "different segment");
+            RequireThrows(() => { using var Plan = ConversationImportService.Preview(Source, Target); }, "conflicting existing history segment rejected");
+            File.Copy(Path.Combine(Source.HomePath, "sessions", "root-old-segment.jsonl"), ExistingSegment, true);
             using (var Plan = ConversationImportService.Preview(Source, Target))
             {
+                Require(Plan.FileList.All(Item => Item.RelativePath != Path.Combine("sessions", "root-old-segment.jsonl")), "identical existing history segment reused");
                 Require(Plan.ConversationList.Count == 2, "new root and child planned");
                 Require(Plan.TargetCount == 1, "original target count shown independently of duplicate IDs");
                 Require(Plan.ExistingCount == 1, "duplicate ID preserved");
