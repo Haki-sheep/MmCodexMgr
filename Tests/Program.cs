@@ -13,6 +13,8 @@ internal static class Tests
     private static int Main(string[] ArgumentList)
     {
         if (ArgumentList.Contains("--library")) return LibraryTests.Run();
+        if (ArgumentList.Contains("--startup")) return StartupTests.Run();
+        if (ArgumentList.Length == 2 && ArgumentList[0] == "--startup-render") return StartupTests.Run(ArgumentList[1]);
         if (ArgumentList.Contains("--dsh") || ArgumentList.Contains("--dsh-live")) { Task.Run(() => DshTests.RunAsync(ArgumentList.Contains("--dsh-live"))).GetAwaiter().GetResult(); return 0; }
         if (ArgumentList.Contains("--library-ui")) return LibraryUiTests.Run();
         if (ArgumentList.Contains("--activity-live")) return Task.Run(RelayInvalidTaskTests.LiveProbeAsync).GetAwaiter().GetResult();

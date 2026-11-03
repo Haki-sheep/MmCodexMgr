@@ -25,6 +25,8 @@ public sealed class MainForm : Form
     private readonly NavigationPage RelayTab = new("任务看板");
     private readonly NavigationPage CollaborationTab = new("跨 Agent 协作");
     private readonly NavigationPage LibraryTab = new("规则与技能库");
+    /// <summary> 管理器自身的全局设置入口 </summary>
+    private readonly NavigationPage SettingsTab = new("设置");
     private readonly Button ThemeButton = new StudioButton();
     private readonly AppTheme Theme;
     private readonly bool PreviewOnly;
@@ -75,8 +77,9 @@ public sealed class MainForm : Form
         MainTabs.TabPages.Add(InstancesTab);
         MainTabs.TabPages.Add(CollaborationTab);
         MainTabs.TabPages.Add(LibraryTab);
+        MainTabs.TabPages.Add(SettingsTab);
         MainTabs.SelectedTab = InstancesTab;
-        MainTabs.SelectedIndexChanged += (_, _) => { if (MainTabs.SelectedTab == RelayTab) BuildRelayPage(); else if (MainTabs.SelectedTab == CollaborationTab) BuildCollaborationPage(); else if (MainTabs.SelectedTab == LibraryTab) BuildLibraryPage(); };
+        MainTabs.SelectedIndexChanged += (_, _) => { if (MainTabs.SelectedTab == RelayTab) BuildRelayPage(); else if (MainTabs.SelectedTab == CollaborationTab) BuildCollaborationPage(); else if (MainTabs.SelectedTab == LibraryTab) BuildLibraryPage(); else if (MainTabs.SelectedTab == SettingsTab) BuildSettingsPage(); };
         Controls.Add(MainTabs);
         StyleButton(ThemeButton, false);
         ThemeButton.Name = AppTheme.ToggleButtonName;
@@ -272,6 +275,13 @@ public sealed class MainForm : Form
         if (LibraryTab.Controls.Count != 0) return;
         var Page = new LibraryPage(Settings, Theme, PreviewOnly);
         LibraryTab.Controls.Add(Page);
+        Theme.Apply(Page);
+    }
+    private void BuildSettingsPage()
+    {
+        if (SettingsTab.Controls.Count != 0) return;
+        var Page = new ManagerSettingsPage(PreviewOnly);
+        SettingsTab.Controls.Add(Page);
         Theme.Apply(Page);
     }
     public void ShowLibraryPage()

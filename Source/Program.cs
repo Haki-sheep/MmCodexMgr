@@ -51,9 +51,11 @@ public static class Program
                 return;
             }
             string Command = ArgumentList.Length == 2 && ArgumentList[0] == "--launch" ? ArgumentList[1] : ArgumentList.Contains("--board") || ArgumentList.Contains("--relay") ? "relay" : ArgumentList.Contains("--collaboration") ? "collaboration" : ArgumentList.Contains("--harness") || ArgumentList.Contains("--cursor") ? "harness" : ArgumentList.Contains("--library") ? "library" : "show";
+            bool Background = ArgumentList.Contains("--background");
             using var Mutex = new Mutex(true, "Local\\" + PipeName, out bool Created);
             if (!Created)
             {
+                if (Background) return;
                 using var Client = new NamedPipeClientStream(".", PipeName, PipeDirection.Out);
                 Client.Connect(4000);
                 using var Writer = new StreamWriter(Client, new UTF8Encoding(false)) { AutoFlush = true };
@@ -74,13 +76,15 @@ public static class Program
             using var Dsh = new DshRelayRunner();
             using var Coordinator = new RelayCoordinator(TaskStore, DesktopBridge, Cursor, Dsh);
             using var Form = new MainForm(SettingsStore.Load(), false, TaskStore, Coordinator);
+            if (Background) { Form.WindowState = FormWindowState.Minimized; Form.ShowInTaskbar = false; }
             var AgentService = new AgentManagementService(TaskStore, Coordinator, new AgentCatalog(), CliPath);
             using var Relay = new RelayHost(Coordinator, AgentService: AgentService);
             Relay.Failed += Error => { if (!Form.IsDisposed && Form.IsHandleCreated) Form.BeginInvoke(() => MessageBox.Show(Form, Error.Message, "联调服务不可用")); };
             using var Cancellation = new CancellationTokenSource();
             Form.Shown += async (_, _) =>
             {
-                if (Command != "show") { Form.Hide(); await Form.HandleCommandAsync(Command); }
+                if (Background) { Form.Hide(); Form.ShowInTaskbar = true; }
+                else if (Command != "show") { Form.Hide(); await Form.HandleCommandAsync(Command); }
                 _ = RecoverReportsAsync(Coordinator, Form, Cancellation.Token);
             };
             _ = ListenAsync(Form, Cancellation.Token);

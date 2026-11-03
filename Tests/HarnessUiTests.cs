@@ -74,7 +74,7 @@ internal static class HarnessUiTests
                 if (Descendants(Board).OfType<RelayChannelEditor>().Any()) throw new Exception("Channel editor still on task board");
                 Count++;
                 var Navigation = Form.Controls.OfType<ThemeTabControl>().Single();
-                if (!Navigation.TabPages.Select(Item => Item.Text).SequenceEqual(new[] { "任务看板", "实例管理", "跨 Agent 协作", "规则与技能库" })) throw new Exception("Duplicate collaboration entry or incorrect navigation order");
+                if (!Navigation.TabPages.Select(Item => Item.Text).SequenceEqual(new[] { "任务看板", "实例管理", "跨 Agent 协作", "规则与技能库", "设置" })) throw new Exception("Duplicate collaboration entry or incorrect navigation order");
                 Count++;
                 Form.ShowCollaborationPage();
                 Application.DoEvents();
