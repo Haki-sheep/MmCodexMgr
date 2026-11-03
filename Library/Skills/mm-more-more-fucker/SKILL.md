@@ -107,6 +107,27 @@ CLI 从 `CODEX_HOME` 和 `CODEX_THREAD_ID` 读取当前身份 不要填写另一
 
 使用已有会话时将 `create_title` 换为 `session` 不能同时提供两者 创建的是可见 Codex 对话 主从关系由管理器任务记录 建好后保留返回的 `task_id` 和 `thread_id` 创建成功时按宿主要求展示对话入口
 
+## DeepSeek Harness 桌面联调
+
+用户指定 DeepSeek Harness 或 DSH 桌面端时 使用 `instance=dsh` 通过本机桌面服务后台操作 不使用 Computer Use 不以 `dsh headless` 替代用户指定的桌面会话
+
+先启动 DSH 桌面端 管理器默认从运行进程识别数据目录与监听端口 不依赖用户名 安装盘符或固定端口 支持 `DSH_HOME` 与 `DSH_SERVER_URL` 显式覆盖 可用 `dsh-config --home <绝对目录|auto> --server-url <本机地址|auto>` 保存管理器连接配置 保存值优先 空值回到环境变量与自动发现 服务地址只接受回环 IP 多服务或多数据目录无法唯一选择时明确报错 不猜测第一个候选 不修改 DSH 的模型或凭据文件 `doctor --instance dsh` 检查真实认证和工作区 不启动模型
+
+`projects --instance dsh` 列出桌面工作区 `sessions --instance dsh` 列出未归档的主会话 支持 `--project <default|工作区ID|名称|绝对路径>` 与 `--session <准确ID|完整名称>` 重名必须指定 ID
+
+联调任务复用 `agent_start` 或 CLI `start` 设置 `instance=dsh` `session` 与 `create_title` 二选一 `project` 可选 新建时省略则放入默认工作区 已有会话沿用原工作区 不接受 `cwd` `model` `cursor_cli_path` 沿用桌面会话模型 当前 DSH 执行端直接完成本次任务 `worker_limits` 三项必须全为 0 默认全为 0 主会话自身预算不受影响 `workspace` 仍必须声明 属于任务写入约束 不自动更改已有桌面会话的沙盒模式
+
+管理器把会话与任务放入原看板 自动按稳定请求 ID 读取持久事件 对应轮次结束并取得合法结构化结果后回传原主会话 受理消息不等于完成 主会话结束回合等待事件 不反复调用状态接口 管理器重启后 `resume` 只恢复原请求监测 不重复发送原任务 若派发是否送达不明 先核对原会话与请求 不能直接重试创建 取消会停止结果监测并核对请求归属后请求取消 DSH 活动轮次或移除待执行消息 接口异常时仍需在桌面核对工具进程 不声称所有脚本已终止
+
+用户只要求创建会话或聊天时 不强行包装成联调任务 可使用 MCP `dsh_create` `dsh_rename` `dsh_send` `dsh_reply` 或下列 CLI 命令 不要求 Codex 调用方身份或管理器进程运行：
+
+- `dsh-create --request-id <稳定标识> --title <会话名> [--project <工作区>]` 默认放入默认工作区 相同创建标识复用原会话 不重复创建
+- `dsh-rename --session-id <准确ID> --title <新名称>` 只命名 不发送消息
+- `dsh-send --json-file <UTF-8请求文件>` 请求字段为 `session_id` `request_id` `message` 相同请求标识由桌面服务去重 返回 `accepted` 仅表示已受理
+- `dsh-reply --session-id <准确ID> --request-id <原请求标识>` 单次读取原请求 对应轮次结束才 `completed=true` 此命令不启动模型 不将别的请求或流式片段当成本轮最终回复
+
+CLI 和 MCP 能力以当前 `help` 与工具目录为准 后台 API 不提供桌面选中会话导航 创建后可在 DSH 对应工作区按名称查看 连接失败时报告具体错误 不静默切换到 headless 或 GUI 桌面后台协议随 DSH 版本变化时先执行 doctor 核实 当前已实测桌面版本 0.2.1-rc.5
+
 ## Cursor CLI 跨 Harness 联调
 
 用户指定 Cursor 时使用同一套 `agent_start` 或 CLI `start` 目标固定为 `instance="cursor"` 不将 Cursor 添加为 Codex 实例 不提取模型 Key 不反代 Cursor
