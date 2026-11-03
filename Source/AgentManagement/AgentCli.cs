@@ -12,10 +12,23 @@ public static class AgentCli
         instances
         projects --instance <实例编号|ID|名称>
         sessions --instance <实例> [--project <项目ID|名称|绝对路径>] [--session <对话ID|完整名称>] [--offset 0]
+          instance=dsh 读取桌面端工作区与会话 不需要管理器或 Codex 会话身份
+        dsh-config [--home <数据目录|auto>] [--server-url <本机服务地址|auto>]
+          默认从运行中的桌面进程识别数据目录和端口 支持 DSH_HOME DSH_SERVER_URL 不修改 DSH 本身配置
+          显式地址仅支持回环 IP 默认无需填写 路径迁移后可用 auto 恢复发现
+        dsh-create --request-id <稳定标识> --title <会话名> [--project <default|工作区ID|名称|绝对路径>]
+          默认创建于默认工作区 重试沿用 request-id 已创建的会话不重复创建
+        dsh-rename --session-id <会话ID> --title <新名称>
+        dsh-send --json-file <UTF-8 JSON文件>
+          必需 session_id request_id message 沿用桌面模型 只发送一次 返回受理状态
+        dsh-reply --session-id <会话ID> --request-id <原请求标识>
+          按持久事件读取指定请求回复 对应轮次结束才返回 completed=true 不启动模型
         start --json-file <UTF-8 JSON文件>
           必需 request_id instance title instructions acceptance workspace
           project 可选 省略时查找实例内所有会话 新建时创建无项目会话
           instance=cursor 使用 Cursor CLI 新建必须提供 cwd 绝对目录 不使用 project
+          instance=dsh 使用正在运行的 DSH 桌面服务 project 选择工作区 省略时新建于默认工作区
+          DSH 沿用桌面模型 worker_limits 必须全零 管理器自动读取并回传结果 不需要操作窗口
           Cursor 可选 model cursor_cli_path 已有会话不能更换目录 CLI 或模型
           Cursor 只执行当前任务 worker_limits 必须为零 默认全部为零
           目标 session 或 create_title 二选一
@@ -38,8 +51,8 @@ public static class AgentCli
         cleanup --state <interrupted|blocked|finished>
           清理当前主会话名下的联调记录 不删除 Codex 对话或项目文件
           interrupted=实例退出后阻塞 blocked=所有阻塞 finished=已验收或已撤销
-          清理未结束记录会中断其下级联调 Cursor CLI 会停止 Codex 模型或脚本需另行停止
-        cancel --task-id <任务ID>  中断联调 Cursor CLI 及其子进程会停止 Codex 模型或脚本需另行停止
+          清理未结束记录会中断其下级联调 Cursor CLI 会停止 DSH 核对归属后请求取消 Codex 模型或脚本需另行停止
+        cancel --task-id <任务ID>  中断联调 Cursor CLI 及其子进程会停止 DSH 核对归属后请求取消 Codex 模型或脚本需另行停止
         accept --task-id <任务ID>
         progress --json-file <UTF-8 JSON文件>  task_id stage(started|progress|blocked) message
         tree --task-id <任务ID> [--offset 0]
@@ -88,6 +101,16 @@ public static class AgentCli
             var Call = Parse(ArgumentList);
             if (Call.Command == "help") { await Writer.WriteLineAsync(Help); return 0; }
             var Settings = (LoadSettings ?? SettingsStore.Load)();
+            if (Call.Command.StartsWith("dsh-", StringComparison.Ordinal))
+            {
+                await Writer.WriteLineAsync(JsonSerializer.Serialize(await DshCli.ExecuteAsync(Call, Settings, Cancellation)));
+                return 0;
+            }
+            if (Call.Command is "projects" or "sessions" && Call.OptionDict.GetValueOrDefault("instance") == DshRelayRunner.InstanceId)
+            {
+                await Writer.WriteLineAsync(JsonSerializer.Serialize(await DshCli.QueryAsync(Call.Command, Settings.Dsh, Call.Arguments, Cancellation)));
+                return 0;
+            }
             if (Call.Command.StartsWith("library-", StringComparison.Ordinal))
             {
                 await Writer.WriteLineAsync(JsonSerializer.Serialize(await LibraryCli.ExecuteAsync(Call, Settings)));
@@ -124,6 +147,7 @@ public static class AgentCli
             if (Call.Command == "doctor")
             {
                 var Report = await AgentDoctor.RunAsync(Settings, ExecutablePath, Call.OptionDict.GetValueOrDefault("instance"), Cancellation);
+                if (Report.InstanceId == DshRelayRunner.InstanceId) { await Writer.WriteLineAsync(JsonSerializer.Serialize(Report)); return Report.Healthy ? 0 : 1; }
                 try
                 {
                     await RelayHost.RequestAsync(new(Report.InstanceId == CursorRelayRunner.InstanceId ? Settings.SelectedId : Report.InstanceId, "", "agent_ping", JsonSerializer.SerializeToElement(new { })), Cancellation, PipeName);
@@ -178,6 +202,11 @@ public static class AgentCli
             "projects" => new[] { "instance" },
             "sessions" => new[] { "instance", "project", "session", "offset" },
             "start" or "report" => new[] { "json-file" },
+            "dsh-send" => new[] { "json-file" },
+            "dsh-config" => new[] { "home", "server-url" },
+            "dsh-create" => new[] { "request-id", "title", "project" },
+            "dsh-rename" => new[] { "session-id", "title" },
+            "dsh-reply" => new[] { "session-id", "request-id" },
             "progress" => new[] { "json-file" },
             "doctor" => new[] { "instance" },
             "tree" => new[] { "task-id", "offset" },
@@ -208,7 +237,7 @@ public static class AgentCli
             if (!AllowedList.Contains(Key) && Key is not ("caller-instance" or "caller-thread")) throw new InvalidOperationException("此命令不支持参数 " + Key);
             if (!OptionDict.TryAdd(Key, ArgumentList[Index + 1]) || string.IsNullOrWhiteSpace(ArgumentList[Index + 1])) throw new InvalidOperationException("参数重复或为空 " + Key);
         }
-        if (Command is "start" or "report" or "progress")
+        if (Command is "start" or "report" or "progress" or "dsh-send")
         {
             if (!OptionDict.TryGetValue("json-file", out string? FilePath)) throw new InvalidOperationException("缺少 --json-file");
             if (new FileInfo(FilePath).Length > RelayLimits.MaxFrameBytes / 2) throw new InvalidDataException("请求文件过大");
@@ -216,6 +245,7 @@ public static class AgentCli
             if (Document.RootElement.ValueKind != JsonValueKind.Object) throw new InvalidDataException("请求必须是 JSON 对象");
             string[] PropertyList = Command switch
             {
+                "dsh-send" => new[] { "session_id", "request_id", "message" },
                 "start" => new[] { "request_id", "instance", "project", "session", "create_title", "title", "instructions", "acceptance", "session_max", "subagent_max", "cross_agent_max", "worker_limits", "timeout_minutes", "tree_session_max", "max_depth", "workspace", "cwd", "model", "cursor_cli_path" },
                 "progress" => new[] { "task_id", "stage", "message" },
                 _ => new[] { "task_id", "outcome", "summary", "artifacts" }

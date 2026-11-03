@@ -67,7 +67,7 @@ public sealed class RelayHost : IDisposable
 
     private async Task<object> ExecuteAsync(RelayRequest Request)
     {
-        if (Request.Command.StartsWith("agent_", StringComparison.Ordinal))
+        if (Request.Command.StartsWith("agent_", StringComparison.Ordinal) || Request.Command.StartsWith("dsh_", StringComparison.Ordinal))
             return await (AgentService ?? throw new InvalidOperationException("当前管理器未启用 CLI 服务 请更新并重启管理器")).ExecuteAsync(Request, Lifetime.Token);
         var Arguments = Request.Arguments;
         switch (Request.Command)

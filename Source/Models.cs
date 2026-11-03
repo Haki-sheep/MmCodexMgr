@@ -23,6 +23,7 @@ public sealed class ManagerSettings
     public string SelectedId { get; set; } = "primary";
     public bool DarkMode { get; set; } = true;
     public CursorHarnessSettings Cursor { get; set; } = new();
+    public DshSettings Dsh { get; set; } = new();
     public LibrarySettings Library { get; set; } = new();
 }
 

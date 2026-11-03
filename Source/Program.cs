@@ -71,7 +71,8 @@ public static class Program
             using var DesktopBridge = new DesktopRelayBridge();
             using var CompatSupervisor = new ResponsesCompatSupervisor(SettingsStore.Load, CliPath, LogError);
             using var Cursor = new CursorRelayRunner();
-            using var Coordinator = new RelayCoordinator(TaskStore, DesktopBridge, Cursor);
+            using var Dsh = new DshRelayRunner();
+            using var Coordinator = new RelayCoordinator(TaskStore, DesktopBridge, Cursor, Dsh);
             using var Form = new MainForm(SettingsStore.Load(), false, TaskStore, Coordinator);
             var AgentService = new AgentManagementService(TaskStore, Coordinator, new AgentCatalog(), CliPath);
             using var Relay = new RelayHost(Coordinator, AgentService: AgentService);

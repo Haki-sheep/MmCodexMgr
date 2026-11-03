@@ -50,10 +50,7 @@ public sealed class CollaborationPage : UserControl
         CodexPage.Controls.Add(CodexBody);
         CursorPage.Controls.Add(new HarnessPage(Settings, Coordinator.Cursor, Theme, ToggleTheme, true));
         var DshPage = new NavigationPage("DSH");
-        var DshBody = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, Padding = new Padding(20), Tag = eThemeRole.Surface };
-        DshBody.Controls.Add(new Label { Text = "DeepSeek Harness", Font = new Font(Font.FontFamily, 13, FontStyle.Bold), AutoSize = true });
-        DshBody.Controls.Add(new Label { Text = "尚未接入 · 后续在此管理 DSH 会话与连接设置", AutoSize = true, Tag = eThemeRole.Muted });
-        DshPage.Controls.Add(DshBody);
+        DshPage.Controls.Add(new DshPage(Settings));
         SourceTabs.TabPages.Add(CodexPage);
         SourceTabs.TabPages.Add(CursorPage);
         SourceTabs.TabPages.Add(DshPage);
@@ -70,7 +67,7 @@ public sealed class CollaborationPage : UserControl
     private void ShowDoctor()
     {
         string InstanceId = SourceTabs.SelectedTab == CursorPage ? CursorRelayRunner.InstanceId : CodexSessions.SelectedInstance?.Id ?? Settings.SelectedId;
-        if (SourceTabs.SelectedTab?.Text == "DSH") { Status.Text = "DSH 尚未接入"; return; }
+        if (SourceTabs.SelectedTab?.Text == "DSH") InstanceId = DshRelayRunner.InstanceId;
         using var Dialog = new Form { Text = "健康检查 · " + AgentDisplay.Instance(Settings, InstanceId, InstanceId), Font = Font, ClientSize = new Size(760, 420), StartPosition = FormStartPosition.CenterParent };
         using var Cancellation = new CancellationTokenSource();
         var Body = new TextBox { Dock = DockStyle.Fill, Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical, Text = "正在检查 CLI MCP Skill 路径与桌面桥接…" };

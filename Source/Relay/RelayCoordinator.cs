@@ -13,19 +13,22 @@ public sealed partial class RelayCoordinator : IDisposable
     public event Action? Changed;
     public RelayChannel? Channel { get; private set; }
     public CursorRelayRunner? Cursor { get; }
+    public DshRelayRunner? Dsh { get; }
 
     #region Lifecycle
-    public RelayCoordinator(RelayStore Store, IRelayBridge Bridge, CursorRelayRunner? Cursor = null)
+    public RelayCoordinator(RelayStore Store, IRelayBridge Bridge, CursorRelayRunner? Cursor = null, DshRelayRunner? Dsh = null)
     {
         this.Store = Store;
         this.Bridge = Bridge;
         this.Cursor = Cursor;
+        this.Dsh = Dsh;
         if (Bridge is IRelayProcessEvents Events) Events.InstanceExited += OnInstanceExited;
         Channel = Store.LoadChannel();
         foreach (string Id in Store.PendingIds())
         {
             var Item = Store.Get(Id);
             if (Item.State == eRelayState.Running && Item.Channel.WorkerInstance.Id == CursorRelayRunner.InstanceId) Change(Item, eRelayState.Interrupted, "管理器重启 Cursor 原执行进程未确认 请核对产物后 resume 原任务 不自动重复执行");
+            else if (Item.State == eRelayState.Running && Item.Channel.WorkerInstance.Id == DshRelayRunner.InstanceId) Change(Item, eRelayState.Interrupted, "管理器重启 DSH 会话保留 使用 resume 仅恢复原请求监测 不自动重复发送");
             else if (Item.State == eRelayState.Running) { ArmDeadline(Item); _ = WatchWorkerAsync(Item); }
             else if (Item.State == eRelayState.Recovering) Change(Item, eRelayState.Interrupted, "管理器在恢复准备期间退出 尚未投递续跑消息 可使用 resume 继续");
             else Change(Item, Item.State == eRelayState.Sending ? eRelayState.DispatchUncertain : eRelayState.ReturnUncertain, "管理器在投递期间退出 请核对目标会话后处理");
@@ -53,6 +56,7 @@ public sealed partial class RelayCoordinator : IDisposable
     {
         Lifetime.Cancel();
         Cursor?.Dispose();
+        Dsh?.Dispose();
         if (Bridge is IRelayProcessEvents Events) Events.InstanceExited -= OnInstanceExited;
         lock (DeadlineGate)
         {
@@ -80,6 +84,7 @@ public sealed partial class RelayCoordinator : IDisposable
                     Existing.Channel.WorkerInstance.Id != Current.WorkerInstance.Id || Existing.Channel.ProjectId != Current.ProjectId ||
                     Existing.Channel.CreateTitle != Current.CreateTitle || Existing.Channel.TimeoutMinutes != Current.TimeoutMinutes ||
                     Existing.Channel.WorkingDirectory != Current.WorkingDirectory || Existing.Channel.WorkerModel != Current.WorkerModel || Existing.Channel.CursorCliPath != Current.CursorCliPath ||
+                    Existing.Channel.DshServerUrl != Current.DshServerUrl ||
                     Current.CreateTitle.Length == 0 && Existing.Channel.WorkerThreadId != Current.WorkerThreadId ||
                     Existing.SessionMax != SessionMax || Existing.SubagentMax != SubagentMax || Existing.CrossAgentMax != CrossAgentMax ||
                     JsonSerializer.Serialize(Existing.WorkerLimits) != JsonSerializer.Serialize(WorkerLimits) ||
@@ -110,8 +115,12 @@ public sealed partial class RelayCoordinator : IDisposable
             Change(Item, eRelayState.Sending, "主会话已交接 正在发送到执行会话");
             try
             {
-                if (Bridge is DesktopRelayBridge && Current.CallbackCliPath.Length == 0) RelayToolInstaller.RequireInstalled(Current.WorkerInstance);
-                if (Current.WorkerInstance.Id == CursorRelayRunner.InstanceId)
+                if (Bridge is DesktopRelayBridge && Current.CallbackCliPath.Length == 0 && Current.WorkerInstance.Id != DshRelayRunner.InstanceId) RelayToolInstaller.RequireInstalled(Current.WorkerInstance);
+                if (Current.WorkerInstance.Id == DshRelayRunner.InstanceId)
+                {
+                    await (Dsh ?? throw new InvalidOperationException("当前管理器未启用 DSH 执行端")).PrepareAsync(Item, Lifetime.Token, () => Store.Save(Item));
+                }
+                else if (Current.WorkerInstance.Id == CursorRelayRunner.InstanceId)
                 {
                     await (Cursor ?? throw new InvalidOperationException("当前管理器未启用 Cursor 执行端")).PrepareAsync(Item, Lifetime.Token);
                 }
@@ -122,9 +131,10 @@ public sealed partial class RelayCoordinator : IDisposable
                     Item.Channel.WorkerTitle = Created.Title;
                 }
                 else await Bridge.SendAsync(Item.Channel.WorkerInstance, Item.Channel.WorkerThreadId, BuildWorkerPrompt(Item), "", Lifetime.Token);
-                Change(Item, eRelayState.Running, Current.WorkerInstance.Id == CursorRelayRunner.InstanceId ? "Cursor 会话已准备 等待 CLI 执行开始事件" : "桌面已接收派发 等待执行会话主动回调");
+                Change(Item, eRelayState.Running, Current.WorkerInstance.Id == DshRelayRunner.InstanceId ? "DSH 会话已准备 等待桌面请求确认" : Current.WorkerInstance.Id == CursorRelayRunner.InstanceId ? "Cursor 会话已准备 等待 CLI 执行开始事件" : "桌面已接收派发 等待执行会话主动回调");
                 ArmDeadline(Item);
                 if (Current.WorkerInstance.Id == CursorRelayRunner.InstanceId) LaunchCursor(Item);
+                else if (Current.WorkerInstance.Id == DshRelayRunner.InstanceId) LaunchDsh(Item);
                 else _ = WatchWorkerAsync(Item);
             }
             catch (Exception Error)
@@ -188,8 +198,9 @@ public sealed partial class RelayCoordinator : IDisposable
             if (Item.State is eRelayState.Accepted or eRelayState.Cancelled) throw new InvalidOperationException("任务已经结束");
             StopDeadline(Item.Id);
             Cursor?.Stop(Item.Id);
+            Dsh?.Stop(Item.Id);
             CancelDescendants(Item.Id);
-            Change(Item, eRelayState.Cancelled, "用户撤销联调 后续回调将被拒绝 Cursor CLI 进程树会停止 Codex 工具进程需在执行会话中停止");
+            Change(Item, eRelayState.Cancelled, "用户撤销联调 后续回调将被拒绝 Cursor CLI 进程树会停止 DSH 核对归属后请求取消 Codex 工具进程需在执行会话中停止");
         }
         finally { Gate.Release(); }
     }
@@ -242,9 +253,10 @@ public sealed partial class RelayCoordinator : IDisposable
                 var Item = Store.Get(Id);
                 StopDeadline(Id);
                 Cursor?.Stop(Id);
+                Dsh?.Stop(Id);
                 CancelDescendants(Id);
                 if (Item.State != eRelayState.Cancelled)
-                    Change(Item, eRelayState.Cancelled, "用户清空已阻塞记录 联调已中断 后续回调将被拒绝 Cursor CLI 会停止 Codex 模型与脚本需另行停止");
+                    Change(Item, eRelayState.Cancelled, "用户清空已阻塞记录 联调已中断 后续回调将被拒绝 Cursor CLI 会停止 DSH 核对归属后请求取消 Codex 模型与脚本需另行停止");
                 Store.DeleteFinished(Id);
             }
             Changed?.Invoke();
@@ -328,6 +340,7 @@ public sealed partial class RelayCoordinator : IDisposable
                 if (Item.State == eRelayState.Running)
                 {
                     Cursor?.Stop(Item.Id);
+                    Dsh?.Stop(Item.Id);
                     CancelDescendants(Item.Id);
                     Change(Item, eRelayState.TimedOut, "执行超时 未收到明确回调 请查看执行会话 后续回调将被拒绝");
                     await NotifyFailureAsync(Item, "执行超时 未收到执行会话的明确回调");
@@ -353,11 +366,16 @@ public sealed partial class RelayCoordinator : IDisposable
 
     private async Task WatchWorkerAsync(RelayTask Item)
     {
+        if (Item.Channel.WorkerInstance.Id == DshRelayRunner.InstanceId) { LaunchDsh(Item, true); return; }
         if (Bridge is not IRelayProcessEvents Events) return;
         try { await Events.WatchAsync(Item.Channel.WorkerInstance, Lifetime.Token); }
         catch (OperationCanceledException) when (Lifetime.IsCancellationRequested) { }
         catch (Exception Error) { Program.LogError(Error); }
     }
+
+    private void LaunchDsh(RelayTask Item, bool ObserveOnly = false) => (Dsh ?? throw new InvalidOperationException("DSH 执行端未连接")).Launch(Item,
+        (Stage, Message) => ProgressAsync(DshRelayRunner.InstanceId, Item.Channel.WorkerThreadId, Item.Id, Stage, Message),
+        Result => ReportAsync(DshRelayRunner.InstanceId, Item.Channel.WorkerThreadId, Item.Id, Result.Outcome, Result.Summary, Result.Artifacts), Lifetime.Token, ObserveOnly);
 
     private void OnInstanceExited(string InstanceId) => _ = HandleInstanceExitAsync(InstanceId);
 
@@ -428,7 +446,8 @@ public sealed partial class RelayCoordinator : IDisposable
                 var Item = Store.Get(Id);
                 StopDeadline(Id);
                 Cursor?.Stop(Id);
-                Change(Item, eRelayState.Cancelled, "上级联调已终止 本任务不再接收回调 Cursor CLI 会停止 Codex 模型与脚本需另行停止");
+                Dsh?.Stop(Id);
+                Change(Item, eRelayState.Cancelled, "上级联调已终止 本任务不再接收回调 Cursor CLI 会停止 DSH 核对归属后请求取消 Codex 模型与脚本需另行停止");
             }
     }
 

@@ -114,7 +114,13 @@ internal static class HarnessUiTests
                 }
                 Sources.SelectedTab = Sources.TabPages[2];
                 Application.DoEvents();
-                if (!Descendants(Collaboration).OfType<Label>().Any(Item => Item.Visible && Item.Text.StartsWith("尚未接入"))) throw new Exception("DSH falsely presented as connected");
+                var DshPage = Descendants(Collaboration).OfType<DshPage>().Single();
+                if (!Descendants(DshPage).OfType<Label>().Any(Item => Item.Visible && Item.Text.StartsWith("启动 DSH")) || Descendants(DshPage).OfType<DataGridView>().Single().RowCount != 0) throw new Exception("DSH page must expose connection controls without pretending a connection exists");
+                foreach (var Button in Descendants(DshPage).OfType<Button>())
+                {
+                    if (!Button.Parent!.ClientRectangle.Contains(Button.Bounds)) throw new Exception("DSH action clipped " + Button.Text + " " + Size);
+                    Count++;
+                }
                 Count++;
                 Store.Save(new RelayTask { RequestKey = "cursor-row", Title = "Codex 到 Cursor", Channel = new() { MainInstance = Settings.InstanceList[0], WorkerInstance = new() { Id = "cursor", Name = "grok-model" }, MainTitle = "协调会话", WorkerTitle = "执行会话" }, State = eRelayState.Accepted });
                 Settings.InstanceList[0].Name = "实例1";

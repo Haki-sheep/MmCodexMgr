@@ -50,6 +50,15 @@ public sealed partial class RelayCoordinator
 
     private async Task ResumeCoreAsync(RelayTask Item, bool Automatic)
     {
+        if (Item.Channel.WorkerInstance.Id == DshRelayRunner.InstanceId)
+        {
+            if (Item.Outcome.Length != 0) throw new InvalidOperationException("任务已有结果 禁止重复执行");
+            Item.RecoveryCount++;
+            Change(Item, eRelayState.Running, "恢复 DSH 原请求监测 不创建会话或重复发送消息");
+            ArmDeadline(Item);
+            LaunchDsh(Item, true);
+            return;
+        }
         if (Item.Channel.WorkerInstance.Id == CursorRelayRunner.InstanceId)
         {
             await ResumeCursorAsync(Item);

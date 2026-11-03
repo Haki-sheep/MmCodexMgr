@@ -14,6 +14,7 @@ public static class AgentDoctor
 {
     public static async Task<AgentHealthReport> RunAsync(ManagerSettings Settings, string CliPath, string? Selector, CancellationToken Cancellation, Func<InstanceProfile, CancellationToken, Task<List<string>>>? Probe = null)
     {
+        if (Selector == DshRelayRunner.InstanceId) return await DshCli.DoctorAsync(Settings.Dsh, Cancellation);
         if (Selector == CursorRelayRunner.InstanceId)
         {
             using var Cursor = new CursorRelayRunner();

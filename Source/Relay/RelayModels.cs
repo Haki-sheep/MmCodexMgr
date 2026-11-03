@@ -20,6 +20,7 @@ public sealed class RelayChannel
     public string WorkingDirectory { get; set; } = "";
     public string WorkerModel { get; set; } = "";
     public string CursorCliPath { get; set; } = "";
+    public string DshServerUrl { get; set; } = "";
     public string CreateTitle { get; set; } = "";
     public RelayTreeBudget TreeBudget { get; set; } = new();
 }

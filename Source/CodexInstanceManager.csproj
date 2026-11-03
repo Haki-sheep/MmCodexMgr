@@ -14,5 +14,6 @@
     <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.21" />
     <PackageReference Include="System.Management" Version="8.0.0" />
     <PackageReference Include="Tomlyn" Version="0.19.0" />
+    <PackageReference Include="YamlDotNet" Version="16.3.0" />
   </ItemGroup>
 </Project>

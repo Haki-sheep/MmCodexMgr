@@ -29,16 +29,24 @@ public sealed partial class AgentManagementService
         if (Request.Command == "agent_doctor") return await AgentDoctor.RunAsync(Settings, CliPath, Request.Arguments.TryGetProperty("instance", out var DoctorInstance) ? DoctorInstance.GetString() : Caller.Id, Cancellation);
         Catalog.Session(Caller, Request.ThreadId);
         var Arguments = Request.Arguments;
+        if (Request.Command is "dsh_create" or "dsh_rename" or "dsh_send" or "dsh_reply")
+        {
+            var OptionDict = Arguments.EnumerateObject().ToDictionary(Property => Property.Name.Replace('_', '-'), Property => Property.Value.GetString()!);
+            return await DshCli.ExecuteAsync(new(Request.Command.Replace('_', '-'), OptionDict, Arguments), Settings, Cancellation);
+        }
         switch (Request.Command)
         {
             case "agent_instances":
                 return Settings.InstanceList.Select((Item, Index) => (object)new { number = Index + 1, id = Item.Id, name = Item.Name, home = Item.HomePath, kind = "codex" })
-                    .Concat(Coordinator.Cursor is null ? Array.Empty<object>() : new object[] { new { number = (int?)null, id = CursorRelayRunner.InstanceId, name = "Cursor CLI", home = CursorRelayRunner.Profile.HomePath, kind = "cursor_cli" } }).ToArray();
+                    .Concat(Coordinator.Cursor is null ? Array.Empty<object>() : new object[] { new { number = (int?)null, id = CursorRelayRunner.InstanceId, name = "Cursor CLI", home = CursorRelayRunner.Profile.HomePath, kind = "cursor_cli" } })
+                    .Concat(Coordinator.Dsh is null ? Array.Empty<object>() : new object[] { new { number = (int?)null, id = DshRelayRunner.InstanceId, name = "DeepSeek Harness", home = Settings.Dsh.HomePath, kind = "dsh_desktop" } }).ToArray();
             case "agent_projects":
+                if (Text(Arguments, "instance") == DshRelayRunner.InstanceId) return await DshCli.QueryAsync("projects", Settings.Dsh, Arguments, Cancellation);
                 if (Text(Arguments, "instance") == CursorRelayRunner.InstanceId) throw new InvalidOperationException("Cursor CLI 使用 cwd 指定工作目录 不使用 Codex 项目登记");
                 return await Catalog.ProjectsAsync(ResolveInstance(Settings, Text(Arguments, "instance")), Cancellation);
             case "agent_sessions":
             {
+                if (Text(Arguments, "instance") == DshRelayRunner.InstanceId) return await DshCli.QueryAsync("sessions", Settings.Dsh, Arguments, Cancellation);
                 if (Text(Arguments, "instance") == CursorRelayRunner.InstanceId)
                 {
                     if (OptionalText(Arguments, "project") is not null) throw new InvalidOperationException("Cursor CLI 会话不使用 project 筛选 请按会话 ID 或完整名称查找");
@@ -58,6 +66,7 @@ public sealed partial class AgentManagementService
             }
             case "agent_open":
             {
+                if (Text(Arguments, "instance") == DshRelayRunner.InstanceId) throw new InvalidOperationException("DSH 后台接口不提供桌面导航 请在默认工作区按会话名称选择 已有会话可直接通过 start 复用");
                 if (Text(Arguments, "instance") == CursorRelayRunner.InstanceId)
                 {
                     var CursorSession = RequireCursor().Session(Text(Arguments, "session_id"));
@@ -89,6 +98,14 @@ public sealed partial class AgentManagementService
                     if (Request.Command == "agent_retry_return") await Coordinator.RetryReturnAsync(Item.Id);
                     else
                     {
+                        if (Item.Channel.WorkerInstance.Id == DshRelayRunner.InstanceId)
+                        {
+                            using var Client = await DshDesktopClient.ConnectAsync(DshRelayRunner.Settings(Item), Cancellation);
+                            var DshSession = await Client.SessionAsync(Text(Arguments, "session_id"), Cancellation);
+                            if (DshSession.Id != Item.Channel.WorkerThreadId) throw new InvalidOperationException("DSH 核对必须使用原会话 ID");
+                            await Coordinator.ReconcileAsync(Caller.Id, Request.ThreadId, Item.Id, DshSession.Id, DshSession.Title);
+                            return Describe(Store.Get(Item.Id));
+                        }
                         if (Item.Channel.WorkerInstance.Id == CursorRelayRunner.InstanceId) throw new InvalidOperationException("Cursor 派发待核对任务不可仅凭进程启动手动恢复结果接收 请核对 CLI 会话和产物后处理原记录");
                         var Session = Catalog.Session(Item.Channel.WorkerInstance, Text(Arguments, "session_id"));
                         if (Item.Channel.ProjectId.Length != 0)
@@ -116,6 +133,7 @@ public sealed partial class AgentManagementService
         var Workspace = ReadWorkspace(Arguments);
         if (Existing is null && Workspace is null) throw new InvalidOperationException("新任务必须声明 workspace.access 只读任务填 read_only 写入任务同时提供 write_paths");
         if (Text(Arguments, "instance") == CursorRelayRunner.InstanceId) return await StartCursorAsync(Settings, Caller, ThreadId, Arguments, Existing, Workspace, Key, Cancellation);
+        if (Text(Arguments, "instance") == DshRelayRunner.InstanceId) return await StartDshAsync(Settings, Caller, ThreadId, Arguments, Existing, Workspace, Key, Cancellation);
         foreach (string CursorParameter in new[] { "cwd", "model", "cursor_cli_path" })
             if (Arguments.TryGetProperty(CursorParameter, out _)) throw new InvalidOperationException(CursorParameter + " 仅适用于 instance=cursor");
         var Target = ResolveInstance(Settings, Text(Arguments, "instance"));

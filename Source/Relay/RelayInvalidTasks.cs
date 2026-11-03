@@ -15,10 +15,12 @@ public interface IRelayActivityProbe
 public sealed class RelayActivityProbe : IRelayActivityProbe
 {
     private readonly CursorRelayRunner? Cursor;
+    /// <summary> DSH 连接覆盖配置 </summary>
+    private readonly DshSettings Dsh;
     private Task<List<RunningInstance>>? Running;
     private readonly Dictionary<string, Task<RelayActivity>> CacheDict = new();
 
-    public RelayActivityProbe(CursorRelayRunner? Cursor) => this.Cursor = Cursor;
+    public RelayActivityProbe(CursorRelayRunner? Cursor, DshSettings? Dsh = null) { this.Cursor = Cursor; this.Dsh = Dsh ?? new(); }
 
     public Task<RelayActivity> ReadAsync(InstanceProfile Instance, string ThreadId, CancellationToken Cancellation)
     {
@@ -30,6 +32,16 @@ public sealed class RelayActivityProbe : IRelayActivityProbe
     private async Task<RelayActivity> ProbeAsync(InstanceProfile Instance, string ThreadId, CancellationToken Cancellation)
     {
         if (ThreadId.Length == 0) return new(eRelayActivity.Unknown, "会话创建结果尚未确认");
+        if (Instance.Id == DshRelayRunner.InstanceId)
+        {
+            try
+            {
+                using var Client = await DshDesktopClient.ConnectAsync(new() { HomePath = Instance.HomePath, ServerUrl = Dsh.ServerUrl }, Cancellation);
+                var Session = await Client.SessionAsync(ThreadId, Cancellation);
+                return new(Session.Running ? eRelayActivity.Active : eRelayActivity.Idle, "DSH 桌面会话状态");
+            }
+            catch (Exception Error) when (!Cancellation.IsCancellationRequested) { return new(eRelayActivity.Unknown, "DSH 活动状态未确认 " + Error.Message); }
+        }
         if (Instance.Id == CursorRelayRunner.InstanceId) return Cursor is null ? new(eRelayActivity.Unknown, "Cursor 执行端未连接") : new(Cursor.IsRunning(ThreadId) ? eRelayActivity.Active : eRelayActivity.Idle, "Cursor 执行进程");
         Running ??= Task.Run(InstanceService.ListRunning, Cancellation);
         if (InstanceService.Find(Instance, await Running) is null) return new(eRelayActivity.Idle, "Codex 实例未运行");
@@ -59,7 +71,7 @@ public sealed class RelayTaskValidator
     {
         this.Settings = Settings;
         this.Store = Store;
-        this.Probe = Probe ?? new RelayActivityProbe(Cursor);
+        this.Probe = Probe ?? new RelayActivityProbe(Cursor, Settings.Dsh);
     }
 
     public async Task<RelayValidity> CheckAsync(RelayTask Item)
@@ -80,7 +92,7 @@ public sealed class RelayTaskValidator
         string Unknown = "";
         foreach (var Endpoint in EndpointList.DistinctBy(Value => (Value.Instance.Id, Value.Thread)))
         {
-            var Profile = Endpoint.Instance.Id == CursorRelayRunner.InstanceId ? CursorRelayRunner.Profile : Settings.InstanceList.SingleOrDefault(Value => Value.Id == Endpoint.Instance.Id);
+            var Profile = Endpoint.Instance.Id == DshRelayRunner.InstanceId ? Endpoint.Instance : Endpoint.Instance.Id == CursorRelayRunner.InstanceId ? CursorRelayRunner.Profile : Settings.InstanceList.SingleOrDefault(Value => Value.Id == Endpoint.Instance.Id);
             if (Profile is null) continue;
             var Activity = await Probe.ReadAsync(Profile, Endpoint.Thread, CancellationToken.None);
             if (Activity.State == eRelayActivity.Active) return new(false, "主会话或下级仍有活动执行");
@@ -145,6 +157,7 @@ public sealed partial class RelayCoordinator
                 {
                     StopDeadline(Id);
                     Cursor?.Stop(Id);
+                    Dsh?.Stop(Id);
                     CancelDescendants(Id);
                     Change(Item, eRelayState.Cancelled, "已核实主子 Agent 均无活动执行 用户确认清理记录 后续回报不再接收");
                 }

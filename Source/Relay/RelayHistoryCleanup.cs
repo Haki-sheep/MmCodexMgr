@@ -15,8 +15,9 @@ public sealed partial class RelayCoordinator
                 {
                     StopDeadline(Id);
                     Cursor?.Stop(Id);
+                    Dsh?.Stop(Id);
                     CancelDescendants(Id);
-                    Change(Item, eRelayState.Cancelled, "主会话通过 CLI 或 MCP 清理记录 已中断下级联调 Cursor CLI 会停止 Codex 模型与脚本需另行停止");
+                    Change(Item, eRelayState.Cancelled, "主会话通过 CLI 或 MCP 清理记录 已中断下级联调 Cursor CLI 会停止 DSH 核对归属后请求取消 Codex 模型与脚本需另行停止");
                 }
                 Store.DeleteFinished(Id);
             }
