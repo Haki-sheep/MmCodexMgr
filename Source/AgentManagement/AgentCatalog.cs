@@ -37,11 +37,12 @@ public sealed class AgentCatalog : IAgentCatalog
         using var Database = ConversationDatabase.Open(Path.Combine(Instance.HomePath, "state_5.sqlite"), true);
         Database.CreateFunction("manager_path", (string Value) => NormalizePath(Value));
         using var Command = Database.CreateCommand();
-        string ProjectFilter = Project is null ? "" : " AND (project_id=$project OR (project_id IS NULL AND CASE WHEN cwd<>'' THEN manager_path(cwd) END=$path))";
+        string ProjectFilter = Project is null ? "" : " AND (project_id IN ($project,$mappedProject) OR (project_id IS NULL AND CASE WHEN cwd<>'' THEN manager_path(cwd) END=$path))";
         Command.CommandText = "SELECT id,COALESCE(NULLIF(name,''),title),COALESCE(project_id,''),cwd FROM threads WHERE archived=0" + ProjectFilter + " AND ($selector IS NULL OR id=$selector OR COALESCE(NULLIF(name,''),title)=$selector) ORDER BY updated_at DESC,id LIMIT $limit OFFSET $offset";
         if (Project is not null)
         {
             Command.Parameters.AddWithValue("$project", Project.Id);
+            Command.Parameters.AddWithValue("$mappedProject", ResolveStoredProjectId(Instance, Project.Id));
             Command.Parameters.AddWithValue("$path", NormalizePath(Project.Path));
         }
         Command.Parameters.AddWithValue("$selector", (object?)Selector ?? DBNull.Value);
@@ -51,6 +52,18 @@ public sealed class AgentCatalog : IAgentCatalog
         var ResultList = new List<AgentSession>();
         while (Reader.Read()) ResultList.Add(new(Reader.GetString(0), Reader.GetString(1), Reader.GetString(2), Reader.GetString(3)));
         return ResultList;
+    }
+
+    private static string ResolveStoredProjectId(InstanceProfile Instance, string ProjectId)
+    {
+        string StatePath = Path.Combine(Instance.HomePath, ".codex-global-state.json");
+        if (!File.Exists(StatePath)) return ProjectId;
+        using var State = JsonDocument.Parse(File.ReadAllText(StatePath));
+        if (!State.RootElement.TryGetProperty("app-server-project-id-by-legacy-project-id-by-host", out var Hosts)) return ProjectId;
+        foreach (var Host in Hosts.EnumerateObject())
+            if (Host.Name.StartsWith("local:", StringComparison.Ordinal) && ManagerPaths.Same(Host.Name[6..], Instance.HomePath) && Host.Value.TryGetProperty(ProjectId, out var StoredId))
+                return StoredId.GetString() ?? throw new InvalidDataException("项目 ID 映射为空 " + ProjectId);
+        return ProjectId;
     }
 
     public AgentSession Session(InstanceProfile Instance, string Id)

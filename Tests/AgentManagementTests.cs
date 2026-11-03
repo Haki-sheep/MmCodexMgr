@@ -295,6 +295,16 @@ internal static class AgentManagementTests
         Command.ExecuteNonQuery();
         Require(Catalog.Sessions(Instance, null, "散落会话", 0).Single().Id == "loose" && Catalog.Sessions(Instance, null, null, 0).Select(Item => Item.Id).ToHashSet().SetEquals(new[] { "a", "b", "c", "loose" }), "unfiltered lookup includes standalone chats and all local projects while excluding archived chats");
         Require(Catalog.Sessions(Instance, Project, null, 0).All(Item => Item.Id != "loose"), "explicit project filter still excludes standalone chats with no workspace");
+        File.WriteAllText(Path.Combine(Instance.HomePath, ".codex-global-state.json"), JsonSerializer.Serialize(new Dictionary<string, object>
+        {
+            ["app-server-project-id-by-legacy-project-id-by-host"] = new Dictionary<string, object>
+            {
+                ["local:" + Instance.HomePath] = new Dictionary<string, string> { ["legacy-project"] = "project" },
+                ["local:" + Path.Combine(Root, "other-instance")] = new Dictionary<string, string> { ["legacy-project"] = "other" }
+            }
+        }));
+        var ImportedMatches = Catalog.Sessions(Instance, new("legacy-project", "项目", Project.Path, true), "同名", 0);
+        Require(ImportedMatches.Select(Item => Item.Id).ToHashSet().SetEquals(new[] { "a", "b" }), "legacy desktop project resolves stored import membership within the selected instance");
         return Task.CompletedTask;
     }
     #endregion
