@@ -40,7 +40,7 @@ internal static class AgentManagementTests
             var Service = new AgentManagementService(Store, Coordinator, new FakeCatalog(Root), Environment.ProcessPath!, () => Settings);
             string PipeName = "CodexAgentDefaultsTests-" + Guid.NewGuid().ToString("N");
             using var Host = new RelayHost(Coordinator, PipeName, Service);
-            await VerifySubagentDefaultsAsync(Root, PipeName, Settings, Coordinator);
+            await VerifySubagentDefaultsAsync(Root, PipeName, Settings, Coordinator, Store);
             Console.WriteLine($"PASS agent defaults {Count} assertions");
         }
         finally
@@ -159,14 +159,18 @@ internal static class AgentManagementTests
         await Coordinator.CancelAsync(CreatedLoose.GetProperty("task_id").GetString()!);
         var LooseSessions = await CliAsync(new[] { "sessions", "--instance", "second", "--session", "loose-session" }, Root, PipeName, Settings);
         Require(LooseSessions[0].GetProperty("Id").GetString() == "loose-session" && Catalog.ProjectCalls == ProjectCalls, "CLI lists standalone sessions without a project option");
-        await VerifySubagentDefaultsAsync(Root, PipeName, Settings, Coordinator);
+        await VerifySubagentDefaultsAsync(Root, PipeName, Settings, Coordinator, Store);
         await VerifyCatalogAsync(Root);
         VerifyCliRelocation(Path.Combine(Root, "cli-relocation"));
         Console.WriteLine($"PASS agent management {Count} assertions; fixture={Root}");
     }
 
-    private static async Task VerifySubagentDefaultsAsync(string Root, string PipeName, ManagerSettings Settings, RelayCoordinator Coordinator)
+    private static async Task VerifySubagentDefaultsAsync(string Root, string PipeName, ManagerSettings Settings, RelayCoordinator Coordinator, RelayStore Store)
     {
+        var MissingLimits = JsonSerializer.Deserialize<RelayTask>("{\"WorkerLimits\":{}}")!;
+        Require(MissingLimits.SubagentMax == 3 && MissingLimits.WorkerLimits.SubagentMax == 3, "omitted task and executor budgets deserialize as three instead of implicit zero");
+        var DisabledLimits = JsonSerializer.Deserialize<RelayTask>("{\"SubagentMax\":0,\"WorkerLimits\":{\"SubagentMax\":0}}")!;
+        Require(DisabledLimits.SubagentMax == 0 && DisabledLimits.WorkerLimits.SubagentMax == 0, "saved explicit zero remains disabled after loading");
         foreach (int Limit in new[] { 3, 1, 0 })
         {
             var RequestDict = Start("default-root-" + Limit, "main", "session-a");
@@ -189,6 +193,25 @@ internal static class AgentManagementTests
             var Retried = await StartAsync(RequestDict, Root, PipeName, Settings);
             Require(Retried.GetProperty("task_id").GetString() == RootId && Retried.GetProperty("subagent_max").GetInt32() == Limit, "retry without limit retains original budget " + Limit);
         }
+        var NativeOnlyRequestDict = Start("native-without-sessions", "main", "session-a");
+        NativeOnlyRequestDict.Remove("subagent_max");
+        NativeOnlyRequestDict["cross_agent_max"] = 0;
+        NativeOnlyRequestDict["worker_limits"] = new { session_max = 0, cross_agent_max = 0 };
+        NativeOnlyRequestDict["tree_session_max"] = 1;
+        NativeOnlyRequestDict["max_depth"] = 1;
+        var NativeOnly = await StartAsync(NativeOnlyRequestDict, Root, PipeName, Settings);
+        string NativeOnlyId = NativeOnly.GetProperty("task_id").GetString()!;
+        var WorkerLimits = NativeOnly.GetProperty("worker_limits");
+        Require(NativeOnly.GetProperty("subagent_max").GetInt32() == 3 && WorkerLimits.GetProperty("SubagentMax").GetInt32() == 3 && WorkerLimits.GetProperty("SessionMax").GetInt32() == 0 && WorkerLimits.GetProperty("CrossAgentMax").GetInt32() == 0, "disabling executor sessions and limiting tree depth to one preserves three native Subagents");
+        string Prompt = RelayCoordinator.BuildWorkerPrompt(Store.Get(NativeOnlyId));
+        Require(Prompt.Contains("禁止递归创建 Subagent") && Prompt.Contains("subagent_max=0 session_max=0 cross_agent_max=0") && Prompt.Contains("每个 Subagent 必须有立即可执行的具体任务") && Prompt.Contains("可以不开 不要求凑满"), "executor handoff requires working leaf Subagents and does not require filling available slots");
+        await Coordinator.CancelAsync(NativeOnlyId);
+        var DisabledWorkerRequestDict = Start("native-worker-disabled", "main", "session-a");
+        DisabledWorkerRequestDict.Remove("subagent_max");
+        DisabledWorkerRequestDict["worker_limits"] = new { subagent_max = 0, session_max = 0, cross_agent_max = 0 };
+        var DisabledWorker = await StartAsync(DisabledWorkerRequestDict, Root, PipeName, Settings);
+        Require(DisabledWorker.GetProperty("subagent_max").GetInt32() == 3 && DisabledWorker.GetProperty("worker_limits").GetProperty("SubagentMax").GetInt32() == 0, "an explicitly disabled executor remains zero while its coordinator keeps the default three");
+        await Coordinator.CancelAsync(DisabledWorker.GetProperty("task_id").GetString()!);
     }
 
     private static void VerifyCliRelocation(string Root)

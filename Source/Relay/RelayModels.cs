@@ -41,7 +41,7 @@ public sealed class RelayTask
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
     public List<string> EventList { get; set; } = new();
     public int SessionMax { get; set; } = 1;
-    public int SubagentMax { get; set; }
+    public int SubagentMax { get; set; } = RelayLimits.DefaultSubagentMax;
     public int CrossAgentMax { get; set; } = 1;
     public RelayAgentLimits WorkerLimits { get; set; } = new();
     public string TreeRootId { get; set; } = "";
@@ -83,7 +83,7 @@ public sealed record RelayVisibleRow(RelayTreeEntry Entry, int Depth, bool More 
 
 public sealed class RelayAgentLimits
 {
-    public int SubagentMax { get; set; }
+    public int SubagentMax { get; set; } = RelayLimits.DefaultSubagentMax;
     public int SessionMax { get; set; } = 1;
     public int CrossAgentMax { get; set; } = 1;
 }
@@ -100,6 +100,8 @@ public static class RelayLimits
     public const int PageSize = 40;
     /// <summary>原生子代理的默认并发上限</summary>
     public const int DefaultSubagentMax = 3;
+    /// <summary> 原生子代理的按需执行与叶子约束 </summary>
+    public const string SubagentPolicy = "原生 Subagent 额度是并发上限 可以不开 不要求凑满 每个 Subagent 必须有立即可执行的具体任务 明确输入 可写范围 产物与验收 不得仅为占位开启或让其空等\n原生 Subagent 只能作为叶子直接干活 禁止递归创建 Subagent 或通过 Session 与跨实例转派绕过 创建时须在其任务提示中明确 subagent_max=0 session_max=0 cross_agent_max=0 并禁止继续委派\n主会话 独立子执行者和联调会话未指定时各默认可用 3 个 Subagent 实际上限以本次预算和宿主工具为准 Session 与联调树额度不占用原生 Subagent 额度";
     public const int DefaultTreeSessionMax = 8;
     public const int DefaultTreeMaxDepth = 3;
     public const int MaxTreeDepth = 32;

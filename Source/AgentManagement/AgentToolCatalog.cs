@@ -11,9 +11,9 @@ public static class AgentToolCatalog
         {
             cwd = Text(), model = Text(), cursor_cli_path = Text(),
             request_id = Text(128), instance = Text(), project = Text(), session = Text(), create_title = Text(120), title = Text(120), instructions = Text(RelayLimits.MaxTextLength), acceptance = Text(RelayLimits.MaxTextLength),
-            subagent_max = new { type = "integer", minimum = 0, @default = RelayLimits.DefaultSubagentMax, description = "原生子代理并发上限 新根任务默认 3 下级继承上级预算 重试保留原值 显式 0 禁用 仍受宿主上限约束" }, session_max = Number(0), cross_agent_max = Number(0), timeout_minutes = new { type = "integer", minimum = 0, maximum = 1440, description = "等待回报的分钟数 默认 60 设为 0 表示无限等待" },
+            subagent_max = new { type = "integer", minimum = 0, @default = RelayLimits.DefaultSubagentMax, description = "主会话 独立子执行者与联调会话默认各可用 3 个原生子代理 下级继承上级预算 重试保留原值 显式 0 禁用 额度不要求凑满 每个子代理必须有实际任务 原生子代理禁止递归创建或转派 仍受宿主上限约束" }, session_max = Number(0), cross_agent_max = Number(0), timeout_minutes = new { type = "integer", minimum = 0, maximum = 1440, description = "等待回报的分钟数 默认 60 设为 0 表示无限等待" },
             tree_session_max = Number(1), max_depth = new { type = "integer", minimum = 1, maximum = RelayLimits.MaxTreeDepth },
-            worker_limits = new { type = "object", properties = new { subagent_max = Number(0), session_max = Number(0), cross_agent_max = Number(0) }, additionalProperties = false },
+            worker_limits = new { type = "object", properties = new { subagent_max = new { type = "integer", minimum = 0, description = "独立执行会话的原生子代理额度 省略时继承本层 本层默认 3 不代表允许原生子代理递归创建下级" }, session_max = Number(0), cross_agent_max = Number(0) }, additionalProperties = false },
             workspace = new { type = "object", properties = new { access = new { type = "string", @enum = new[] { "read_only", "write" } }, write_paths = new { type = "array", items = Text(1024), maxItems = 20 } }, required = new[] { "access" }, additionalProperties = false }
         }, new[] { "request_id", "instance", "title", "instructions", "acceptance", "workspace" }),
         Tool("agent_task", "单次读取本人参与任务的状态 进度 结果和预算 仅用户询问进度或排错时查询 不要轮询", new { task_id = Text(128) }, new[] { "task_id" }),

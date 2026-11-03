@@ -22,7 +22,9 @@ public static class AgentCli
           已授权自动协作时可用 create_title 自动新建任务所需会话 无需逐次确认
           Codex 目标实例未运行时自动启动并等待桥接就绪 首次使用需完成登录并已有会话上下文
           可选 subagent_max=3 session_max=1 cross_agent_max=1 timeout_minutes=60
-          未指定 subagent_max 时新根任务默认 3 下级继承上级预算 重试保留原值 显式 0 禁用
+          主会话 独立子执行者与联调会话默认各可用 3 个 Subagent 下级继承上级预算 重试保留原值 显式 0 禁用
+          额度不要求凑满 每个 Subagent 必须有立即可执行的任务 原生 Subagent 是叶子 禁止递归创建或转派
+          Session 与整棵联调树的数量和层级不限制原生 Subagent 额度 仍受宿主工具上限约束
           session_max 与 cross_agent_max 按本次请求校验 不锁定为已有任务的值 下级仍受上级预算约束
           timeout_minutes 范围 0 至 1440 分钟 0 表示无限等待
           worker_limits 可分别指定下级三种协作上限 默认继承本层
