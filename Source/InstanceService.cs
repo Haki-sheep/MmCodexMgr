@@ -75,7 +75,9 @@ public static class InstanceService
             return Existing.ProcessId;
         }
         Directory.CreateDirectory(Profile.HomePath);
-        var Info = new ProcessStartInfo(ResolveAppPath()) { UseShellExecute = false };
+        string AppPath = ResolveAppPath();
+        if (PackagedAppLauncher.IsPackaged(AppPath)) return PackagedAppLauncher.Launch(AppPath, Profile);
+        var Info = new ProcessStartInfo(AppPath) { UseShellExecute = false };
         Info.WorkingDirectory = Path.GetDirectoryName(Info.FileName)!;
         foreach (string Key in Info.Environment.Keys.ToArray())
             if (Key.StartsWith("CODEX_", StringComparison.OrdinalIgnoreCase) || Key is "OPENAI_API_KEY" or "ELECTRON_RUN_AS_NODE" or "NODE_OPTIONS" or "NODE_CHANNEL_FD") Info.Environment.Remove(Key);
