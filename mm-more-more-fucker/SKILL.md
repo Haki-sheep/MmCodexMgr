@@ -167,6 +167,8 @@ CLI 和 MCP 能力以当前 `help` 与工具目录为准 后台 API 不提供桌
 
 Session 派发成功后 优先处理已到达且当前可核对的回传 继续推进其他已授权且依赖已满足的工作 当前无可推进事项且仍在等回传时 才结束本轮等待事件 结束本轮不代表整体任务结束 管理器收到执行会话的 `report` 后唤醒原主会话 由原主会话继续验收与调度 不循环调用 status read_thread 或 sleep 原生 Subagent 使用宿主提供的完成事件
 
+主会话收到任一回传通知 恢复会话或准备结束本轮等待时 用 `agent_inbox` 或 CLI `inbox` 从第一页核对当前主会话的待处理回传 多条通知按任务 ID 去重 `next_after` 非空时传入 MCP `after` 或 CLI `--after` 继续读取本批次 通过 `agent_task` 或 `status --task-id <ID>` 读取完整结果 已保存但通知未确认的结果也在收件箱中 核对通过后调用 `accept` 一并关闭对应待处理项 不需要先重发通知 不循环刷新收件箱 等待下一次事件时再次从第一页核对
+
 执行 Agent 真正开始工作时主动调用 `relay_progress` 或 CLI `progress --json-file <文件>` 参数含 `task_id` `stage=started` `message` 重要阶段完成时上报 `stage=progress` 暂时阻塞时上报 `stage=blocked` 不发送定时心跳 进度只更新管理器 不唤醒主会话 不能代替最终回报 未收到 started 时界面只表示等待开始确认
 
 执行 Agent 收齐并验收自己的下级后 回报上级 `report` 请求含 `task_id` `outcome` `summary` `artifacts` outcome 取 `completed` `needs_decision` `failed` 产物是绝对路径 摘要写明实际修改 检查结果与未解决项 管理器自动把该回报送回原主会话
@@ -187,7 +189,7 @@ Session 派发成功后 优先处理已到达且当前可核对的回传 继续�
 
 超时与发送失败不代表没有执行 不用新 `request_id` 重复启动或创建 先核对记录及目标会话 不确定创建状态保留现场并交由用户核对 禁止形成指向等待自己的上级会话的循环依赖
 
-CLI 与 MCP 发送最终回报前会保存到本地发件箱 若管理器离线 结果保留并明确返回保存位置 管理器启动时恢复尚未确认的结果接收 已经保存且回传状态不明的结果不会自动再发送到主会话
+CLI 与 MCP 发送最终回报前会保存到本地发件箱 若管理器离线 结果保留并明确返回保存位置 管理器启动及运行期间自动补录尚未登记的回报 每个任务 ID 只登记一份结果 回报确认表示结果已落盘 桌面通知随后逐条投递 重启时继续投递明确未尝试的通知 回传通知状态不明时从主会话收件箱核对 只有明确核对后才可手动重发通知 被拒绝的原回报保留为发件箱中的 .rejected 文件供核对
 
 只有用户已核对执行会话确实收到并开始任务时 才使用 `agent_reconcile` 或 CLI `reconcile --task-id <ID> --session-id <ID> --confirmed true` 恢复原记录 不重复创建或发送 只有用户核对原主会话未收到结果后 才使用 `agent_retry_return` 或 CLI `retry-return --task-id <ID> --confirmed true` 重发回传 不自行把 confirmed 填为 true 管理器界面双击任务可查看详情与这些恢复入口
 

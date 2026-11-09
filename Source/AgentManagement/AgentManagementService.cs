@@ -58,6 +58,17 @@ public sealed partial class AgentManagementService
                 return Catalog.Sessions(Target, Project, OptionalText(Arguments, "session"), Number(Arguments, "offset", 0));
             }
             case "agent_start": return await StartAsync(Settings, Caller, Request.ThreadId, Arguments, Cancellation);
+            case "agent_inbox":
+            {
+                string After = OptionalText(Arguments, "after") ?? "";
+                if (After.Length > 128) throw new InvalidOperationException("收件箱游标过长");
+                var ItemList = Store.Inbox(Caller.Id, Request.ThreadId, After);
+                return new
+                {
+                    items = ItemList.Take(RelayLimits.PageSize).Select(Item => new { task_id = Item.Id, title = Item.Title, state = RelayLimits.StateText(Item.State), outcome = Item.Outcome, updated_at = Item.UpdatedAt }).ToArray(),
+                    next_after = ItemList.Count > RelayLimits.PageSize ? ItemList[RelayLimits.PageSize - 1].Id : null
+                };
+            }
             case "agent_cleanup":
             {
                 string State = Text(Arguments, "state");

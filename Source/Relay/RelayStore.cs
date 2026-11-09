@@ -81,6 +81,33 @@ public sealed partial class RelayStore
         return ResultList;
     }
 
+    public List<RelayTaskSummary> Inbox(string InstanceId, string ThreadId, string After)
+    {
+        using var Database = Open();
+        using var Command = Database.CreateCommand();
+        Command.CommandText = """
+            SELECT id,title,state,updated_at,json_extract(data,'$.Outcome')
+            FROM relay_tasks
+            WHERE state IN ($returning,$returned,$uncertain)
+              AND json_extract(data,'$.Channel.MainInstance.Id')=$instance
+              AND json_extract(data,'$.Channel.MainThreadId')=$thread
+              AND json_extract(data,'$.Outcome')<>''
+              AND id>$after
+            ORDER BY id LIMIT $limit
+            """;
+        Command.Parameters.AddWithValue("$returning", (int)eRelayState.Returning);
+        Command.Parameters.AddWithValue("$returned", (int)eRelayState.Returned);
+        Command.Parameters.AddWithValue("$uncertain", (int)eRelayState.ReturnUncertain);
+        Command.Parameters.AddWithValue("$instance", InstanceId);
+        Command.Parameters.AddWithValue("$thread", ThreadId);
+        Command.Parameters.AddWithValue("$after", After);
+        Command.Parameters.AddWithValue("$limit", RelayLimits.PageSize + 1);
+        using var Reader = Command.ExecuteReader();
+        var ResultList = new List<RelayTaskSummary>();
+        while (Reader.Read()) ResultList.Add(new(Reader.GetString(0), Reader.GetString(1), (eRelayState)Reader.GetInt32(2), DateTimeOffset.Parse(Reader.GetString(3)), Reader.GetString(4)));
+        return ResultList;
+    }
+
     public List<string> PendingIds()
     {
         using var Database = Open();

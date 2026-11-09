@@ -6,6 +6,7 @@ namespace CodexInstanceManager;
 public static class Program
 {
     private static readonly string PipeName = "CodexInstanceManager-" + Environment.UserName;
+    private static readonly object ErrorLogGate = new();
 
     [STAThread]
     public static void Main(string[] ArgumentList)
@@ -81,11 +82,12 @@ public static class Program
             using var Relay = new RelayHost(Coordinator, AgentService: AgentService);
             Relay.Failed += Error => { if (!Form.IsDisposed && Form.IsHandleCreated) Form.BeginInvoke(() => MessageBox.Show(Form, Error.Message, "联调服务不可用")); };
             using var Cancellation = new CancellationTokenSource();
+            var RecoveryCancellation = Cancellation.Token;
             Form.Shown += async (_, _) =>
             {
                 if (Background) { Form.Hide(); Form.ShowInTaskbar = true; }
                 else if (Command != "show") { Form.Hide(); await Form.HandleCommandAsync(Command); }
-                _ = RecoverReportsAsync(Coordinator, Form, Cancellation.Token);
+                _ = Task.Run(() => RecoverReportsAsync(Coordinator, Form, RecoveryCancellation));
             };
             _ = ListenAsync(Form, Cancellation.Token);
             Application.Run(Form);
@@ -113,20 +115,34 @@ public static class Program
 
     public static void LogError(Exception Error)
     {
-        Directory.CreateDirectory(ManagerPaths.Root);
-        File.AppendAllText(Path.Combine(ManagerPaths.Root, "errors.log"), DateTime.Now.ToString("O") + Environment.NewLine + Error + Environment.NewLine);
+        lock (ErrorLogGate)
+        {
+            Directory.CreateDirectory(ManagerPaths.Root);
+            File.AppendAllText(Path.Combine(ManagerPaths.Root, "errors.log"), DateTime.Now.ToString("O") + Environment.NewLine + Error + Environment.NewLine);
+        }
     }
 
     private static async Task RecoverReportsAsync(RelayCoordinator Coordinator, MainForm Form, CancellationToken Cancellation)
     {
+        using var Timer = new PeriodicTimer(TimeSpan.FromSeconds(3));
+        bool Initial = true;
         try
         {
-            var Result = await RelayOutbox.ReplayOnceAsync(Coordinator, Cancellation);
-            if (Result.Recovered + Result.Failed > 0 && !Form.IsDisposed)
-                Form.BeginInvoke(() => MessageBox.Show(Form, "已恢复 " + Result.Recovered + " 条本地回报\n待核对 " + Result.Failed + " 条 详情保留在发件箱和错误日志中", "联调结果恢复"));
+            do
+            {
+                try
+                {
+                    if (Initial) Coordinator.StartQueuedReturns();
+                    var Result = await RelayOutbox.ReplayOnceAsync(Coordinator, Cancellation, WaitForNotification: false);
+                    if (Initial && Result.Recovered + Result.Failed > 0 && !Form.IsDisposed && Form.IsHandleCreated)
+                        Form.BeginInvoke(() => MessageBox.Show(Form, "已恢复 " + Result.Recovered + " 条本地回报\n待核对 " + Result.Failed + " 条 详情保留在发件箱和错误日志中", "联调结果恢复"));
+                }
+                catch (Exception Error) when (!Cancellation.IsCancellationRequested) { LogError(Error); }
+                Initial = false;
+            }
+            while (await Timer.WaitForNextTickAsync(Cancellation));
         }
         catch (OperationCanceledException) when (Cancellation.IsCancellationRequested) { }
-        catch (Exception Error) { LogError(Error); if (!Form.IsDisposed) Form.BeginInvoke(() => MessageBox.Show(Form, Error.Message, "发件箱恢复失败")); }
     }
 
     private static object[] DescribeLayout(Control Parent) => Parent.Controls.Cast<Control>().Select(Control => new { Type = Control.GetType().Name, Control.Text, Bounds = Control.Bounds.ToString(), Control.PreferredSize, Font = Control.Font.ToString(), Control.Visible, Children = DescribeLayout(Control) }).Cast<object>().ToArray();

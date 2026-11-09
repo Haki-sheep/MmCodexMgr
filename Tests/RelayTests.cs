@@ -289,7 +289,7 @@ internal static class RelayTests
         using var Catalog = JsonDocument.Parse(ResponseList[1]);
         Require(ResponseList.Length == 2 && Initialize.RootElement.GetProperty("result").GetProperty("protocolVersion").GetString() == "2025-06-18", "MCP handshake handles notifications without bogus responses");
         var ToolList = Catalog.RootElement.GetProperty("result").GetProperty("tools");
-        Require(ToolList.GetArrayLength() == 22 && new[] { "agent_start", "relay_progress", "agent_open", "agent_resume", "agent_cleanup", "dsh_create", "dsh_rename", "dsh_send", "dsh_reply" }.All(Name => ToolList.EnumerateArray().Any(Item => Item.GetProperty("name").GetString() == Name)), "MCP exposes DSH desktop session operations alongside existing relay contracts");
+        Require(ToolList.GetArrayLength() == 23 && new[] { "agent_start", "relay_progress", "agent_open", "agent_resume", "agent_cleanup", "agent_inbox", "dsh_create", "dsh_rename", "dsh_send", "dsh_reply" }.All(Name => ToolList.EnumerateArray().Any(Item => Item.GetProperty("name").GetString() == Name)), "MCP exposes inbox and DSH desktop session operations alongside existing relay contracts");
         using var Metadata = JsonDocument.Parse("{\"x-codex-turn-metadata\":\"{\\\"thread_id\\\":\\\"bound-thread\\\"}\"}");
         Require(RelayMcp.ReadThreadId(Metadata.RootElement) == "bound-thread", "thread ownership comes from Codex executor metadata");
     }
@@ -314,9 +314,12 @@ internal static class RelayTests
         var Dispatch = await CallMcpAsync("main", "main-thread", "relay_dispatch", new { request_id = "wire-1", title = "协议回环", instructions = "执行固定操作", acceptance = "结果验证" }, PipeName);
         string TaskId = Dispatch.GetProperty("task_id").GetString()!;
         Require(Store.Get(TaskId).State == eRelayState.Running, "MCP metadata crosses actual named-pipe host and dispatches task");
+        var Returned = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Coordinator.Changed += () => { if (Store.Get(TaskId).State == eRelayState.Returned) Returned.TrySetResult(); };
         var Reports = await Task.WhenAll(
             CallMcpAsync("worker", "worker-thread", "relay_report", new { task_id = TaskId, outcome = "completed", summary = "完成", artifacts = Array.Empty<string>() }, PipeName),
             CallMcpAsync("worker", "worker-thread", "relay_report", new { task_id = TaskId, outcome = "completed", summary = "完成", artifacts = Array.Empty<string>() }, PipeName));
+        await Returned.Task.WaitAsync(TimeSpan.FromSeconds(5));
         Require(Reports.Length == 2 && Bridge.SentList.Count == 2, "concurrent callbacks through separate pipe clients cause one main wakeup");
         await CallMcpAsync("main", "main-thread", "relay_accept", new { task_id = TaskId }, PipeName);
         Require(Store.Get(TaskId).State == eRelayState.Accepted, "full MCP dispatch-report-accept roundtrip persists final acceptance");

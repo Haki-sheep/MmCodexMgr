@@ -37,6 +37,7 @@ public sealed class RelayTask
     public eRelayState State { get; set; }
     public string Outcome { get; set; } = "";
     public string Result { get; set; } = "";
+    public bool ReturnNotificationQueued { get; set; }
     public List<string> ArtifactList { get; set; } = new();
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
@@ -114,7 +115,7 @@ public static class RelayLimits
     public const int MaxEventCount = 48;
     public const int MaxEventLength = 2000;
     public const string McpName = "mm_codex_mgr";
-    public const string DispatchWaitInstruction = "优先处理已到达且当前可核对的回传 继续推进其他已授权且依赖已满足的工作 当前无可推进事项且仍在等回传时才结束本轮等待事件 不轮询";
+    public const string DispatchWaitInstruction = "优先处理已到达且当前可核对的回传 继续推进其他已授权且依赖已满足的工作 准备等待前用 agent_inbox 或 CLI inbox 核对一次 当前无可推进事项且仍在等回传时才结束本轮等待事件 不轮询";
     public static string Root => Path.Combine(ManagerPaths.Root, "relay");
     public static string PipeName => "MmCodexMgr-Relay-" + Environment.UserName;
 

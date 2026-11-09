@@ -66,6 +66,7 @@ internal static class CollaborationTests
         await VerifyBudgetAsync();
         await VerifyWorkspaceAsync();
         await VerifyRecoveryAsync();
+        await VerifyConcurrentReturnsAsync();
         await VerifyMcpAsync();
         VerifyTree();
         await VerifyDoctorAsync();
@@ -161,6 +162,53 @@ internal static class CollaborationTests
         var Rejected = await RelayOutbox.ReplayOnceAsync(Coordinator, CancellationToken.None, Outbox);
         Require(Rejected.Failed == 1 && Directory.GetFiles(Outbox, "*.rejected").Length == 1, "late cancelled report is retained as rejected evidence without waking main");
     }
+
+    private static async Task VerifyConcurrentReturnsAsync()
+    {
+        var Store = new RelayStore(Path.Combine(Root, "concurrent-returns"));
+        var Bridge = new Bridge();
+        using var Coordinator = new RelayCoordinator(Store, Bridge);
+        var First = await Dispatch(Coordinator, "first-return", "root", "b");
+        var Second = await Dispatch(Coordinator, "second-return", "root", "c");
+        var Settings = new ManagerSettings { InstanceList = new() { Profile() }, SelectedId = "instance" };
+        var Service = new AgentManagementService(Store, Coordinator, new Catalog(), Environment.ProcessPath!, () => Settings);
+        string Pipe = "concurrent-returns-" + Guid.NewGuid().ToString("N");
+        using var Host = new RelayHost(Coordinator, Pipe, Service);
+        var Ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var Returned = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Coordinator.Changed += () => { if (Store.Get(First.Id).State == eRelayState.Returned) Returned.TrySetResult(); };
+        Bridge.WaitForSend = Ready.Task;
+        try
+        {
+            await Mcp("b", "relay_report", new { task_id = First.Id, outcome = "completed", summary = "第一份", artifacts = Array.Empty<string>() }, Pipe).WaitAsync(TimeSpan.FromSeconds(3));
+            await Mcp("c", "relay_report", new { task_id = Second.Id, outcome = "completed", summary = "第二份", artifacts = Array.Empty<string>() }, Pipe).WaitAsync(TimeSpan.FromSeconds(3));
+            var Inbox = await Mcp("root", "agent_inbox", new { }, Pipe).WaitAsync(TimeSpan.FromSeconds(3));
+            Require(Inbox.GetProperty("items").EnumerateArray().Select(Item => Item.GetProperty("task_id").GetString()).ToHashSet().SetEquals(new[] { First.Id, Second.Id }) && Bridge.SentList.Count == 3, "both pipe clients receive durable receipts and the inbox is readable while the first desktop notification is pending");
+            await Mcp("root", "relay_accept", new { task_id = Second.Id }, Pipe).WaitAsync(TimeSpan.FromSeconds(3));
+        }
+        finally { Ready.TrySetResult(); }
+        await Returned.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        Require(Store.Get(Second.Id).State == eRelayState.Accepted && Bridge.SentList.Count == 3, "accepting an inbox result skips its queued notification and cannot be reverted by delivery");
+
+        var Failed = await Dispatch(Coordinator, "failed-notice", "root", "d");
+        Bridge.FailNext = true;
+        await Reject(() => Coordinator.ReportAsync("instance", "d", Failed.Id, "completed", "通知失败 结果已登记", new()), "fixture");
+        int Sent = Bridge.SentList.Count;
+        await Coordinator.ReportAsync("instance", "d", Failed.Id, "completed", "通知失败 结果已登记", new());
+        Require(Store.Inbox("instance", "root", "").Any(Item => Item.Id == Failed.Id && Item.State == eRelayState.ReturnUncertain) && Bridge.SentList.Count == Sent, "ambiguous notification remains readable and repeated callback does not resend");
+        await Coordinator.ReviewAsync("instance", "root", Failed.Id);
+        Require(Store.Inbox("instance", "root", "").All(Item => Item.Id != Failed.Id), "stored result can be accepted after failed notification");
+
+        var RestartStore = new RelayStore(Path.Combine(Root, "queued-restart"));
+        var Queued = new RelayTask { RequestKey = "queued", State = eRelayState.Returning, Channel = First.Channel, Outcome = "completed", Result = "尚未发送", ReturnNotificationQueued = true };
+        var Attempted = new RelayTask { RequestKey = "attempted", State = eRelayState.Returning, Channel = First.Channel, Outcome = "completed", Result = "是否送达不明" };
+        RestartStore.Save(Queued);
+        RestartStore.Save(Attempted);
+        var RestartBridge = new Bridge();
+        using var Restarted = new RelayCoordinator(RestartStore, RestartBridge);
+        Restarted.StartQueuedReturns();
+        Require(RestartStore.Get(Queued.Id).State == eRelayState.Returned && RestartStore.Get(Attempted.Id).State == eRelayState.ReturnUncertain && RestartBridge.SentList.Count == 1, "restart sends the queued notification once and leaves the ambiguous delivery readable without resending");
+    }
     #endregion
 
     #region Integration
@@ -179,6 +227,20 @@ internal static class CollaborationTests
         await Mcp("worker", "relay_progress", new { task_id = Id, stage = "started", message = "开始" }, Pipe);
         var Status = await Mcp("root", "agent_task", new { task_id = Id }, Pipe);
         Require(Status.GetProperty("progress_stage").GetString() == "started" && Status.GetProperty("tree_budget").GetProperty("MaxSessions").GetInt32() == 2, "MCP routed startup and progress use same policy and data as CLI");
+        var OwnedList = new List<string>();
+        for (int Index = 0; Index <= RelayLimits.PageSize; Index++)
+        {
+            var Entry = new RelayTask { RequestKey = "inbox-" + Index, State = eRelayState.Returned, Outcome = "completed", Channel = new() { MainInstance = Profile(), MainThreadId = "root" } };
+            Store.Save(Entry);
+            OwnedList.Add(Entry.Id);
+        }
+        Store.Save(new RelayTask { RequestKey = "foreign-inbox", State = eRelayState.Returned, Outcome = "completed", Channel = new() { MainInstance = Profile(), MainThreadId = "foreign" } });
+        var Page = await Mcp("root", "agent_inbox", new { }, Pipe);
+        string After = Page.GetProperty("next_after").GetString()!;
+        var NextPage = await Mcp("root", "agent_inbox", new { after = After }, Pipe);
+        var PagedList = Page.GetProperty("items").EnumerateArray().Concat(NextPage.GetProperty("items").EnumerateArray()).Select(Item => Item.GetProperty("task_id").GetString()).ToList();
+        Require(PagedList.Count == OwnedList.Count && PagedList.ToHashSet().SetEquals(OwnedList) && NextPage.GetProperty("next_after").ValueKind == JsonValueKind.Null, "inbox pages return every result for the calling main session once and omit foreign or running tasks");
+        Require(AgentCli.Parse(new[] { "inbox", "--after", After }).Arguments.GetProperty("after").GetString() == After, "CLI preserves the inbox cursor");
         Require(AgentCli.Parse(new[] { "reconcile", "--task-id", Id, "--session-id", "worker", "--confirmed", "true" }).Arguments.GetProperty("confirmed").GetBoolean(), "CLI parses checked recovery as boolean");
     }
 
@@ -244,12 +306,13 @@ internal static class CollaborationTests
     private sealed class Bridge : IRelayBridge
     {
         public bool FailNext { get; set; }
+        public Task WaitForSend { get; set; } = Task.CompletedTask;
         public List<string> SentList { get; } = new();
         public Task SendAsync(InstanceProfile Instance, string ThreadId, string Prompt, string Model, CancellationToken Cancellation)
         {
             SentList.Add(ThreadId);
             if (FailNext) { FailNext = false; throw new IOException("fixture delivery uncertainty"); }
-            return Task.CompletedTask;
+            return WaitForSend.WaitAsync(Cancellation);
         }
     }
 

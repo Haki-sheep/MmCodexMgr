@@ -20,7 +20,8 @@ public static class AgentToolCatalog
             worker_limits = new { type = "object", properties = new { subagent_max = new { type = "integer", minimum = 0, description = "独立执行会话的原生子代理额度 省略时继承本层 本层默认 3 不代表允许原生子代理递归创建下级" }, session_max = Number(0), cross_agent_max = Number(0) }, additionalProperties = false },
             workspace = new { type = "object", properties = new { access = new { type = "string", @enum = new[] { "read_only", "write" } }, write_paths = new { type = "array", items = Text(1024), maxItems = 20 } }, required = new[] { "access" }, additionalProperties = false }
         }, new[] { "request_id", "instance", "title", "instructions", "acceptance", "workspace" }),
-        Tool("agent_task", "单次读取本人参与任务的状态 进度 结果和预算 仅用户询问进度或排错时查询 不要轮询", new { task_id = Text(128) }, new[] { "task_id" }),
+        Tool("agent_task", "按任务 ID 读取本人参与任务的状态 进度 结果和预算 可读取收件箱条目正文 不要轮询", new { task_id = Text(128) }, new[] { "task_id" }),
+        Tool("agent_inbox", "读取当前主会话的待处理回传 收到回传或恢复会话时从第一页核对 后续页传 next_after 到 after 正文用 agent_task 按 task_id 读取 不轮询", new { after = Text(128) }, Array.Empty<string>()),
         Tool("agent_open", "启动指定实例并打开已存在的准确会话 不新建会话 不发送执行消息", new { instance = Text(), session_id = Text(128) }, new[] { "instance", "session_id" }),
         Tool("agent_resume", "仅任务主会话恢复实例退出后的原任务 自动打开原执行会话 空闲时投递续跑消息 保留原任务和下级 投递不明时禁止使用 已恢复的请求不重复发送", new { task_id = Text(128) }, new[] { "task_id" }),
         Tool("agent_cleanup", "按用户要求清理当前主会话名下的联调记录 interrupted=实例退出后阻塞 blocked=所有阻塞 finished=已验收或已撤销 未结束任务的下级联调会被中断 不删除对话或项目文件 Cursor CLI 及其子进程会停止 DSH 核对归属后请求取消 Codex 模型或脚本需另行停止", new { state = new { type = "string", @enum = new[] { "interrupted", "blocked", "finished" } } }, new[] { "state" }),

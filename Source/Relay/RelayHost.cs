@@ -52,7 +52,7 @@ public sealed class RelayHost : IDisposable
                     var Request = Message.Deserialize<RelayRequest>() ?? throw new InvalidDataException("联调请求为空");
                     object Result;
                     try { Result = await ExecuteAsync(Request); }
-                    catch (Exception Error) { Program.LogError(Error); Result = new { error = Error.Message, error_kind = Error is IOException or OperationCanceledException ? "delivery_uncertain" : "rejected" }; await RelayWire.WriteAsync(Server, Result, RelayLimits.MaxFrameBytes, RequestTimeout.Token); continue; }
+                    catch (Exception Error) { Program.LogError(Error); Result = new { error = Error.Message, error_kind = Error is IOException or TimeoutException or OperationCanceledException ? "delivery_uncertain" : "rejected" }; await RelayWire.WriteAsync(Server, Result, RelayLimits.MaxFrameBytes, RequestTimeout.Token); continue; }
                     await RelayWire.WriteAsync(Server, new { result = Result }, RelayLimits.MaxFrameBytes, RequestTimeout.Token);
                 }
                 catch (OperationCanceledException) when (!Lifetime.IsCancellationRequested) { Program.LogError(new TimeoutException("联调客户端请求超时")); }
@@ -80,7 +80,7 @@ public sealed class RelayHost : IDisposable
                 return Describe(Item, Item.State == eRelayState.Running ? RelayLimits.DispatchWaitInstruction : "按已保存的任务状态继续处理 不重复派发");
             }
             case "relay_report":
-                return Describe(await Coordinator.ReportAsync(Request.InstanceId, Request.ThreadId, Arguments.GetProperty("task_id").GetString()!, Arguments.GetProperty("outcome").GetString()!, Arguments.GetProperty("summary").GetString()!, Arguments.GetProperty("artifacts").EnumerateArray().Select(Item => Item.GetString()!).ToList()));
+                return Describe(await Coordinator.ReportAsync(Request.InstanceId, Request.ThreadId, Arguments.GetProperty("task_id").GetString()!, Arguments.GetProperty("outcome").GetString()!, Arguments.GetProperty("summary").GetString()!, Arguments.GetProperty("artifacts").EnumerateArray().Select(Item => Item.GetString()!).ToList(), WaitForNotification: false), "执行结果已保存 主会话可从收件箱读取");
             case "relay_progress":
                 return Describe(await Coordinator.ProgressAsync(Request.InstanceId, Request.ThreadId, Arguments.GetProperty("task_id").GetString()!, Arguments.GetProperty("stage").GetString()!, Arguments.GetProperty("message").GetString()!));
             case "relay_accept":

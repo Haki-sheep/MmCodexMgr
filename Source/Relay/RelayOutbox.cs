@@ -25,22 +25,23 @@ public static class RelayOutbox
         }
         catch (RelayRequestException Error) when (Error.Kind == "rejected")
         {
-            File.Delete(PathValue);
-            throw;
+            string? Retained = PreserveRejected(PathValue);
+            if (Retained is null) throw;
+            throw new RelayRequestException(Error.Kind, Error.Message + " 原回报已保留供核对 " + Retained);
         }
         catch (Exception Error) when (Error is IOException or TimeoutException or OperationCanceledException or RelayRequestException)
         {
-            throw new IOException("回报未确认 已保存在本地发件箱 管理器启动时会恢复结果接收 " + PathValue + " 原因 " + Error.Message, Error);
+            throw new IOException("回报未确认 本地发件箱会自动补录 " + PathValue + " 原因 " + Error.Message, Error);
         }
     }
 
-    public static async Task<(int Recovered, int Failed)> ReplayOnceAsync(RelayCoordinator Coordinator, CancellationToken Cancellation, string? DirectoryPath = null)
+    public static async Task<(int Recovered, int Failed)> ReplayOnceAsync(RelayCoordinator Coordinator, CancellationToken Cancellation, string? DirectoryPath = null, bool WaitForNotification = true)
     {
         string Folder = DirectoryPath ?? Root;
         if (!Directory.Exists(Folder)) return (0, 0);
         int Recovered = 0;
         int Failed = 0;
-        foreach (string PathValue in Directory.EnumerateFiles(Folder, "*.pending.json").Take(200))
+        foreach (string PathValue in Directory.GetFiles(Folder, "*.pending.json"))
         {
             Cancellation.ThrowIfCancellationRequested();
             try
@@ -48,19 +49,28 @@ public static class RelayOutbox
                 if (new FileInfo(PathValue).Length > RelayLimits.MaxFrameBytes) throw new InvalidDataException("发件箱文件超过限制 " + PathValue);
                 var Request = JsonSerializer.Deserialize<RelayRequest>(File.ReadAllBytes(PathValue)) ?? throw new InvalidDataException("发件箱请求为空 " + PathValue);
                 var Arguments = Request.Arguments;
-                await Coordinator.ReportAsync(Request.InstanceId, Request.ThreadId, Arguments.GetProperty("task_id").GetString()!, Arguments.GetProperty("outcome").GetString()!, Arguments.GetProperty("summary").GetString()!, Arguments.GetProperty("artifacts").EnumerateArray().Select(Item => Item.GetString()!).ToList());
+                await Coordinator.ReportAsync(Request.InstanceId, Request.ThreadId, Arguments.GetProperty("task_id").GetString()!, Arguments.GetProperty("outcome").GetString()!, Arguments.GetProperty("summary").GetString()!, Arguments.GetProperty("artifacts").EnumerateArray().Select(Item => Item.GetString()!).ToList(), WaitForNotification);
                 File.Delete(PathValue);
                 Recovered++;
             }
+            catch (FileNotFoundException) when (!File.Exists(PathValue)) { }
             catch (OperationCanceledException) when (Cancellation.IsCancellationRequested) { throw; }
-            catch (Exception Error) when (Error is IOException or InvalidOperationException or JsonException or KeyNotFoundException)
+            catch (Exception Error) when (Error is IOException or InvalidDataException or InvalidOperationException or JsonException or KeyNotFoundException)
             {
                 Program.LogError(Error);
-                if (Error is not IOException) File.Move(PathValue, PathValue + ".rejected", true);
+                if (Error is not IOException) PreserveRejected(PathValue);
                 Failed++;
             }
         }
         return (Recovered, Failed);
+    }
+
+    private static string? PreserveRejected(string PathValue)
+    {
+        string Retained = PathValue + "." + Guid.NewGuid().ToString("N") + ".rejected";
+        try { File.Move(PathValue, Retained); }
+        catch (FileNotFoundException) { return null; }
+        return Retained;
     }
 
     public static string Save(RelayRequest Request, string DirectoryPath)

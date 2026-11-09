@@ -57,6 +57,7 @@ public static class AgentCli
         progress --json-file <UTF-8 JSON文件>  task_id stage(started|progress|blocked) message
         tree --task-id <任务ID> [--offset 0]
         retry-return --task-id <任务ID> --confirmed true
+        inbox [--after <上一页的 next_after>]  列出本主会话待处理回传 正文用 status --task-id 查看
         reconcile --task-id <任务ID> --session-id <已核对的会话ID> --confirmed true
         doctor [--instance <实例>]  无需会话身份 不启动模型
         install --instance <实例> [--skill <Skill目录>]
@@ -174,7 +175,7 @@ public static class AgentCli
             string Command = Call.Command switch
             {
                 "instances" => "agent_instances", "projects" => "agent_projects", "sessions" => "agent_sessions", "start" => "agent_start",
-                "report" => "relay_report", "status" => "agent_task", "cancel" => "agent_cancel", "accept" => "relay_accept",
+                "report" => "relay_report", "status" => "agent_task", "inbox" => "agent_inbox", "cancel" => "agent_cancel", "accept" => "relay_accept",
                 "progress" => "relay_progress", "tree" => "agent_tree", "retry-return" => "agent_retry_return", "reconcile" => "agent_reconcile", "open" => "agent_open", "resume" => "agent_resume", "cleanup" => "agent_cleanup",
                 _ => throw new InvalidOperationException("未知命令 " + Call.Command)
             };
@@ -210,6 +211,7 @@ public static class AgentCli
             "progress" => new[] { "json-file" },
             "doctor" => new[] { "instance" },
             "tree" => new[] { "task-id", "offset" },
+            "inbox" => new[] { "after" },
             "retry-return" => new[] { "task-id", "confirmed" },
             "reconcile" => new[] { "task-id", "session-id", "confirmed" },
             "open" => new[] { "instance", "session-id" },
