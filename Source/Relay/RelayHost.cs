@@ -75,7 +75,10 @@ public sealed class RelayHost : IDisposable
             case "relay_channel":
                 return Coordinator.Channel ?? throw new InvalidOperationException("请先绑定联调通道");
             case "relay_dispatch":
-                return Describe(await Coordinator.DispatchAsync(Request.InstanceId, Request.ThreadId, Request.InstanceId + "/" + Request.ThreadId + "/" + Arguments.GetProperty("request_id").GetString(), Arguments.GetProperty("title").GetString()!, Arguments.GetProperty("instructions").GetString()!, Arguments.GetProperty("acceptance").GetString()!));
+            {
+                var Item = await Coordinator.DispatchAsync(Request.InstanceId, Request.ThreadId, Request.InstanceId + "/" + Request.ThreadId + "/" + Arguments.GetProperty("request_id").GetString(), Arguments.GetProperty("title").GetString()!, Arguments.GetProperty("instructions").GetString()!, Arguments.GetProperty("acceptance").GetString()!);
+                return Describe(Item, Item.State == eRelayState.Running ? RelayLimits.DispatchWaitInstruction : "按已保存的任务状态继续处理 不重复派发");
+            }
             case "relay_report":
                 return Describe(await Coordinator.ReportAsync(Request.InstanceId, Request.ThreadId, Arguments.GetProperty("task_id").GetString()!, Arguments.GetProperty("outcome").GetString()!, Arguments.GetProperty("summary").GetString()!, Arguments.GetProperty("artifacts").EnumerateArray().Select(Item => Item.GetString()!).ToList()));
             case "relay_progress":
@@ -87,5 +90,5 @@ public sealed class RelayHost : IDisposable
         }
     }
 
-    private static object Describe(RelayTask Item) => new { task_id = Item.Id, state = RelayLimits.StateText(Item.State), outcome = Item.Outcome, instruction = "执行结果需要明确回调 主会话派发后结束当前回合 等待管理器事件回传 不要轮询" };
+    private static object Describe(RelayTask Item, string Instruction = "") => new { task_id = Item.Id, state = RelayLimits.StateText(Item.State), outcome = Item.Outcome, instruction = Instruction };
 }

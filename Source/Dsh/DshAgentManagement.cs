@@ -35,6 +35,9 @@ public sealed partial class AgentManagementService
         };
         var Item = await Coordinator.DispatchAsync(Caller.Id, ThreadId, Key, Text(Arguments, "title"), Text(Arguments, "instructions"), Text(Arguments, "acceptance"), Route,
             Number(Arguments, "session_max", 1), SubagentMax, CrossAgentMax: Number(Arguments, "cross_agent_max", 1), WorkerLimits: WorkerLimits, TreeBudget: ReadTreeBudget(Arguments), Workspace: Workspace);
-        return new { task_id = Item.Id, state = RelayLimits.StateText(Item.State), instance_id = DshRelayRunner.InstanceId, thread_id = Item.Channel.WorkerThreadId, project_id = Item.Channel.ProjectId, cwd = Item.Channel.WorkingDirectory, worker_limits = Item.WorkerLimits, instruction = "管理器按原请求监测 DSH 桌面会话并回传结果 结束当前回合等待事件 不要轮询或重复派发" };
+        string Instruction = Item.State == eRelayState.Running
+            ? "管理器按原请求监测 DSH 桌面会话并回传结果 " + RelayLimits.DispatchWaitInstruction
+            : "按已保存的任务状态继续处理 不重复派发";
+        return new { task_id = Item.Id, state = RelayLimits.StateText(Item.State), instance_id = DshRelayRunner.InstanceId, thread_id = Item.Channel.WorkerThreadId, project_id = Item.Channel.ProjectId, cwd = Item.Channel.WorkingDirectory, worker_limits = Item.WorkerLimits, instruction = Instruction };
     }
 }

@@ -161,7 +161,7 @@ public sealed partial class AgentManagementService
             Number(Arguments, "cross_agent_max", 1), ReadWorkerLimits(Arguments, SubagentMax), ReadTreeBudget(Arguments), Workspace);
         string Instruction = Item.State switch
         {
-            eRelayState.Running => "结束当前回合 等待执行会话主动回传 不要轮询",
+            eRelayState.Running => RelayLimits.DispatchWaitInstruction,
             eRelayState.DispatchUncertain or eRelayState.ReturnUncertain => "投递状态待核对 请查看任务记录与目标对话 不得自动重复创建或发送",
             _ => "按已保存的任务状态继续处理 不得重新执行已完成或终止的任务"
         };

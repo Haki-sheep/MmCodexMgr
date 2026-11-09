@@ -41,7 +41,7 @@ public sealed partial class AgentManagementService
             task_id = Item.Id, state = RelayLimits.StateText(Item.State), instance_id = CursorRelayRunner.InstanceId,
             thread_id = Item.Channel.WorkerThreadId, cwd = Cwd, model = Model, worker_limits = Item.WorkerLimits,
             tree_budget = Item.TreeBudget, tree_depth = Item.TreeDepth, workspace = Item.Workspace,
-            instruction = Item.State == eRelayState.Running ? "Cursor CLI 直接执行当前任务 管理器自动回传结果 结束当前回合等待事件 不要轮询" : "返回原任务记录 不重复启动 Cursor 派发或回传待核对时先核对目标会话"
+            instruction = Item.State == eRelayState.Running ? "Cursor CLI 直接执行当前任务 管理器自动回传结果 " + RelayLimits.DispatchWaitInstruction : "返回原任务记录 不重复启动 Cursor 派发或回传待核对时先核对目标会话"
         };
     }
 }

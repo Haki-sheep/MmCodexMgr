@@ -72,7 +72,7 @@ public static class RelayMcp
     private static object[] LegacyTools() => new object[]
     {
         Tool("relay_channel", "读取用户在 MmCodexMgr 中绑定的跨实例联调通道 仅使用该通道派发与回传 不得自行更换会话", new { }, Array.Empty<string>()),
-        Tool("relay_dispatch", "主会话向用户已绑定的执行会话派发明确任务 用户启用通道即授权本任务交接及其结果回传 request_id 为本次业务请求的唯一标识 重试必须保持不变 成功后结束当前回合 由管理器事件唤醒 不要轮询", new { request_id = Text(128), title = Text(120), instructions = Text(RelayLimits.MaxTextLength), acceptance = Text(RelayLimits.MaxTextLength) }, new[] { "request_id", "title", "instructions", "acceptance" }),
+        Tool("relay_dispatch", "主会话向用户已绑定的执行会话派发明确任务 用户启用通道即授权本任务交接及其结果回传 request_id 为本次业务请求的唯一标识 重试必须保持不变 " + RelayLimits.DispatchWaitInstruction, new { request_id = Text(128), title = Text(120), instructions = Text(RelayLimits.MaxTextLength), acceptance = Text(RelayLimits.MaxTextLength) }, new[] { "request_id", "title", "instructions", "acceptance" }),
         Tool("relay_report", "执行会话主动回报绑定任务 completed 表示待验收 needs_decision 表示需要主会话判断 failed 表示执行失败 结果由管理器回传用户授权的原主会话 相同内容重试不会重复回传 报告后结束回合", new { task_id = Text(128), outcome = new { type = "string", @enum = new[] { "completed", "needs_decision", "failed" } }, summary = Text(RelayLimits.MaxTextLength), artifacts = new { type = "array", items = Text(1024), maxItems = 20 } }, new[] { "task_id", "outcome", "summary", "artifacts" }),
         Tool("relay_accept", "仅主会话在根据原需求验证完成后调用 确认联调任务验收通过 不得因为执行会话自报完成就直接确认", new { task_id = Text(128) }, new[] { "task_id" })
     };
