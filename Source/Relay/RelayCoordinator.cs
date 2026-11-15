@@ -69,7 +69,7 @@ public sealed partial class RelayCoordinator : IDisposable
     #endregion
 
     #region Commands
-    public async Task<RelayTask> DispatchAsync(string InstanceId, string ThreadId, string RequestKey, string Title, string Instructions, string Acceptance, RelayChannel? Route = null, int SessionMax = 1, int SubagentMax = RelayLimits.DefaultSubagentMax, Func<RelayTask, Task<RelayThread>>? CreateAsync = null, int CrossAgentMax = 1, RelayAgentLimits? WorkerLimits = null, RelayTreeBudget? TreeBudget = null, RelayWorkspace? Workspace = null)
+    public async Task<RelayTask> DispatchAsync(string InstanceId, string ThreadId, string RequestKey, string Title, string Instructions, string Acceptance, RelayChannel? Route = null, int SessionMax = 1, int SubagentMax = RelayLimits.DefaultSubagentMax, Func<RelayTask, Task<RelayThread>>? CreateAsync = null, int CrossAgentMax = 1, RelayAgentLimits? WorkerLimits = null, RelayTreeBudget? TreeBudget = null, RelayWorkspace? Workspace = null, DshConnection? ResolvedDsh = null)
     {
         await Gate.WaitAsync(Lifetime.Token);
         try
@@ -120,7 +120,7 @@ public sealed partial class RelayCoordinator : IDisposable
                 if (Bridge is DesktopRelayBridge && Current.CallbackCliPath.Length == 0 && Current.WorkerInstance.Id != DshRelayRunner.InstanceId) RelayToolInstaller.RequireInstalled(Current.WorkerInstance);
                 if (Current.WorkerInstance.Id == DshRelayRunner.InstanceId)
                 {
-                    await (Dsh ?? throw new InvalidOperationException("当前管理器未启用 DSH 执行端")).PrepareAsync(Item, Lifetime.Token, () => Store.Save(Item));
+                    await (Dsh ?? throw new InvalidOperationException("当前管理器未启用 DSH 执行端")).PrepareAsync(Item, Lifetime.Token, () => Store.Save(Item), ResolvedDsh);
                 }
                 else if (Current.WorkerInstance.Id == CursorRelayRunner.InstanceId)
                 {
@@ -136,7 +136,7 @@ public sealed partial class RelayCoordinator : IDisposable
                 Change(Item, eRelayState.Running, Current.WorkerInstance.Id == DshRelayRunner.InstanceId ? "DSH 会话已准备 等待桌面请求确认" : Current.WorkerInstance.Id == CursorRelayRunner.InstanceId ? "Cursor 会话已准备 等待 CLI 执行开始事件" : "桌面已接收派发 等待执行会话主动回调");
                 ArmDeadline(Item);
                 if (Current.WorkerInstance.Id == CursorRelayRunner.InstanceId) LaunchCursor(Item);
-                else if (Current.WorkerInstance.Id == DshRelayRunner.InstanceId) LaunchDsh(Item);
+                else if (Current.WorkerInstance.Id == DshRelayRunner.InstanceId) LaunchDsh(Item, Resolved: ResolvedDsh);
                 else _ = WatchWorkerAsync(Item);
             }
             catch (Exception Error)
@@ -426,9 +426,9 @@ public sealed partial class RelayCoordinator : IDisposable
         catch (Exception Error) { Program.LogError(Error); }
     }
 
-    private void LaunchDsh(RelayTask Item, bool ObserveOnly = false) => (Dsh ?? throw new InvalidOperationException("DSH 执行端未连接")).Launch(Item,
+    private void LaunchDsh(RelayTask Item, bool ObserveOnly = false, DshConnection? Resolved = null) => (Dsh ?? throw new InvalidOperationException("DSH 执行端未连接")).Launch(Item,
         (Stage, Message) => ProgressAsync(DshRelayRunner.InstanceId, Item.Channel.WorkerThreadId, Item.Id, Stage, Message),
-        Result => ReportAsync(DshRelayRunner.InstanceId, Item.Channel.WorkerThreadId, Item.Id, Result.Outcome, Result.Summary, Result.Artifacts), Lifetime.Token, ObserveOnly);
+        Result => ReportAsync(DshRelayRunner.InstanceId, Item.Channel.WorkerThreadId, Item.Id, Result.Outcome, Result.Summary, Result.Artifacts), Lifetime.Token, ObserveOnly, Resolved);
 
     private void OnInstanceExited(string InstanceId) => _ = HandleInstanceExitAsync(InstanceId);
 

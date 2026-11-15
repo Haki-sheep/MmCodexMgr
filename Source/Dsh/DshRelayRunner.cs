@@ -29,9 +29,12 @@ public sealed class DshRelayRunner : IDisposable
 
     public static DshSettings Settings(RelayTask Item) => new() { HomePath = Item.Channel.WorkerInstance.HomePath, ServerUrl = Item.Channel.DshServerUrl };
 
-    public async Task PrepareAsync(RelayTask Item, CancellationToken Cancellation, Action? PersistSession = null)
+    private Task<DshDesktopClient> ConnectAsync(RelayTask Item, DshConnection? Resolved, CancellationToken Cancellation) =>
+        Resolved is null ? Connect(Settings(Item), Cancellation) : Task.FromResult(new DshDesktopClient(Resolved));
+
+    public async Task PrepareAsync(RelayTask Item, CancellationToken Cancellation, Action? PersistSession = null, DshConnection? Resolved = null)
     {
-        using var Client = await Connect(Settings(Item), Cancellation);
+        using var Client = await ConnectAsync(Item, Resolved, Cancellation);
         if (Item.Channel.WorkerThreadId.Length == 0)
         {
             string Id = "session-" + Guid.NewGuid().ToString("D");
@@ -45,16 +48,16 @@ public sealed class DshRelayRunner : IDisposable
         if (!ManagerPaths.Same(Session.Cwd, Item.Channel.WorkingDirectory)) throw new InvalidOperationException("DSH 会话工作目录已变化 请重新核对目标");
     }
 
-    public void Launch(RelayTask Item, Func<string, string, Task> Progress, Func<CursorReport, Task> Report, CancellationToken Cancellation, bool ObserveOnly = false)
+    public void Launch(RelayTask Item, Func<string, string, Task> Progress, Func<CursorReport, Task> Report, CancellationToken Cancellation, bool ObserveOnly = false, DshConnection? Resolved = null)
     {
         var Lifetime = CancellationTokenSource.CreateLinkedTokenSource(Cancellation);
         if (!RunningDict.TryAdd(Item.Id, Lifetime)) { Lifetime.Dispose(); throw new InvalidOperationException("DSH 任务已在监测 " + Item.Id); }
-        _ = ExecuteAsync(Item, Progress, Report, Lifetime, ObserveOnly);
+        _ = ExecuteAsync(Item, Progress, Report, Lifetime, ObserveOnly, Resolved);
     }
 
-    private async Task ExecuteAsync(RelayTask Item, Func<string, string, Task> Progress, Func<CursorReport, Task> Report, CancellationTokenSource Lifetime, bool ObserveOnly)
+    private async Task ExecuteAsync(RelayTask Item, Func<string, string, Task> Progress, Func<CursorReport, Task> Report, CancellationTokenSource Lifetime, bool ObserveOnly, DshConnection? Resolved)
     {
-        try { await RunAsync(Item, Progress, Report, Lifetime, ObserveOnly); }
+        try { await RunAsync(Item, Progress, Report, Lifetime, ObserveOnly, Resolved); }
         finally
         {
             lock (Lifetime)
@@ -66,12 +69,12 @@ public sealed class DshRelayRunner : IDisposable
         }
     }
 
-    private async Task RunAsync(RelayTask Item, Func<string, string, Task> Progress, Func<CursorReport, Task> Report, CancellationTokenSource Lifetime, bool ObserveOnly)
+    private async Task RunAsync(RelayTask Item, Func<string, string, Task> Progress, Func<CursorReport, Task> Report, CancellationTokenSource Lifetime, bool ObserveOnly, DshConnection? Resolved)
     {
         CursorReport Result;
         try
         {
-            using var Client = await Connect(Settings(Item), Lifetime.Token);
+            using var Client = await ConnectAsync(Item, Resolved, Lifetime.Token);
             string RequestId = "mmcodex-" + Item.Id;
             if (!ObserveOnly)
             {

@@ -17,8 +17,9 @@ public sealed partial class AgentManagementService
         string? Project = OptionalText(Arguments, "project");
         var ProjectList = Client.Workspaces();
         var SelectedProject = Project is null ? null : DshCli.ResolveWorkspace(ProjectList, Project);
-        var SessionList = await Client.SessionsAsync(Cancellation);
-        var Session = Selector is null ? null : Unique(SessionList.Where(Value => !Value.Archived && (Value.Id == Selector || Value.Title == Selector) && (SelectedProject is null || SelectedProject.SessionIdList.Contains(Value.Id))).ToList(), "DSH 会话", Value => Value.Id, Value => Value.Title);
+        var Session = Selector is null ? null : Unique((await Client.SessionsAsync(Cancellation))
+            .Where(Value => !Value.Archived && (Value.Id == Selector || Value.Title == Selector) && (SelectedProject is null || SelectedProject.SessionIdList.Contains(Value.Id))).ToList(),
+            "DSH 会话", Value => Value.Id, Value => Value.Title);
         var TargetProject = SelectedProject ?? (Session is null ? ProjectList.Single(Value => Value.Default) : ProjectList.SingleOrDefault(Value => Value.SessionIdList.Contains(Session.Id)));
         if (Existing is null && Session?.Running == true) throw new InvalidOperationException("DSH 会话正在执行");
         int SubagentMax = ReadSubagentMax(Arguments, Caller, ThreadId, Existing);
@@ -34,7 +35,7 @@ public sealed partial class AgentManagementService
             DshServerUrl = Settings.Dsh.ServerUrl, TimeoutMinutes = Number(Arguments, "timeout_minutes", 60)
         };
         var Item = await Coordinator.DispatchAsync(Caller.Id, ThreadId, Key, Text(Arguments, "title"), Text(Arguments, "instructions"), Text(Arguments, "acceptance"), Route,
-            Number(Arguments, "session_max", 1), SubagentMax, CrossAgentMax: Number(Arguments, "cross_agent_max", 1), WorkerLimits: WorkerLimits, TreeBudget: ReadTreeBudget(Arguments), Workspace: Workspace);
+            Number(Arguments, "session_max", 1), SubagentMax, CrossAgentMax: Number(Arguments, "cross_agent_max", 1), WorkerLimits: WorkerLimits, TreeBudget: ReadTreeBudget(Arguments), Workspace: Workspace, ResolvedDsh: Client.Connection);
         string Instruction = Item.State == eRelayState.Running
             ? "管理器按原请求监测 DSH 桌面会话并回传结果 " + RelayLimits.DispatchWaitInstruction
             : "按已保存的任务状态继续处理 不重复派发";
