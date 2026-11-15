@@ -1,0 +1,2995 @@
+{
+  "format": "fxforge-preset",
+  "version": 1,
+  "title": "一墨断江 · Sumi Sword Slash Forward · 顺势收尾",
+  "category": "原创刀光",
+  "tags": [
+    "水",
+    "墨",
+    " ",
+    "武",
+    "侠",
+    "刀",
+    "光",
+    "飞",
+    "白",
+    "泼",
+    "朱",
+    "砂",
+    "顺势收尾"
+  ],
+  "effect": {
+    "version": 1,
+    "space": "3d",
+    "name": "一墨断江 · Sumi Sword Slash Forward",
+    "duration": 4.6,
+    "fps": 30,
+    "loop": "once",
+    "background": "#eee9df",
+    "seed": 116219,
+    "fixedSeed": true,
+    "showCharacter": false,
+    "bloom": {
+      "enabled": false,
+      "intensity": 0,
+      "threshold": 1,
+      "radius": 0
+    },
+    "layers": [
+      {
+        "id": "wash0",
+        "name": "1式 · 淡墨拖影",
+        "visible": true,
+        "blend": "normal",
+        "empty": false,
+        "parentId": "",
+        "position": {
+          "x": 0,
+          "y": 1.5,
+          "z": 0
+        },
+        "rotation": {
+          "x": 59,
+          "y": 14,
+          "z": -36
+        },
+        "startLifetime": {
+          "min": 0.62,
+          "max": 0.62
+        },
+        "startSpeed": {
+          "min": 0,
+          "max": 0
+        },
+        "startSize": {
+          "min": 6.48,
+          "max": 6.48
+        },
+        "startRotation": {
+          "min": 10.359375,
+          "max": 10.359375
+        },
+        "startColor": "#ffffff",
+        "startColor2": "#ffffff",
+        "gravityModifier": 0,
+        "maxParticles": 1000,
+        "simulationSpace": "local",
+        "rate": 0,
+        "bursts": [
+          {
+            "time": 0.5,
+            "count": 1
+          }
+        ],
+        "startDelay": 0,
+        "stopAfter": 0,
+        "shape": "sphere",
+        "radius": 0,
+        "radiusThickness": 1,
+        "angle": 20,
+        "arc": 360,
+        "boxSize": {
+          "x": 1,
+          "y": 1,
+          "z": 1
+        },
+        "randomDirection": 0,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "orbital": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "radial": 0,
+        "force": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "drag": 0,
+        "noiseStrength": 0,
+        "noiseFrequency": 0.8,
+        "noiseScroll": 0,
+        "colors": [
+          {
+            "t": 0,
+            "color": "#ffffff"
+          },
+          {
+            "t": 1,
+            "color": "#ffffff"
+          }
+        ],
+        "stepped": false,
+        "alpha": 0.55,
+        "fadeIn": 0,
+        "fadeOut": 0.67,
+        "sizeEnd": 1.18,
+        "sizeEase": "linear",
+        "spin": {
+          "min": 0,
+          "max": 0
+        },
+        "floor": false,
+        "floorY": 0,
+        "bounce": 0.4,
+        "dampen": 0.2,
+        "lifetimeLoss": 0,
+        "minKillSpeed": 0,
+        "sprite": "soft",
+        "renderMode": "mesh",
+        "lengthScale": 2,
+        "velocityScale": 0.1,
+        "mesh": "ring",
+        "meshAlign": "local",
+        "material": {
+          "intensity": 1,
+          "mainTexture": "sprite",
+          "texture": "",
+          "shader": "s_inkforwardwash",
+          "scrollX": 0,
+          "scrollY": 0,
+          "dissolve": false,
+          "dissolveFrom": 0,
+          "dissolveTo": 1,
+          "dissolveEdge": 0.08,
+          "dissolveEdgeColor": "#ffffff",
+          "dissolveScale": 1,
+          "fresnel": 0,
+          "fresnelPower": 2,
+          "fresnelColor": "#ffffff",
+          "softness": 0
+        },
+        "sheet": {
+          "enabled": false,
+          "texture": "smoke",
+          "asset": "",
+          "mode": "lifetime",
+          "cycles": 1,
+          "fps": 24,
+          "randomStart": false
+        },
+        "trails": false,
+        "trailRatio": 1,
+        "trailLifetime": 0.3,
+        "trailWidth": 1,
+        "trailWidthEnd": 0,
+        "trailColor": "#ffffff",
+        "trailInheritColor": true,
+        "subEmitterOf": "",
+        "subEvent": "death",
+        "inheritColor": false,
+        "inheritSize": false,
+        "inheritVelocity": 0
+      },
+      {
+        "id": "brush0",
+        "name": "1式 · 浓墨刀弧",
+        "visible": true,
+        "blend": "normal",
+        "empty": false,
+        "parentId": "",
+        "position": {
+          "x": 0,
+          "y": 1.5,
+          "z": 0
+        },
+        "rotation": {
+          "x": 59,
+          "y": 14,
+          "z": -32
+        },
+        "startLifetime": {
+          "min": 0.48,
+          "max": 0.48
+        },
+        "startSpeed": {
+          "min": 0,
+          "max": 0
+        },
+        "startSize": {
+          "min": 6,
+          "max": 6
+        },
+        "startRotation": {
+          "min": 11.7,
+          "max": 11.7
+        },
+        "startColor": "#ffffff",
+        "startColor2": "#ffffff",
+        "gravityModifier": 0,
+        "maxParticles": 1000,
+        "simulationSpace": "local",
+        "rate": 0,
+        "bursts": [
+          {
+            "time": 0.48,
+            "count": 1
+          }
+        ],
+        "startDelay": 0,
+        "stopAfter": 0,
+        "shape": "sphere",
+        "radius": 0,
+        "radiusThickness": 1,
+        "angle": 20,
+        "arc": 360,
+        "boxSize": {
+          "x": 1,
+          "y": 1,
+          "z": 1
+        },
+        "randomDirection": 0,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "orbital": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "radial": 0,
+        "force": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "drag": 0,
+        "noiseStrength": 0,
+        "noiseFrequency": 0.8,
+        "noiseScroll": 0,
+        "colors": [
+          {
+            "t": 0,
+            "color": "#ffffff"
+          },
+          {
+            "t": 1,
+            "color": "#ffffff"
+          }
+        ],
+        "stepped": false,
+        "alpha": 1,
+        "fadeIn": 0,
+        "fadeOut": 0.4,
+        "sizeEnd": 1.08,
+        "sizeEase": "linear",
+        "spin": {
+          "min": 0,
+          "max": 0
+        },
+        "floor": false,
+        "floorY": 0,
+        "bounce": 0.4,
+        "dampen": 0.2,
+        "lifetimeLoss": 0,
+        "minKillSpeed": 0,
+        "sprite": "soft",
+        "renderMode": "mesh",
+        "lengthScale": 2,
+        "velocityScale": 0.1,
+        "mesh": "ring",
+        "meshAlign": "local",
+        "material": {
+          "intensity": 1,
+          "mainTexture": "sprite",
+          "texture": "",
+          "shader": "s_inkforwardbrush",
+          "scrollX": 0,
+          "scrollY": 0,
+          "dissolve": false,
+          "dissolveFrom": 0,
+          "dissolveTo": 1,
+          "dissolveEdge": 0.08,
+          "dissolveEdgeColor": "#ffffff",
+          "dissolveScale": 1,
+          "fresnel": 0,
+          "fresnelPower": 2,
+          "fresnelColor": "#ffffff",
+          "softness": 0
+        },
+        "sheet": {
+          "enabled": false,
+          "texture": "smoke",
+          "asset": "",
+          "mode": "lifetime",
+          "cycles": 1,
+          "fps": 24,
+          "randomStart": false
+        },
+        "trails": false,
+        "trailRatio": 1,
+        "trailLifetime": 0.3,
+        "trailWidth": 1,
+        "trailWidthEnd": 0,
+        "trailColor": "#ffffff",
+        "trailInheritColor": true,
+        "subEmitterOf": "",
+        "subEvent": "death",
+        "inheritColor": false,
+        "inheritSize": false,
+        "inheritVelocity": 0
+      },
+      {
+        "id": "fibers0",
+        "name": "1式 · 枯笔飞白",
+        "visible": true,
+        "blend": "normal",
+        "empty": false,
+        "parentId": "",
+        "position": {
+          "x": 0,
+          "y": 1.5,
+          "z": 0
+        },
+        "rotation": {
+          "x": 56,
+          "y": 14,
+          "z": -28
+        },
+        "startLifetime": {
+          "min": 0.56,
+          "max": 0.56
+        },
+        "startSpeed": {
+          "min": 0,
+          "max": 0
+        },
+        "startSize": {
+          "min": 6.24,
+          "max": 6.24
+        },
+        "startRotation": {
+          "min": 10.659,
+          "max": 10.659
+        },
+        "startColor": "#ffffff",
+        "startColor2": "#ffffff",
+        "gravityModifier": 0,
+        "maxParticles": 1000,
+        "simulationSpace": "local",
+        "rate": 0,
+        "bursts": [
+          {
+            "time": 0.515,
+            "count": 1
+          }
+        ],
+        "startDelay": 0,
+        "stopAfter": 0,
+        "shape": "sphere",
+        "radius": 0,
+        "radiusThickness": 1,
+        "angle": 20,
+        "arc": 360,
+        "boxSize": {
+          "x": 1,
+          "y": 1,
+          "z": 1
+        },
+        "randomDirection": 0,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "orbital": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "radial": 0,
+        "force": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "drag": 0,
+        "noiseStrength": 0,
+        "noiseFrequency": 0.8,
+        "noiseScroll": 0,
+        "colors": [
+          {
+            "t": 0,
+            "color": "#ffffff"
+          },
+          {
+            "t": 1,
+            "color": "#ffffff"
+          }
+        ],
+        "stepped": false,
+        "alpha": 0.4,
+        "fadeIn": 0,
+        "fadeOut": 0.62,
+        "sizeEnd": 1.2,
+        "sizeEase": "linear",
+        "spin": {
+          "min": 0,
+          "max": 0
+        },
+        "floor": false,
+        "floorY": 0,
+        "bounce": 0.4,
+        "dampen": 0.2,
+        "lifetimeLoss": 0,
+        "minKillSpeed": 0,
+        "sprite": "soft",
+        "renderMode": "mesh",
+        "lengthScale": 2,
+        "velocityScale": 0.1,
+        "mesh": "ring",
+        "meshAlign": "local",
+        "material": {
+          "intensity": 1,
+          "mainTexture": "sprite",
+          "texture": "",
+          "shader": "s_inkforwardfibers",
+          "scrollX": 0,
+          "scrollY": 0,
+          "dissolve": false,
+          "dissolveFrom": 0,
+          "dissolveTo": 1,
+          "dissolveEdge": 0.08,
+          "dissolveEdgeColor": "#ffffff",
+          "dissolveScale": 1,
+          "fresnel": 0,
+          "fresnelPower": 2,
+          "fresnelColor": "#ffffff",
+          "softness": 0
+        },
+        "sheet": {
+          "enabled": false,
+          "texture": "smoke",
+          "asset": "",
+          "mode": "lifetime",
+          "cycles": 1,
+          "fps": 24,
+          "randomStart": false
+        },
+        "trails": false,
+        "trailRatio": 1,
+        "trailLifetime": 0.3,
+        "trailWidth": 1,
+        "trailWidthEnd": 0,
+        "trailColor": "#ffffff",
+        "trailInheritColor": true,
+        "subEmitterOf": "",
+        "subEvent": "death",
+        "inheritColor": false,
+        "inheritSize": false,
+        "inheritVelocity": 0
+      },
+      {
+        "id": "drops0",
+        "name": "1式 · 飞溅墨点",
+        "visible": true,
+        "blend": "normal",
+        "empty": false,
+        "parentId": "",
+        "position": {
+          "x": 0,
+          "y": 1.5,
+          "z": 0
+        },
+        "rotation": {
+          "x": 59,
+          "y": 14,
+          "z": -32
+        },
+        "startLifetime": {
+          "min": 0.35,
+          "max": 0.85
+        },
+        "startSpeed": {
+          "min": 0.4,
+          "max": 3.1
+        },
+        "startSize": {
+          "min": 0.025,
+          "max": 0.09
+        },
+        "startRotation": {
+          "min": 0,
+          "max": 360
+        },
+        "startColor": "#ffffff",
+        "startColor2": "#ffffff",
+        "gravityModifier": 0.1,
+        "maxParticles": 1000,
+        "simulationSpace": "local",
+        "rate": 0,
+        "bursts": [
+          {
+            "time": 0.59,
+            "count": 48
+          }
+        ],
+        "startDelay": 0,
+        "stopAfter": 0,
+        "shape": "circle",
+        "radius": 2.2800000000000002,
+        "radiusThickness": 0.22,
+        "angle": 20,
+        "arc": 245,
+        "boxSize": {
+          "x": 1,
+          "y": 1,
+          "z": 1
+        },
+        "randomDirection": 0,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "orbital": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "radial": 0,
+        "force": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "drag": 1.3,
+        "noiseStrength": 0,
+        "noiseFrequency": 0.8,
+        "noiseScroll": 0,
+        "colors": [
+          {
+            "t": 0,
+            "color": "#1a1e1e"
+          },
+          {
+            "t": 0.5,
+            "color": "#3b403d"
+          },
+          {
+            "t": 1,
+            "color": "#797d76"
+          }
+        ],
+        "stepped": false,
+        "alpha": 1,
+        "fadeIn": 0,
+        "fadeOut": 0.72,
+        "sizeEnd": 0.35,
+        "sizeEase": "linear",
+        "spin": {
+          "min": 0,
+          "max": 0
+        },
+        "floor": false,
+        "floorY": 0,
+        "bounce": 0.4,
+        "dampen": 0.2,
+        "lifetimeLoss": 0,
+        "minKillSpeed": 0,
+        "sprite": "soft",
+        "renderMode": "billboard",
+        "lengthScale": 2,
+        "velocityScale": 0.1,
+        "mesh": "shard",
+        "meshAlign": "random",
+        "material": {
+          "intensity": 1,
+          "mainTexture": "sprite",
+          "texture": "",
+          "shader": "s_inkslashblot",
+          "scrollX": 0,
+          "scrollY": 0,
+          "dissolve": false,
+          "dissolveFrom": 0,
+          "dissolveTo": 1,
+          "dissolveEdge": 0.08,
+          "dissolveEdgeColor": "#ffffff",
+          "dissolveScale": 1,
+          "fresnel": 0,
+          "fresnelPower": 2,
+          "fresnelColor": "#ffffff",
+          "softness": 0
+        },
+        "sheet": {
+          "enabled": false,
+          "texture": "smoke",
+          "asset": "",
+          "mode": "lifetime",
+          "cycles": 1,
+          "fps": 24,
+          "randomStart": false
+        },
+        "trails": false,
+        "trailRatio": 1,
+        "trailLifetime": 0.3,
+        "trailWidth": 1,
+        "trailWidthEnd": 0,
+        "trailColor": "#ffffff",
+        "trailInheritColor": true,
+        "subEmitterOf": "",
+        "subEvent": "death",
+        "inheritColor": false,
+        "inheritSize": false,
+        "inheritVelocity": 0
+      },
+      {
+        "id": "splats0",
+        "name": "1式 · 浓墨甩尾",
+        "visible": true,
+        "blend": "normal",
+        "empty": false,
+        "parentId": "",
+        "position": {
+          "x": 0,
+          "y": 1.5,
+          "z": 0
+        },
+        "rotation": {
+          "x": 59,
+          "y": 14,
+          "z": -32
+        },
+        "startLifetime": {
+          "min": 0.45,
+          "max": 0.9
+        },
+        "startSpeed": {
+          "min": 0.2,
+          "max": 1.1
+        },
+        "startSize": {
+          "min": 0.13,
+          "max": 0.34
+        },
+        "startRotation": {
+          "min": 0,
+          "max": 360
+        },
+        "startColor": "#ffffff",
+        "startColor2": "#ffffff",
+        "gravityModifier": 0.05,
+        "maxParticles": 1000,
+        "simulationSpace": "local",
+        "rate": 0,
+        "bursts": [
+          {
+            "time": 0.6599999999999999,
+            "count": 7
+          }
+        ],
+        "startDelay": 0,
+        "stopAfter": 0,
+        "shape": "circle",
+        "radius": 2.34,
+        "radiusThickness": 0.08,
+        "angle": 20,
+        "arc": 235,
+        "boxSize": {
+          "x": 1,
+          "y": 1,
+          "z": 1
+        },
+        "randomDirection": 0,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "orbital": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "radial": 0,
+        "force": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "drag": 0.8,
+        "noiseStrength": 0,
+        "noiseFrequency": 0.8,
+        "noiseScroll": 0,
+        "colors": [
+          {
+            "t": 0,
+            "color": "#222724"
+          },
+          {
+            "t": 0.5,
+            "color": "#4c524d"
+          },
+          {
+            "t": 1,
+            "color": "#8b9188"
+          }
+        ],
+        "stepped": false,
+        "alpha": 1,
+        "fadeIn": 0,
+        "fadeOut": 0.8,
+        "sizeEnd": 1.1,
+        "sizeEase": "linear",
+        "spin": {
+          "min": 0,
+          "max": 0
+        },
+        "floor": false,
+        "floorY": 0,
+        "bounce": 0.4,
+        "dampen": 0.2,
+        "lifetimeLoss": 0,
+        "minKillSpeed": 0,
+        "sprite": "soft",
+        "renderMode": "billboard",
+        "lengthScale": 2,
+        "velocityScale": 0.1,
+        "mesh": "shard",
+        "meshAlign": "random",
+        "material": {
+          "intensity": 1,
+          "mainTexture": "sprite",
+          "texture": "",
+          "shader": "s_inkslashblot",
+          "scrollX": 0,
+          "scrollY": 0,
+          "dissolve": false,
+          "dissolveFrom": 0,
+          "dissolveTo": 1,
+          "dissolveEdge": 0.08,
+          "dissolveEdgeColor": "#ffffff",
+          "dissolveScale": 1,
+          "fresnel": 0,
+          "fresnelPower": 2,
+          "fresnelColor": "#ffffff",
+          "softness": 0
+        },
+        "sheet": {
+          "enabled": false,
+          "texture": "smoke",
+          "asset": "",
+          "mode": "lifetime",
+          "cycles": 1,
+          "fps": 24,
+          "randomStart": false
+        },
+        "trails": false,
+        "trailRatio": 1,
+        "trailLifetime": 0.3,
+        "trailWidth": 1,
+        "trailWidthEnd": 0,
+        "trailColor": "#ffffff",
+        "trailInheritColor": true,
+        "subEmitterOf": "",
+        "subEvent": "death",
+        "inheritColor": false,
+        "inheritSize": false,
+        "inheritVelocity": 0
+      },
+      {
+        "id": "wash1",
+        "name": "2式 · 淡墨拖影",
+        "visible": true,
+        "blend": "normal",
+        "empty": false,
+        "parentId": "",
+        "position": {
+          "x": 0.05,
+          "y": 1.65,
+          "z": 0
+        },
+        "rotation": {
+          "x": 25,
+          "y": -17,
+          "z": 40
+        },
+        "startLifetime": {
+          "min": 0.85,
+          "max": 0.85
+        },
+        "startSpeed": {
+          "min": 0,
+          "max": 0
+        },
+        "startSize": {
+          "min": 7.0200000000000005,
+          "max": 7.0200000000000005
+        },
+        "startRotation": {
+          "min": 0,
+          "max": 0
+        },
+        "startColor": "#ffffff",
+        "startColor2": "#ffffff",
+        "gravityModifier": 0,
+        "maxParticles": 1000,
+        "simulationSpace": "local",
+        "rate": 0,
+        "bursts": [
+          {
+            "time": 1.21,
+            "count": 1
+          }
+        ],
+        "startDelay": 0,
+        "stopAfter": 0,
+        "shape": "sphere",
+        "radius": 0,
+        "radiusThickness": 1,
+        "angle": 20,
+        "arc": 360,
+        "boxSize": {
+          "x": 1,
+          "y": 1,
+          "z": 1
+        },
+        "randomDirection": 0,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "orbital": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "radial": 0,
+        "force": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "drag": 0,
+        "noiseStrength": 0,
+        "noiseFrequency": 0.8,
+        "noiseScroll": 0,
+        "colors": [
+          {
+            "t": 0,
+            "color": "#ffffff"
+          },
+          {
+            "t": 1,
+            "color": "#ffffff"
+          }
+        ],
+        "stepped": false,
+        "alpha": 0.55,
+        "fadeIn": 0,
+        "fadeOut": 0.67,
+        "sizeEnd": 1.18,
+        "sizeEase": "linear",
+        "spin": {
+          "min": -58.5,
+          "max": -58.5
+        },
+        "floor": false,
+        "floorY": 0,
+        "bounce": 0.4,
+        "dampen": 0.2,
+        "lifetimeLoss": 0,
+        "minKillSpeed": 0,
+        "sprite": "soft",
+        "renderMode": "mesh",
+        "lengthScale": 2,
+        "velocityScale": 0.1,
+        "mesh": "ring",
+        "meshAlign": "local",
+        "material": {
+          "intensity": 1,
+          "mainTexture": "sprite",
+          "texture": "",
+          "shader": "s_inkslashwash",
+          "scrollX": 0,
+          "scrollY": 0,
+          "dissolve": false,
+          "dissolveFrom": 0,
+          "dissolveTo": 1,
+          "dissolveEdge": 0.08,
+          "dissolveEdgeColor": "#ffffff",
+          "dissolveScale": 1,
+          "fresnel": 0,
+          "fresnelPower": 2,
+          "fresnelColor": "#ffffff",
+          "softness": 0
+        },
+        "sheet": {
+          "enabled": false,
+          "texture": "smoke",
+          "asset": "",
+          "mode": "lifetime",
+          "cycles": 1,
+          "fps": 24,
+          "randomStart": false
+        },
+        "trails": false,
+        "trailRatio": 1,
+        "trailLifetime": 0.3,
+        "trailWidth": 1,
+        "trailWidthEnd": 0,
+        "trailColor": "#ffffff",
+        "trailInheritColor": true,
+        "subEmitterOf": "",
+        "subEvent": "death",
+        "inheritColor": false,
+        "inheritSize": false,
+        "inheritVelocity": 0
+      },
+      {
+        "id": "brush1",
+        "name": "2式 · 浓墨刀弧",
+        "visible": true,
+        "blend": "normal",
+        "empty": false,
+        "parentId": "",
+        "position": {
+          "x": 0.05,
+          "y": 1.65,
+          "z": 0
+        },
+        "rotation": {
+          "x": 25,
+          "y": -17,
+          "z": 44
+        },
+        "startLifetime": {
+          "min": 0.65,
+          "max": 0.65
+        },
+        "startSpeed": {
+          "min": 0,
+          "max": 0
+        },
+        "startSize": {
+          "min": 6.5,
+          "max": 6.5
+        },
+        "startRotation": {
+          "min": 0,
+          "max": 0
+        },
+        "startColor": "#ffffff",
+        "startColor2": "#ffffff",
+        "gravityModifier": 0,
+        "maxParticles": 1000,
+        "simulationSpace": "local",
+        "rate": 0,
+        "bursts": [
+          {
+            "time": 1.19,
+            "count": 1
+          }
+        ],
+        "startDelay": 0,
+        "stopAfter": 0,
+        "shape": "sphere",
+        "radius": 0,
+        "radiusThickness": 1,
+        "angle": 20,
+        "arc": 360,
+        "boxSize": {
+          "x": 1,
+          "y": 1,
+          "z": 1
+        },
+        "randomDirection": 0,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "orbital": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "radial": 0,
+        "force": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "drag": 0,
+        "noiseStrength": 0,
+        "noiseFrequency": 0.8,
+        "noiseScroll": 0,
+        "colors": [
+          {
+            "t": 0,
+            "color": "#ffffff"
+          },
+          {
+            "t": 1,
+            "color": "#ffffff"
+          }
+        ],
+        "stepped": false,
+        "alpha": 1,
+        "fadeIn": 0,
+        "fadeOut": 0.4,
+        "sizeEnd": 1.08,
+        "sizeEase": "linear",
+        "spin": {
+          "min": -90,
+          "max": -90
+        },
+        "floor": false,
+        "floorY": 0,
+        "bounce": 0.4,
+        "dampen": 0.2,
+        "lifetimeLoss": 0,
+        "minKillSpeed": 0,
+        "sprite": "soft",
+        "renderMode": "mesh",
+        "lengthScale": 2,
+        "velocityScale": 0.1,
+        "mesh": "ring",
+        "meshAlign": "local",
+        "material": {
+          "intensity": 1,
+          "mainTexture": "sprite",
+          "texture": "",
+          "shader": "s_inkslashbrush",
+          "scrollX": 0,
+          "scrollY": 0,
+          "dissolve": false,
+          "dissolveFrom": 0,
+          "dissolveTo": 1,
+          "dissolveEdge": 0.08,
+          "dissolveEdgeColor": "#ffffff",
+          "dissolveScale": 1,
+          "fresnel": 0,
+          "fresnelPower": 2,
+          "fresnelColor": "#ffffff",
+          "softness": 0
+        },
+        "sheet": {
+          "enabled": false,
+          "texture": "smoke",
+          "asset": "",
+          "mode": "lifetime",
+          "cycles": 1,
+          "fps": 24,
+          "randomStart": false
+        },
+        "trails": false,
+        "trailRatio": 1,
+        "trailLifetime": 0.3,
+        "trailWidth": 1,
+        "trailWidthEnd": 0,
+        "trailColor": "#ffffff",
+        "trailInheritColor": true,
+        "subEmitterOf": "",
+        "subEvent": "death",
+        "inheritColor": false,
+        "inheritSize": false,
+        "inheritVelocity": 0
+      },
+      {
+        "id": "fibers1",
+        "name": "2式 · 枯笔飞白",
+        "visible": true,
+        "blend": "normal",
+        "empty": false,
+        "parentId": "",
+        "position": {
+          "x": 0.05,
+          "y": 1.65,
+          "z": 0
+        },
+        "rotation": {
+          "x": 22,
+          "y": -17,
+          "z": 48
+        },
+        "startLifetime": {
+          "min": 0.76,
+          "max": 0.76
+        },
+        "startSpeed": {
+          "min": 0,
+          "max": 0
+        },
+        "startSize": {
+          "min": 6.76,
+          "max": 6.76
+        },
+        "startRotation": {
+          "min": 0,
+          "max": 0
+        },
+        "startColor": "#ffffff",
+        "startColor2": "#ffffff",
+        "gravityModifier": 0,
+        "maxParticles": 1000,
+        "simulationSpace": "local",
+        "rate": 0,
+        "bursts": [
+          {
+            "time": 1.2249999999999999,
+            "count": 1
+          }
+        ],
+        "startDelay": 0,
+        "stopAfter": 0,
+        "shape": "sphere",
+        "radius": 0,
+        "radiusThickness": 1,
+        "angle": 20,
+        "arc": 360,
+        "boxSize": {
+          "x": 1,
+          "y": 1,
+          "z": 1
+        },
+        "randomDirection": 0,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "orbital": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "radial": 0,
+        "force": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "drag": 0,
+        "noiseStrength": 0,
+        "noiseFrequency": 0.8,
+        "noiseScroll": 0,
+        "colors": [
+          {
+            "t": 0,
+            "color": "#ffffff"
+          },
+          {
+            "t": 1,
+            "color": "#ffffff"
+          }
+        ],
+        "stepped": false,
+        "alpha": 0.4,
+        "fadeIn": 0,
+        "fadeOut": 0.62,
+        "sizeEnd": 1.2,
+        "sizeEase": "linear",
+        "spin": {
+          "min": -76.5,
+          "max": -76.5
+        },
+        "floor": false,
+        "floorY": 0,
+        "bounce": 0.4,
+        "dampen": 0.2,
+        "lifetimeLoss": 0,
+        "minKillSpeed": 0,
+        "sprite": "soft",
+        "renderMode": "mesh",
+        "lengthScale": 2,
+        "velocityScale": 0.1,
+        "mesh": "ring",
+        "meshAlign": "local",
+        "material": {
+          "intensity": 1,
+          "mainTexture": "sprite",
+          "texture": "",
+          "shader": "s_inkslashfibers",
+          "scrollX": 0,
+          "scrollY": 0,
+          "dissolve": false,
+          "dissolveFrom": 0,
+          "dissolveTo": 1,
+          "dissolveEdge": 0.08,
+          "dissolveEdgeColor": "#ffffff",
+          "dissolveScale": 1,
+          "fresnel": 0,
+          "fresnelPower": 2,
+          "fresnelColor": "#ffffff",
+          "softness": 0
+        },
+        "sheet": {
+          "enabled": false,
+          "texture": "smoke",
+          "asset": "",
+          "mode": "lifetime",
+          "cycles": 1,
+          "fps": 24,
+          "randomStart": false
+        },
+        "trails": false,
+        "trailRatio": 1,
+        "trailLifetime": 0.3,
+        "trailWidth": 1,
+        "trailWidthEnd": 0,
+        "trailColor": "#ffffff",
+        "trailInheritColor": true,
+        "subEmitterOf": "",
+        "subEvent": "death",
+        "inheritColor": false,
+        "inheritSize": false,
+        "inheritVelocity": 0
+      },
+      {
+        "id": "drops1",
+        "name": "2式 · 飞溅墨点",
+        "visible": true,
+        "blend": "normal",
+        "empty": false,
+        "parentId": "",
+        "position": {
+          "x": 0.05,
+          "y": 1.65,
+          "z": 0
+        },
+        "rotation": {
+          "x": 25,
+          "y": -17,
+          "z": 44
+        },
+        "startLifetime": {
+          "min": 0.35,
+          "max": 0.85
+        },
+        "startSpeed": {
+          "min": 0.4,
+          "max": 3.1
+        },
+        "startSize": {
+          "min": 0.025,
+          "max": 0.09
+        },
+        "startRotation": {
+          "min": 0,
+          "max": 360
+        },
+        "startColor": "#ffffff",
+        "startColor2": "#ffffff",
+        "gravityModifier": 0.1,
+        "maxParticles": 1000,
+        "simulationSpace": "local",
+        "rate": 0,
+        "bursts": [
+          {
+            "time": 1.3,
+            "count": 48
+          }
+        ],
+        "startDelay": 0,
+        "stopAfter": 0,
+        "shape": "circle",
+        "radius": 2.47,
+        "radiusThickness": 0.22,
+        "angle": 20,
+        "arc": 245,
+        "boxSize": {
+          "x": 1,
+          "y": 1,
+          "z": 1
+        },
+        "randomDirection": 0,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "orbital": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "radial": 0,
+        "force": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "drag": 1.3,
+        "noiseStrength": 0,
+        "noiseFrequency": 0.8,
+        "noiseScroll": 0,
+        "colors": [
+          {
+            "t": 0,
+            "color": "#1a1e1e"
+          },
+          {
+            "t": 0.5,
+            "color": "#3b403d"
+          },
+          {
+            "t": 1,
+            "color": "#797d76"
+          }
+        ],
+        "stepped": false,
+        "alpha": 1,
+        "fadeIn": 0,
+        "fadeOut": 0.72,
+        "sizeEnd": 0.35,
+        "sizeEase": "linear",
+        "spin": {
+          "min": 0,
+          "max": 0
+        },
+        "floor": false,
+        "floorY": 0,
+        "bounce": 0.4,
+        "dampen": 0.2,
+        "lifetimeLoss": 0,
+        "minKillSpeed": 0,
+        "sprite": "soft",
+        "renderMode": "billboard",
+        "lengthScale": 2,
+        "velocityScale": 0.1,
+        "mesh": "shard",
+        "meshAlign": "random",
+        "material": {
+          "intensity": 1,
+          "mainTexture": "sprite",
+          "texture": "",
+          "shader": "s_inkslashblot",
+          "scrollX": 0,
+          "scrollY": 0,
+          "dissolve": false,
+          "dissolveFrom": 0,
+          "dissolveTo": 1,
+          "dissolveEdge": 0.08,
+          "dissolveEdgeColor": "#ffffff",
+          "dissolveScale": 1,
+          "fresnel": 0,
+          "fresnelPower": 2,
+          "fresnelColor": "#ffffff",
+          "softness": 0
+        },
+        "sheet": {
+          "enabled": false,
+          "texture": "smoke",
+          "asset": "",
+          "mode": "lifetime",
+          "cycles": 1,
+          "fps": 24,
+          "randomStart": false
+        },
+        "trails": false,
+        "trailRatio": 1,
+        "trailLifetime": 0.3,
+        "trailWidth": 1,
+        "trailWidthEnd": 0,
+        "trailColor": "#ffffff",
+        "trailInheritColor": true,
+        "subEmitterOf": "",
+        "subEvent": "death",
+        "inheritColor": false,
+        "inheritSize": false,
+        "inheritVelocity": 0
+      },
+      {
+        "id": "splats1",
+        "name": "2式 · 浓墨甩尾",
+        "visible": true,
+        "blend": "normal",
+        "empty": false,
+        "parentId": "",
+        "position": {
+          "x": 0.05,
+          "y": 1.65,
+          "z": 0
+        },
+        "rotation": {
+          "x": 25,
+          "y": -17,
+          "z": 44
+        },
+        "startLifetime": {
+          "min": 0.45,
+          "max": 0.9
+        },
+        "startSpeed": {
+          "min": 0.2,
+          "max": 1.1
+        },
+        "startSize": {
+          "min": 0.13,
+          "max": 0.34
+        },
+        "startRotation": {
+          "min": 0,
+          "max": 360
+        },
+        "startColor": "#ffffff",
+        "startColor2": "#ffffff",
+        "gravityModifier": 0.05,
+        "maxParticles": 1000,
+        "simulationSpace": "local",
+        "rate": 0,
+        "bursts": [
+          {
+            "time": 1.3699999999999999,
+            "count": 7
+          }
+        ],
+        "startDelay": 0,
+        "stopAfter": 0,
+        "shape": "circle",
+        "radius": 2.535,
+        "radiusThickness": 0.08,
+        "angle": 20,
+        "arc": 235,
+        "boxSize": {
+          "x": 1,
+          "y": 1,
+          "z": 1
+        },
+        "randomDirection": 0,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "orbital": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "radial": 0,
+        "force": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "drag": 0.8,
+        "noiseStrength": 0,
+        "noiseFrequency": 0.8,
+        "noiseScroll": 0,
+        "colors": [
+          {
+            "t": 0,
+            "color": "#222724"
+          },
+          {
+            "t": 0.5,
+            "color": "#4c524d"
+          },
+          {
+            "t": 1,
+            "color": "#8b9188"
+          }
+        ],
+        "stepped": false,
+        "alpha": 1,
+        "fadeIn": 0,
+        "fadeOut": 0.8,
+        "sizeEnd": 1.1,
+        "sizeEase": "linear",
+        "spin": {
+          "min": 0,
+          "max": 0
+        },
+        "floor": false,
+        "floorY": 0,
+        "bounce": 0.4,
+        "dampen": 0.2,
+        "lifetimeLoss": 0,
+        "minKillSpeed": 0,
+        "sprite": "soft",
+        "renderMode": "billboard",
+        "lengthScale": 2,
+        "velocityScale": 0.1,
+        "mesh": "shard",
+        "meshAlign": "random",
+        "material": {
+          "intensity": 1,
+          "mainTexture": "sprite",
+          "texture": "",
+          "shader": "s_inkslashblot",
+          "scrollX": 0,
+          "scrollY": 0,
+          "dissolve": false,
+          "dissolveFrom": 0,
+          "dissolveTo": 1,
+          "dissolveEdge": 0.08,
+          "dissolveEdgeColor": "#ffffff",
+          "dissolveScale": 1,
+          "fresnel": 0,
+          "fresnelPower": 2,
+          "fresnelColor": "#ffffff",
+          "softness": 0
+        },
+        "sheet": {
+          "enabled": false,
+          "texture": "smoke",
+          "asset": "",
+          "mode": "lifetime",
+          "cycles": 1,
+          "fps": 24,
+          "randomStart": false
+        },
+        "trails": false,
+        "trailRatio": 1,
+        "trailLifetime": 0.3,
+        "trailWidth": 1,
+        "trailWidthEnd": 0,
+        "trailColor": "#ffffff",
+        "trailInheritColor": true,
+        "subEmitterOf": "",
+        "subEvent": "death",
+        "inheritColor": false,
+        "inheritSize": false,
+        "inheritVelocity": 0
+      },
+      {
+        "id": "wash2",
+        "name": "3式 · 淡墨拖影",
+        "visible": true,
+        "blend": "normal",
+        "empty": false,
+        "parentId": "",
+        "position": {
+          "x": 0,
+          "y": 1.55,
+          "z": 0
+        },
+        "rotation": {
+          "x": 23,
+          "y": 28,
+          "z": -52
+        },
+        "startLifetime": {
+          "min": 0.78,
+          "max": 0.78
+        },
+        "startSpeed": {
+          "min": 0,
+          "max": 0
+        },
+        "startSize": {
+          "min": 7.884,
+          "max": 7.884
+        },
+        "startRotation": {
+          "min": 19.110000000000003,
+          "max": 19.110000000000003
+        },
+        "startColor": "#ffffff",
+        "startColor2": "#ffffff",
+        "gravityModifier": 0,
+        "maxParticles": 1000,
+        "simulationSpace": "local",
+        "rate": 0,
+        "bursts": [
+          {
+            "time": 2.58,
+            "count": 1
+          }
+        ],
+        "startDelay": 0,
+        "stopAfter": 0,
+        "shape": "sphere",
+        "radius": 0,
+        "radiusThickness": 1,
+        "angle": 20,
+        "arc": 360,
+        "boxSize": {
+          "x": 1,
+          "y": 1,
+          "z": 1
+        },
+        "randomDirection": 0,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "orbital": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "radial": 0,
+        "force": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "drag": 0,
+        "noiseStrength": 0,
+        "noiseFrequency": 0.8,
+        "noiseScroll": 0,
+        "colors": [
+          {
+            "t": 0,
+            "color": "#ffffff"
+          },
+          {
+            "t": 1,
+            "color": "#ffffff"
+          }
+        ],
+        "stepped": false,
+        "alpha": 0.55,
+        "fadeIn": 0,
+        "fadeOut": 0.67,
+        "sizeEnd": 1.18,
+        "sizeEase": "linear",
+        "spin": {
+          "min": 0,
+          "max": 0
+        },
+        "floor": false,
+        "floorY": 0,
+        "bounce": 0.4,
+        "dampen": 0.2,
+        "lifetimeLoss": 0,
+        "minKillSpeed": 0,
+        "sprite": "soft",
+        "renderMode": "mesh",
+        "lengthScale": 2,
+        "velocityScale": 0.1,
+        "mesh": "ring",
+        "meshAlign": "local",
+        "material": {
+          "intensity": 1,
+          "mainTexture": "sprite",
+          "texture": "",
+          "shader": "s_inkforwardwash",
+          "scrollX": 0,
+          "scrollY": 0,
+          "dissolve": false,
+          "dissolveFrom": 0,
+          "dissolveTo": 1,
+          "dissolveEdge": 0.08,
+          "dissolveEdgeColor": "#ffffff",
+          "dissolveScale": 1,
+          "fresnel": 0,
+          "fresnelPower": 2,
+          "fresnelColor": "#ffffff",
+          "softness": 0
+        },
+        "sheet": {
+          "enabled": false,
+          "texture": "smoke",
+          "asset": "",
+          "mode": "lifetime",
+          "cycles": 1,
+          "fps": 24,
+          "randomStart": false
+        },
+        "trails": false,
+        "trailRatio": 1,
+        "trailLifetime": 0.3,
+        "trailWidth": 1,
+        "trailWidthEnd": 0,
+        "trailColor": "#ffffff",
+        "trailInheritColor": true,
+        "subEmitterOf": "",
+        "subEvent": "death",
+        "inheritColor": false,
+        "inheritSize": false,
+        "inheritVelocity": 0
+      },
+      {
+        "id": "brush2",
+        "name": "3式 · 浓墨刀弧",
+        "visible": true,
+        "blend": "normal",
+        "empty": false,
+        "parentId": "",
+        "position": {
+          "x": 0,
+          "y": 1.55,
+          "z": 0
+        },
+        "rotation": {
+          "x": 23,
+          "y": 28,
+          "z": -48
+        },
+        "startLifetime": {
+          "min": 0.6,
+          "max": 0.6
+        },
+        "startSpeed": {
+          "min": 0,
+          "max": 0
+        },
+        "startSize": {
+          "min": 7.3,
+          "max": 7.3
+        },
+        "startRotation": {
+          "min": 20.915999999999997,
+          "max": 20.915999999999997
+        },
+        "startColor": "#ffffff",
+        "startColor2": "#ffffff",
+        "gravityModifier": 0,
+        "maxParticles": 1000,
+        "simulationSpace": "local",
+        "rate": 0,
+        "bursts": [
+          {
+            "time": 2.56,
+            "count": 1
+          }
+        ],
+        "startDelay": 0,
+        "stopAfter": 0,
+        "shape": "sphere",
+        "radius": 0,
+        "radiusThickness": 1,
+        "angle": 20,
+        "arc": 360,
+        "boxSize": {
+          "x": 1,
+          "y": 1,
+          "z": 1
+        },
+        "randomDirection": 0,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "orbital": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "radial": 0,
+        "force": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "drag": 0,
+        "noiseStrength": 0,
+        "noiseFrequency": 0.8,
+        "noiseScroll": 0,
+        "colors": [
+          {
+            "t": 0,
+            "color": "#ffffff"
+          },
+          {
+            "t": 1,
+            "color": "#ffffff"
+          }
+        ],
+        "stepped": false,
+        "alpha": 1,
+        "fadeIn": 0,
+        "fadeOut": 0.4,
+        "sizeEnd": 1.08,
+        "sizeEase": "linear",
+        "spin": {
+          "min": 0,
+          "max": 0
+        },
+        "floor": false,
+        "floorY": 0,
+        "bounce": 0.4,
+        "dampen": 0.2,
+        "lifetimeLoss": 0,
+        "minKillSpeed": 0,
+        "sprite": "soft",
+        "renderMode": "mesh",
+        "lengthScale": 2,
+        "velocityScale": 0.1,
+        "mesh": "ring",
+        "meshAlign": "local",
+        "material": {
+          "intensity": 1,
+          "mainTexture": "sprite",
+          "texture": "",
+          "shader": "s_inkforwardbrush",
+          "scrollX": 0,
+          "scrollY": 0,
+          "dissolve": false,
+          "dissolveFrom": 0,
+          "dissolveTo": 1,
+          "dissolveEdge": 0.08,
+          "dissolveEdgeColor": "#ffffff",
+          "dissolveScale": 1,
+          "fresnel": 0,
+          "fresnelPower": 2,
+          "fresnelColor": "#ffffff",
+          "softness": 0
+        },
+        "sheet": {
+          "enabled": false,
+          "texture": "smoke",
+          "asset": "",
+          "mode": "lifetime",
+          "cycles": 1,
+          "fps": 24,
+          "randomStart": false
+        },
+        "trails": false,
+        "trailRatio": 1,
+        "trailLifetime": 0.3,
+        "trailWidth": 1,
+        "trailWidthEnd": 0,
+        "trailColor": "#ffffff",
+        "trailInheritColor": true,
+        "subEmitterOf": "",
+        "subEvent": "death",
+        "inheritColor": false,
+        "inheritSize": false,
+        "inheritVelocity": 0
+      },
+      {
+        "id": "fibers2",
+        "name": "3式 · 枯笔飞白",
+        "visible": true,
+        "blend": "normal",
+        "empty": false,
+        "parentId": "",
+        "position": {
+          "x": 0,
+          "y": 1.55,
+          "z": 0
+        },
+        "rotation": {
+          "x": 20,
+          "y": 28,
+          "z": -44
+        },
+        "startLifetime": {
+          "min": 0.7,
+          "max": 0.7
+        },
+        "startSpeed": {
+          "min": 0,
+          "max": 0
+        },
+        "startSize": {
+          "min": 7.592,
+          "max": 7.592
+        },
+        "startRotation": {
+          "min": 18.65325,
+          "max": 18.65325
+        },
+        "startColor": "#ffffff",
+        "startColor2": "#ffffff",
+        "gravityModifier": 0,
+        "maxParticles": 1000,
+        "simulationSpace": "local",
+        "rate": 0,
+        "bursts": [
+          {
+            "time": 2.595,
+            "count": 1
+          }
+        ],
+        "startDelay": 0,
+        "stopAfter": 0,
+        "shape": "sphere",
+        "radius": 0,
+        "radiusThickness": 1,
+        "angle": 20,
+        "arc": 360,
+        "boxSize": {
+          "x": 1,
+          "y": 1,
+          "z": 1
+        },
+        "randomDirection": 0,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "orbital": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "radial": 0,
+        "force": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "drag": 0,
+        "noiseStrength": 0,
+        "noiseFrequency": 0.8,
+        "noiseScroll": 0,
+        "colors": [
+          {
+            "t": 0,
+            "color": "#ffffff"
+          },
+          {
+            "t": 1,
+            "color": "#ffffff"
+          }
+        ],
+        "stepped": false,
+        "alpha": 0.4,
+        "fadeIn": 0,
+        "fadeOut": 0.62,
+        "sizeEnd": 1.2,
+        "sizeEase": "linear",
+        "spin": {
+          "min": 0,
+          "max": 0
+        },
+        "floor": false,
+        "floorY": 0,
+        "bounce": 0.4,
+        "dampen": 0.2,
+        "lifetimeLoss": 0,
+        "minKillSpeed": 0,
+        "sprite": "soft",
+        "renderMode": "mesh",
+        "lengthScale": 2,
+        "velocityScale": 0.1,
+        "mesh": "ring",
+        "meshAlign": "local",
+        "material": {
+          "intensity": 1,
+          "mainTexture": "sprite",
+          "texture": "",
+          "shader": "s_inkforwardfibers",
+          "scrollX": 0,
+          "scrollY": 0,
+          "dissolve": false,
+          "dissolveFrom": 0,
+          "dissolveTo": 1,
+          "dissolveEdge": 0.08,
+          "dissolveEdgeColor": "#ffffff",
+          "dissolveScale": 1,
+          "fresnel": 0,
+          "fresnelPower": 2,
+          "fresnelColor": "#ffffff",
+          "softness": 0
+        },
+        "sheet": {
+          "enabled": false,
+          "texture": "smoke",
+          "asset": "",
+          "mode": "lifetime",
+          "cycles": 1,
+          "fps": 24,
+          "randomStart": false
+        },
+        "trails": false,
+        "trailRatio": 1,
+        "trailLifetime": 0.3,
+        "trailWidth": 1,
+        "trailWidthEnd": 0,
+        "trailColor": "#ffffff",
+        "trailInheritColor": true,
+        "subEmitterOf": "",
+        "subEvent": "death",
+        "inheritColor": false,
+        "inheritSize": false,
+        "inheritVelocity": 0
+      },
+      {
+        "id": "drops2",
+        "name": "3式 · 飞溅墨点",
+        "visible": true,
+        "blend": "normal",
+        "empty": false,
+        "parentId": "",
+        "position": {
+          "x": 0,
+          "y": 1.55,
+          "z": 0
+        },
+        "rotation": {
+          "x": 23,
+          "y": 28,
+          "z": -48
+        },
+        "startLifetime": {
+          "min": 0.35,
+          "max": 0.85
+        },
+        "startSpeed": {
+          "min": 0.4,
+          "max": 3.1
+        },
+        "startSize": {
+          "min": 0.025,
+          "max": 0.09
+        },
+        "startRotation": {
+          "min": 0,
+          "max": 360
+        },
+        "startColor": "#ffffff",
+        "startColor2": "#ffffff",
+        "gravityModifier": 0.1,
+        "maxParticles": 1000,
+        "simulationSpace": "local",
+        "rate": 0,
+        "bursts": [
+          {
+            "time": 2.67,
+            "count": 82
+          }
+        ],
+        "startDelay": 0,
+        "stopAfter": 0,
+        "shape": "circle",
+        "radius": 2.774,
+        "radiusThickness": 0.22,
+        "angle": 20,
+        "arc": 245,
+        "boxSize": {
+          "x": 1,
+          "y": 1,
+          "z": 1
+        },
+        "randomDirection": 0,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "orbital": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "radial": 0,
+        "force": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "drag": 1.3,
+        "noiseStrength": 0,
+        "noiseFrequency": 0.8,
+        "noiseScroll": 0,
+        "colors": [
+          {
+            "t": 0,
+            "color": "#1a1e1e"
+          },
+          {
+            "t": 0.5,
+            "color": "#3b403d"
+          },
+          {
+            "t": 1,
+            "color": "#797d76"
+          }
+        ],
+        "stepped": false,
+        "alpha": 1,
+        "fadeIn": 0,
+        "fadeOut": 0.72,
+        "sizeEnd": 0.35,
+        "sizeEase": "linear",
+        "spin": {
+          "min": 0,
+          "max": 0
+        },
+        "floor": false,
+        "floorY": 0,
+        "bounce": 0.4,
+        "dampen": 0.2,
+        "lifetimeLoss": 0,
+        "minKillSpeed": 0,
+        "sprite": "soft",
+        "renderMode": "billboard",
+        "lengthScale": 2,
+        "velocityScale": 0.1,
+        "mesh": "shard",
+        "meshAlign": "random",
+        "material": {
+          "intensity": 1,
+          "mainTexture": "sprite",
+          "texture": "",
+          "shader": "s_inkslashblot",
+          "scrollX": 0,
+          "scrollY": 0,
+          "dissolve": false,
+          "dissolveFrom": 0,
+          "dissolveTo": 1,
+          "dissolveEdge": 0.08,
+          "dissolveEdgeColor": "#ffffff",
+          "dissolveScale": 1,
+          "fresnel": 0,
+          "fresnelPower": 2,
+          "fresnelColor": "#ffffff",
+          "softness": 0
+        },
+        "sheet": {
+          "enabled": false,
+          "texture": "smoke",
+          "asset": "",
+          "mode": "lifetime",
+          "cycles": 1,
+          "fps": 24,
+          "randomStart": false
+        },
+        "trails": false,
+        "trailRatio": 1,
+        "trailLifetime": 0.3,
+        "trailWidth": 1,
+        "trailWidthEnd": 0,
+        "trailColor": "#ffffff",
+        "trailInheritColor": true,
+        "subEmitterOf": "",
+        "subEvent": "death",
+        "inheritColor": false,
+        "inheritSize": false,
+        "inheritVelocity": 0
+      },
+      {
+        "id": "splats2",
+        "name": "3式 · 浓墨甩尾",
+        "visible": true,
+        "blend": "normal",
+        "empty": false,
+        "parentId": "",
+        "position": {
+          "x": 0,
+          "y": 1.55,
+          "z": 0
+        },
+        "rotation": {
+          "x": 23,
+          "y": 28,
+          "z": -48
+        },
+        "startLifetime": {
+          "min": 0.45,
+          "max": 0.9
+        },
+        "startSpeed": {
+          "min": 0.2,
+          "max": 1.1
+        },
+        "startSize": {
+          "min": 0.13,
+          "max": 0.34
+        },
+        "startRotation": {
+          "min": 0,
+          "max": 360
+        },
+        "startColor": "#ffffff",
+        "startColor2": "#ffffff",
+        "gravityModifier": 0.05,
+        "maxParticles": 1000,
+        "simulationSpace": "local",
+        "rate": 0,
+        "bursts": [
+          {
+            "time": 2.74,
+            "count": 7
+          }
+        ],
+        "startDelay": 0,
+        "stopAfter": 0,
+        "shape": "circle",
+        "radius": 2.847,
+        "radiusThickness": 0.08,
+        "angle": 20,
+        "arc": 235,
+        "boxSize": {
+          "x": 1,
+          "y": 1,
+          "z": 1
+        },
+        "randomDirection": 0,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "orbital": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "radial": 0,
+        "force": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "drag": 0.8,
+        "noiseStrength": 0,
+        "noiseFrequency": 0.8,
+        "noiseScroll": 0,
+        "colors": [
+          {
+            "t": 0,
+            "color": "#222724"
+          },
+          {
+            "t": 0.5,
+            "color": "#4c524d"
+          },
+          {
+            "t": 1,
+            "color": "#8b9188"
+          }
+        ],
+        "stepped": false,
+        "alpha": 1,
+        "fadeIn": 0,
+        "fadeOut": 0.8,
+        "sizeEnd": 1.1,
+        "sizeEase": "linear",
+        "spin": {
+          "min": 0,
+          "max": 0
+        },
+        "floor": false,
+        "floorY": 0,
+        "bounce": 0.4,
+        "dampen": 0.2,
+        "lifetimeLoss": 0,
+        "minKillSpeed": 0,
+        "sprite": "soft",
+        "renderMode": "billboard",
+        "lengthScale": 2,
+        "velocityScale": 0.1,
+        "mesh": "shard",
+        "meshAlign": "random",
+        "material": {
+          "intensity": 1,
+          "mainTexture": "sprite",
+          "texture": "",
+          "shader": "s_inkslashblot",
+          "scrollX": 0,
+          "scrollY": 0,
+          "dissolve": false,
+          "dissolveFrom": 0,
+          "dissolveTo": 1,
+          "dissolveEdge": 0.08,
+          "dissolveEdgeColor": "#ffffff",
+          "dissolveScale": 1,
+          "fresnel": 0,
+          "fresnelPower": 2,
+          "fresnelColor": "#ffffff",
+          "softness": 0
+        },
+        "sheet": {
+          "enabled": false,
+          "texture": "smoke",
+          "asset": "",
+          "mode": "lifetime",
+          "cycles": 1,
+          "fps": 24,
+          "randomStart": false
+        },
+        "trails": false,
+        "trailRatio": 1,
+        "trailLifetime": 0.3,
+        "trailWidth": 1,
+        "trailWidthEnd": 0,
+        "trailColor": "#ffffff",
+        "trailInheritColor": true,
+        "subEmitterOf": "",
+        "subEvent": "death",
+        "inheritColor": false,
+        "inheritSize": false,
+        "inheritVelocity": 0
+      },
+      {
+        "id": "breath",
+        "name": "蓄势 · 墨息",
+        "visible": true,
+        "blend": "normal",
+        "empty": false,
+        "parentId": "",
+        "position": {
+          "x": -0.6,
+          "y": 1.1,
+          "z": 0.1
+        },
+        "rotation": {
+          "x": -90,
+          "y": 0,
+          "z": 0
+        },
+        "startLifetime": {
+          "min": 0.35,
+          "max": 0.63
+        },
+        "startSpeed": {
+          "min": 0.15,
+          "max": 0.4
+        },
+        "startSize": {
+          "min": 0.22,
+          "max": 0.48
+        },
+        "startRotation": {
+          "min": 0,
+          "max": 0
+        },
+        "startColor": "#ffffff",
+        "startColor2": "#ffffff",
+        "gravityModifier": 0,
+        "maxParticles": 1000,
+        "simulationSpace": "local",
+        "rate": 0,
+        "bursts": [
+          {
+            "time": 0.08,
+            "count": 5
+          },
+          {
+            "time": 2.05,
+            "count": 6
+          }
+        ],
+        "startDelay": 0,
+        "stopAfter": 0,
+        "shape": "sphere",
+        "radius": 0.22,
+        "radiusThickness": 1,
+        "angle": 20,
+        "arc": 360,
+        "boxSize": {
+          "x": 1,
+          "y": 1,
+          "z": 1
+        },
+        "randomDirection": 0,
+        "velocity": {
+          "x": 0,
+          "y": 0.15,
+          "z": 0
+        },
+        "orbital": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "radial": 0,
+        "force": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "drag": 0,
+        "noiseStrength": 0.3,
+        "noiseFrequency": 0.8,
+        "noiseScroll": 0,
+        "colors": [
+          {
+            "t": 0,
+            "color": "#667067"
+          },
+          {
+            "t": 0.5,
+            "color": "#90998d"
+          },
+          {
+            "t": 1,
+            "color": "#babeb1"
+          }
+        ],
+        "stepped": false,
+        "alpha": 0.2,
+        "fadeIn": 0,
+        "fadeOut": 0.85,
+        "sizeEnd": 1.4,
+        "sizeEase": "linear",
+        "spin": {
+          "min": 0,
+          "max": 0
+        },
+        "floor": false,
+        "floorY": 0,
+        "bounce": 0.4,
+        "dampen": 0.2,
+        "lifetimeLoss": 0,
+        "minKillSpeed": 0,
+        "sprite": "soft",
+        "renderMode": "billboard",
+        "lengthScale": 2,
+        "velocityScale": 0.1,
+        "mesh": "shard",
+        "meshAlign": "random",
+        "material": {
+          "intensity": 1,
+          "mainTexture": "sprite",
+          "texture": "",
+          "shader": "s_inkslashblot",
+          "scrollX": 0,
+          "scrollY": 0,
+          "dissolve": false,
+          "dissolveFrom": 0,
+          "dissolveTo": 1,
+          "dissolveEdge": 0.08,
+          "dissolveEdgeColor": "#ffffff",
+          "dissolveScale": 1,
+          "fresnel": 0,
+          "fresnelPower": 2,
+          "fresnelColor": "#ffffff",
+          "softness": 0
+        },
+        "sheet": {
+          "enabled": false,
+          "texture": "smoke",
+          "asset": "",
+          "mode": "lifetime",
+          "cycles": 1,
+          "fps": 24,
+          "randomStart": false
+        },
+        "trails": false,
+        "trailRatio": 1,
+        "trailLifetime": 0.3,
+        "trailWidth": 1,
+        "trailWidthEnd": 0,
+        "trailColor": "#ffffff",
+        "trailInheritColor": true,
+        "subEmitterOf": "",
+        "subEvent": "death",
+        "inheritColor": false,
+        "inheritSize": false,
+        "inheritVelocity": 0
+      },
+      {
+        "id": "sumi",
+        "name": "终式 · 泼墨散锋",
+        "visible": true,
+        "blend": "normal",
+        "empty": false,
+        "parentId": "",
+        "position": {
+          "x": 0.4,
+          "y": 1.4,
+          "z": 0
+        },
+        "rotation": {
+          "x": -90,
+          "y": 0,
+          "z": 0
+        },
+        "startLifetime": {
+          "min": 0.4,
+          "max": 1.05
+        },
+        "startSpeed": {
+          "min": 2.4,
+          "max": 5.5
+        },
+        "startSize": {
+          "min": 0.04,
+          "max": 0.23
+        },
+        "startRotation": {
+          "min": 0,
+          "max": 360
+        },
+        "startColor": "#ffffff",
+        "startColor2": "#ffffff",
+        "gravityModifier": 0.25,
+        "maxParticles": 1000,
+        "simulationSpace": "local",
+        "rate": 0,
+        "bursts": [
+          {
+            "time": 2.72,
+            "count": 36
+          }
+        ],
+        "startDelay": 0,
+        "stopAfter": 0,
+        "shape": "sphere",
+        "radius": 1.1,
+        "radiusThickness": 1,
+        "angle": 20,
+        "arc": 360,
+        "boxSize": {
+          "x": 1,
+          "y": 1,
+          "z": 1
+        },
+        "randomDirection": 0,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "orbital": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "radial": 0,
+        "force": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "drag": 1.5,
+        "noiseStrength": 0,
+        "noiseFrequency": 0.8,
+        "noiseScroll": 0,
+        "colors": [
+          {
+            "t": 0,
+            "color": "#141a16"
+          },
+          {
+            "t": 0.5,
+            "color": "#394138"
+          },
+          {
+            "t": 1,
+            "color": "#a3a99c"
+          }
+        ],
+        "stepped": false,
+        "alpha": 1,
+        "fadeIn": 0,
+        "fadeOut": 0.8,
+        "sizeEnd": 0.4,
+        "sizeEase": "linear",
+        "spin": {
+          "min": 0,
+          "max": 0
+        },
+        "floor": false,
+        "floorY": 0,
+        "bounce": 0.4,
+        "dampen": 0.2,
+        "lifetimeLoss": 0,
+        "minKillSpeed": 0,
+        "sprite": "soft",
+        "renderMode": "billboard",
+        "lengthScale": 2,
+        "velocityScale": 0.1,
+        "mesh": "shard",
+        "meshAlign": "random",
+        "material": {
+          "intensity": 1,
+          "mainTexture": "sprite",
+          "texture": "",
+          "shader": "s_inkslashblot",
+          "scrollX": 0,
+          "scrollY": 0,
+          "dissolve": false,
+          "dissolveFrom": 0,
+          "dissolveTo": 1,
+          "dissolveEdge": 0.08,
+          "dissolveEdgeColor": "#ffffff",
+          "dissolveScale": 1,
+          "fresnel": 0,
+          "fresnelPower": 2,
+          "fresnelColor": "#ffffff",
+          "softness": 0
+        },
+        "sheet": {
+          "enabled": false,
+          "texture": "smoke",
+          "asset": "",
+          "mode": "lifetime",
+          "cycles": 1,
+          "fps": 24,
+          "randomStart": false
+        },
+        "trails": false,
+        "trailRatio": 1,
+        "trailLifetime": 0.3,
+        "trailWidth": 1,
+        "trailWidthEnd": 0,
+        "trailColor": "#ffffff",
+        "trailInheritColor": true,
+        "subEmitterOf": "",
+        "subEvent": "death",
+        "inheritColor": false,
+        "inheritSize": false,
+        "inheritVelocity": 0
+      },
+      {
+        "id": "mist",
+        "name": "终式 · 墨色晕散",
+        "visible": true,
+        "blend": "normal",
+        "empty": false,
+        "parentId": "",
+        "position": {
+          "x": 0,
+          "y": 1.5,
+          "z": 0
+        },
+        "rotation": {
+          "x": -90,
+          "y": 0,
+          "z": 0
+        },
+        "startLifetime": {
+          "min": 0.75,
+          "max": 1.25
+        },
+        "startSpeed": {
+          "min": 0.3,
+          "max": 0.65
+        },
+        "startSize": {
+          "min": 0.7,
+          "max": 1.35
+        },
+        "startRotation": {
+          "min": 0,
+          "max": 360
+        },
+        "startColor": "#ffffff",
+        "startColor2": "#ffffff",
+        "gravityModifier": 0,
+        "maxParticles": 1000,
+        "simulationSpace": "local",
+        "rate": 0,
+        "bursts": [
+          {
+            "time": 2.76,
+            "count": 12
+          }
+        ],
+        "startDelay": 0,
+        "stopAfter": 0,
+        "shape": "sphere",
+        "radius": 1.25,
+        "radiusThickness": 1,
+        "angle": 20,
+        "arc": 360,
+        "boxSize": {
+          "x": 1,
+          "y": 1,
+          "z": 1
+        },
+        "randomDirection": 0,
+        "velocity": {
+          "x": 0.1,
+          "y": 0.18,
+          "z": 0
+        },
+        "orbital": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "radial": 0,
+        "force": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "drag": 0,
+        "noiseStrength": 0.2,
+        "noiseFrequency": 0.8,
+        "noiseScroll": 0,
+        "colors": [
+          {
+            "t": 0,
+            "color": "#596358"
+          },
+          {
+            "t": 0.5,
+            "color": "#85917f"
+          },
+          {
+            "t": 1,
+            "color": "#b3bcaa"
+          }
+        ],
+        "stepped": false,
+        "alpha": 0.18,
+        "fadeIn": 0.08,
+        "fadeOut": 0.88,
+        "sizeEnd": 1.6,
+        "sizeEase": "linear",
+        "spin": {
+          "min": 0,
+          "max": 0
+        },
+        "floor": false,
+        "floorY": 0,
+        "bounce": 0.4,
+        "dampen": 0.2,
+        "lifetimeLoss": 0,
+        "minKillSpeed": 0,
+        "sprite": "soft",
+        "renderMode": "billboard",
+        "lengthScale": 2,
+        "velocityScale": 0.1,
+        "mesh": "shard",
+        "meshAlign": "random",
+        "material": {
+          "intensity": 1,
+          "mainTexture": "sprite",
+          "texture": "",
+          "shader": "s_inkslashblot",
+          "scrollX": 0,
+          "scrollY": 0,
+          "dissolve": false,
+          "dissolveFrom": 0,
+          "dissolveTo": 1,
+          "dissolveEdge": 0.08,
+          "dissolveEdgeColor": "#ffffff",
+          "dissolveScale": 1,
+          "fresnel": 0,
+          "fresnelPower": 2,
+          "fresnelColor": "#ffffff",
+          "softness": 0
+        },
+        "sheet": {
+          "enabled": false,
+          "texture": "smoke",
+          "asset": "",
+          "mode": "lifetime",
+          "cycles": 1,
+          "fps": 24,
+          "randomStart": false
+        },
+        "trails": false,
+        "trailRatio": 1,
+        "trailLifetime": 0.3,
+        "trailWidth": 1,
+        "trailWidthEnd": 0,
+        "trailColor": "#ffffff",
+        "trailInheritColor": true,
+        "subEmitterOf": "",
+        "subEvent": "death",
+        "inheritColor": false,
+        "inheritSize": false,
+        "inheritVelocity": 0
+      },
+      {
+        "id": "redblots",
+        "name": "终式 · 朱砂飞点",
+        "visible": true,
+        "blend": "normal",
+        "empty": false,
+        "parentId": "",
+        "position": {
+          "x": 0.9,
+          "y": 1.3,
+          "z": -0.3
+        },
+        "rotation": {
+          "x": -90,
+          "y": 0,
+          "z": 0
+        },
+        "startLifetime": {
+          "min": 0.3,
+          "max": 0.64
+        },
+        "startSpeed": {
+          "min": 1.1,
+          "max": 3.1
+        },
+        "startSize": {
+          "min": 0.03,
+          "max": 0.08
+        },
+        "startRotation": {
+          "min": 0,
+          "max": 0
+        },
+        "startColor": "#ffffff",
+        "startColor2": "#ffffff",
+        "gravityModifier": 0.25,
+        "maxParticles": 1000,
+        "simulationSpace": "local",
+        "rate": 0,
+        "bursts": [
+          {
+            "time": 2.7,
+            "count": 14
+          }
+        ],
+        "startDelay": 0,
+        "stopAfter": 0,
+        "shape": "sphere",
+        "radius": 0.5,
+        "radiusThickness": 1,
+        "angle": 20,
+        "arc": 360,
+        "boxSize": {
+          "x": 1,
+          "y": 1,
+          "z": 1
+        },
+        "randomDirection": 0,
+        "velocity": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "orbital": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "radial": 0,
+        "force": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "drag": 0,
+        "noiseStrength": 0,
+        "noiseFrequency": 0.8,
+        "noiseScroll": 0,
+        "colors": [
+          {
+            "t": 0,
+            "color": "#8b3329"
+          },
+          {
+            "t": 0.5,
+            "color": "#aa6852"
+          },
+          {
+            "t": 1,
+            "color": "#c9aa8c"
+          }
+        ],
+        "stepped": false,
+        "alpha": 1,
+        "fadeIn": 0,
+        "fadeOut": 0.8,
+        "sizeEnd": 1,
+        "sizeEase": "linear",
+        "spin": {
+          "min": 0,
+          "max": 0
+        },
+        "floor": false,
+        "floorY": 0,
+        "bounce": 0.4,
+        "dampen": 0.2,
+        "lifetimeLoss": 0,
+        "minKillSpeed": 0,
+        "sprite": "soft",
+        "renderMode": "billboard",
+        "lengthScale": 2,
+        "velocityScale": 0.1,
+        "mesh": "shard",
+        "meshAlign": "random",
+        "material": {
+          "intensity": 1,
+          "mainTexture": "sprite",
+          "texture": "",
+          "shader": "s_inkslashblot",
+          "scrollX": 0,
+          "scrollY": 0,
+          "dissolve": false,
+          "dissolveFrom": 0,
+          "dissolveTo": 1,
+          "dissolveEdge": 0.08,
+          "dissolveEdgeColor": "#ffffff",
+          "dissolveScale": 1,
+          "fresnel": 0,
+          "fresnelPower": 2,
+          "fresnelColor": "#ffffff",
+          "softness": 0
+        },
+        "sheet": {
+          "enabled": false,
+          "texture": "smoke",
+          "asset": "",
+          "mode": "lifetime",
+          "cycles": 1,
+          "fps": 24,
+          "randomStart": false
+        },
+        "trails": false,
+        "trailRatio": 1,
+        "trailLifetime": 0.3,
+        "trailWidth": 1,
+        "trailWidthEnd": 0,
+        "trailColor": "#ffffff",
+        "trailInheritColor": true,
+        "subEmitterOf": "",
+        "subEvent": "death",
+        "inheritColor": false,
+        "inheritSize": false,
+        "inheritVelocity": 0
+      }
+    ]
+  },
+  "thumb": "data:image/png;base64,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",
+  "assets": [],
+  "shaders": [
+    {
+      "id": "s_inkslashbrush",
+      "name": "墨斩 · 浓墨笔锋",
+      "description": "水墨刀光 使用年龄驱动笔锋扫出 飞白与晕染",
+      "code": "\nfloat inkHash(vec2 p) { return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }\nfloat inkValue(vec2 p) {\n vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);\n return mix(mix(inkHash(i),inkHash(i+vec2(1.0,0.0)),f.x),mix(inkHash(i+vec2(0.0,1.0)),inkHash(i+vec2(1.0,1.0)),f.x),f.y);\n}\nvec4 inkNoise(vec2 p) {\n float n=inkValue(p*4.0)*.55+inkValue(p*8.2+vec2(17.2,3.1))*.3+inkValue(p*16.4+vec2(8.1,11.3))*.15;\n return vec4(n,n,n,1.0);\n}\n\nvec4 fxCustom(vec2 uv, vec4 tint, float life, float rnd, float age) {\n float head=mix(0.03,0.72,smoothstep(0.0,0.24,life));\n float tail=max(0.0,head-0.59*(1.0-smoothstep(0.31,1.0,life)));\n float arc=(uv.x-tail)/max(0.001,head-tail);\n float taper=pow(clamp(sin(clamp(arc,0.0,1.0)*3.14159),0.0,1.0),0.7);\n float n=inkNoise(vec2(uv.x*6.0-age*0.25,uv.y*2.3+rnd*3.0)).r;\n float fine=inkNoise(vec2(uv.x*3.6+0.3+n*.18,uv.y*3.2+rnd*4.0)).r;\n float inner=0.86-taper*0.86+(n-0.5)*0.26;\n float outer=0.91+(n-0.5)*0.15;\n float body=smoothstep(inner,inner+0.07,uv.y)*(1.0-smoothstep(outer-0.015,outer+0.015,uv.y));\n float grain=inkNoise(vec2(uv.x*15.0,uv.y*10.0+rnd*3.0)).r;\n float dry=(1.0-smoothstep(0.65,0.78,fine+life*0.09)*(1.0-smoothstep(0.68,0.93,uv.y)))*(1.0-smoothstep(.69,.8,grain)*.6);\n float erosion=smoothstep(life*0.48-0.1,life*0.48+0.17,n+uv.y*0.16);\n float ends=smoothstep(tail,tail+0.035,uv.x)*(1.0-smoothstep(head-0.02,head,uv.x));\n vec3 ink=mix(vec3(0.004,0.005,0.005),vec3(0.045,0.048,0.044),n*n*0.4);\n return vec4(ink*tint.rgb,body*ends*dry*erosion*tint.a);\n}",
+      "createdAt": 1794321916042,
+      "updatedAt": 1794321916042
+    },
+    {
+      "id": "s_inkslashwash",
+      "name": "墨斩 · 淡墨渗染",
+      "description": "水墨刀光 使用年龄驱动笔锋扫出 飞白与晕染",
+      "code": "\nfloat inkHash(vec2 p) { return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }\nfloat inkValue(vec2 p) {\n vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);\n return mix(mix(inkHash(i),inkHash(i+vec2(1.0,0.0)),f.x),mix(inkHash(i+vec2(0.0,1.0)),inkHash(i+vec2(1.0,1.0)),f.x),f.y);\n}\nvec4 inkNoise(vec2 p) {\n float n=inkValue(p*4.0)*.55+inkValue(p*8.2+vec2(17.2,3.1))*.3+inkValue(p*16.4+vec2(8.1,11.3))*.15;\n return vec4(n,n,n,1.0);\n}\n\nvec4 fxCustom(vec2 uv, vec4 tint, float life, float rnd, float age) {\n float head=mix(0.02,0.74,smoothstep(0.0,0.25,life));\n float tail=max(0.0,head-0.62*(1.0-smoothstep(0.18,1.0,life)));\n float n=inkNoise(vec2(uv.x*5.0-age*0.14,uv.y*2.0+rnd*2.0)).r;\n float n2=inkNoise(vec2(uv.x*9.0+age*.13,uv.y*5.0+rnd)).r;\n float along=smoothstep(tail,tail+0.12,uv.x)*(1.0-smoothstep(head-0.09,head,uv.x));\n float body=smoothstep(0.1+(n-0.5)*0.45,0.6,uv.y)*(1.0-smoothstep(0.86,1.0,uv.y));\n float a=along*body*(0.18+n2*.65)*pow(1.0-life,1.1)*tint.a;\n return vec4(vec3(0.19,0.21,0.20)*tint.rgb,a);\n}",
+      "createdAt": 1794321916046,
+      "updatedAt": 1794321916046
+    },
+    {
+      "id": "s_inkslashfibers",
+      "name": "墨斩 · 飞白散锋",
+      "description": "水墨刀光 使用年龄驱动笔锋扫出 飞白与晕染",
+      "code": "\nfloat inkHash(vec2 p) { return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }\nfloat inkValue(vec2 p) {\n vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);\n return mix(mix(inkHash(i),inkHash(i+vec2(1.0,0.0)),f.x),mix(inkHash(i+vec2(0.0,1.0)),inkHash(i+vec2(1.0,1.0)),f.x),f.y);\n}\nvec4 inkNoise(vec2 p) {\n float n=inkValue(p*4.0)*.55+inkValue(p*8.2+vec2(17.2,3.1))*.3+inkValue(p*16.4+vec2(8.1,11.3))*.15;\n return vec4(n,n,n,1.0);\n}\n\nvec4 fxCustom(vec2 uv, vec4 tint, float life, float rnd, float age) {\n float head=mix(0.03,0.74,smoothstep(0.0,0.22,life));\n float tail=max(0.0,head-0.57*(1.0-life));\n float n=inkNoise(vec2(uv.x*4.5-age*.15,uv.y*4.8+rnd*3.0)).r;\n float brush=pow(smoothstep(0.52,0.65,n),1.4);\n float along=smoothstep(tail,tail+0.04,uv.x)*(1.0-smoothstep(head-0.025,head,uv.x));\n float radial=smoothstep(0.15,.4,uv.y)*(1.0-smoothstep(.87,1.0,uv.y));\n return vec4(vec3(.018,.021,.021)*tint.rgb,along*radial*brush*tint.a);\n}",
+      "createdAt": 1794321916049,
+      "updatedAt": 1794321916049
+    },
+    {
+      "id": "s_inkslashblot",
+      "name": "墨斩 · 泼墨与墨雾",
+      "description": "水墨刀光 使用年龄驱动笔锋扫出 飞白与晕染",
+      "code": "\nfloat inkHash(vec2 p) { return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }\nfloat inkValue(vec2 p) {\n vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);\n return mix(mix(inkHash(i),inkHash(i+vec2(1.0,0.0)),f.x),mix(inkHash(i+vec2(0.0,1.0)),inkHash(i+vec2(1.0,1.0)),f.x),f.y);\n}\nvec4 inkNoise(vec2 p) {\n float n=inkValue(p*4.0)*.55+inkValue(p*8.2+vec2(17.2,3.1))*.3+inkValue(p*16.4+vec2(8.1,11.3))*.15;\n return vec4(n,n,n,1.0);\n}\n\nvec4 fxCustom(vec2 uv, vec4 tint, float life, float rnd, float age) {\n vec2 p=(uv-0.5)*2.0;\n float n=inkNoise(uv*2.8+vec2(rnd*8.1,age*.09)).r;\n float n2=inkNoise(uv*8.0+vec2(rnd*5.1,0.0)).r;\n float r=length(p);\n float edge=0.62+(n-.5)*.66;\n float body=1.0-smoothstep(edge-.08,edge+.04,r);\n float dry=smoothstep(life*.5-.08,life*.5+.13,n2);\n return vec4(tint.rgb,body*dry*tint.a);\n}",
+      "createdAt": 1794321916052,
+      "updatedAt": 1794321916052
+    },
+    {
+      "id": "s_inkforwardbrush",
+      "name": "墨斩 · 浓墨笔锋 · 顺势",
+      "description": "收尾沿出刀方向前送 从尾端消散",
+      "code": "\nfloat inkHash(vec2 p) { return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }\nfloat inkValue(vec2 p) {\n vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);\n return mix(mix(inkHash(i),inkHash(i+vec2(1.0,0.0)),f.x),mix(inkHash(i+vec2(0.0,1.0)),inkHash(i+vec2(1.0,1.0)),f.x),f.y);\n}\nvec4 inkNoise(vec2 p) {\n float n=inkValue(p*4.0)*.55+inkValue(p*8.2+vec2(17.2,3.1))*.3+inkValue(p*16.4+vec2(8.1,11.3))*.15;\n return vec4(n,n,n,1.0);\n}\n\nvec4 fxCustom(vec2 uv, vec4 tint, float life, float rnd, float age) {\n float head=mix(0.03,0.72,smoothstep(0.0,0.33,life))+0.06*smoothstep(0.33,1.0,life);\n float tail=max(0.0,head-0.59*(1.0-smoothstep(0.31,1.0,life)));\n float arc=(uv.x-tail)/max(0.001,head-tail);\n float taper=pow(clamp(sin(clamp(arc,0.0,1.0)*3.14159),0.0,1.0),0.7);\n float n=inkNoise(vec2(uv.x*6.0-age*0.25,uv.y*2.3+rnd*3.0)).r;\n float fine=inkNoise(vec2(uv.x*3.6+0.3+n*.18,uv.y*3.2+rnd*4.0)).r;\n float inner=0.86-taper*0.86+(n-0.5)*0.26;\n float outer=0.91+(n-0.5)*0.15;\n float body=smoothstep(inner,inner+0.07,uv.y)*(1.0-smoothstep(outer-0.015,outer+0.015,uv.y));\n float grain=inkNoise(vec2(uv.x*15.0,uv.y*10.0+rnd*3.0)).r;\n float dry=(1.0-smoothstep(0.65,0.78,fine+life*0.09)*(1.0-smoothstep(0.68,0.93,uv.y)))*(1.0-smoothstep(.69,.8,grain)*.6);\n float erosion=smoothstep(life*0.48-0.1,life*0.48+0.17,n+uv.y*0.16);\n float ends=smoothstep(tail,tail+0.035,uv.x)*(1.0-smoothstep(head-0.02,head,uv.x));\n vec3 ink=mix(vec3(0.004,0.005,0.005),vec3(0.045,0.048,0.044),n*n*0.4);\n return vec4(ink*tint.rgb,body*ends*dry*erosion*tint.a);\n}",
+      "createdAt": 1794323463670,
+      "updatedAt": 1794323463670
+    },
+    {
+      "id": "s_inkforwardwash",
+      "name": "墨斩 · 淡墨渗染 · 顺势",
+      "description": "收尾沿出刀方向前送 从尾端消散",
+      "code": "\nfloat inkHash(vec2 p) { return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }\nfloat inkValue(vec2 p) {\n vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);\n return mix(mix(inkHash(i),inkHash(i+vec2(1.0,0.0)),f.x),mix(inkHash(i+vec2(0.0,1.0)),inkHash(i+vec2(1.0,1.0)),f.x),f.y);\n}\nvec4 inkNoise(vec2 p) {\n float n=inkValue(p*4.0)*.55+inkValue(p*8.2+vec2(17.2,3.1))*.3+inkValue(p*16.4+vec2(8.1,11.3))*.15;\n return vec4(n,n,n,1.0);\n}\n\nvec4 fxCustom(vec2 uv, vec4 tint, float life, float rnd, float age) {\n float head=mix(0.02,0.74,smoothstep(0.0,0.35,life))+0.06*smoothstep(0.35,1.0,life);\n float tail=max(0.0,head-0.62*(1.0-smoothstep(0.18,1.0,life)));\n float n=inkNoise(vec2(uv.x*5.0-age*0.14,uv.y*2.0+rnd*2.0)).r;\n float n2=inkNoise(vec2(uv.x*9.0+age*.13,uv.y*5.0+rnd)).r;\n float along=smoothstep(tail,tail+0.12,uv.x)*(1.0-smoothstep(head-0.09,head,uv.x));\n float body=smoothstep(0.1+(n-0.5)*0.45,0.6,uv.y)*(1.0-smoothstep(0.86,1.0,uv.y));\n float a=along*body*(0.18+n2*.65)*pow(1.0-life,1.1)*tint.a;\n return vec4(vec3(0.19,0.21,0.20)*tint.rgb,a);\n}",
+      "createdAt": 1794323463671,
+      "updatedAt": 1794323463671
+    },
+    {
+      "id": "s_inkforwardfibers",
+      "name": "墨斩 · 飞白散锋 · 顺势",
+      "description": "收尾沿出刀方向前送 从尾端消散",
+      "code": "\nfloat inkHash(vec2 p) { return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }\nfloat inkValue(vec2 p) {\n vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);\n return mix(mix(inkHash(i),inkHash(i+vec2(1.0,0.0)),f.x),mix(inkHash(i+vec2(0.0,1.0)),inkHash(i+vec2(1.0,1.0)),f.x),f.y);\n}\nvec4 inkNoise(vec2 p) {\n float n=inkValue(p*4.0)*.55+inkValue(p*8.2+vec2(17.2,3.1))*.3+inkValue(p*16.4+vec2(8.1,11.3))*.15;\n return vec4(n,n,n,1.0);\n}\n\nvec4 fxCustom(vec2 uv, vec4 tint, float life, float rnd, float age) {\n float head=mix(0.03,0.74,smoothstep(0.0,0.30,life))+0.06*smoothstep(0.30,1.0,life);\n float tail=max(0.0,head-0.57*(1.0-life));\n float n=inkNoise(vec2(uv.x*4.5-age*.15,uv.y*4.8+rnd*3.0)).r;\n float brush=pow(smoothstep(0.52,0.65,n),1.4);\n float along=smoothstep(tail,tail+0.04,uv.x)*(1.0-smoothstep(head-0.025,head,uv.x));\n float radial=smoothstep(0.15,.4,uv.y)*(1.0-smoothstep(.87,1.0,uv.y));\n return vec4(vec3(.018,.021,.021)*tint.rgb,along*radial*brush*tint.a);\n}",
+      "createdAt": 1794323463671,
+      "updatedAt": 1794323463671
+    }
+  ]
+}

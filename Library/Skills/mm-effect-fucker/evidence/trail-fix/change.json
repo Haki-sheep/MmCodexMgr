@@ -1,0 +1,20 @@
+{
+  "runtimeSha256": "67eb2f10afcfff458a65046933a942ffee35d7d39b2ee64ea7509c5b5ac863a3",
+  "changedCoreFile": "assets/forge-core/src/engine/sprites.ts",
+  "failure": "destination-in mask covered only the first twelve percent of the canvas and cleared the remaining alpha",
+  "fix": "Draw the head alpha gradient across the full canvas so its last opaque stop covers the remaining trail",
+  "before": {
+    "head": 8,
+    "middle": 0,
+    "tail": 0,
+    "edge": 0
+  },
+  "after": {
+    "head": 8,
+    "middle": 248,
+    "tail": 248,
+    "edge": 9
+  },
+  "checks": 21,
+  "unityValidation": "not_rerun_for_this_pixel_generation_fix"
+}

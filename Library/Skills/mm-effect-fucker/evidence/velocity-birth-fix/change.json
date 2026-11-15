@@ -1,0 +1,22 @@
+{
+  "runtimeSha256": "42f2bee35f64b6a47c71c6568c9a6b5ce1a9647b50a70c14dafead90152e2392",
+  "changedCoreFile": "assets/forge-core/src/engine/sim3d/particle.ts",
+  "failure": "Configured velocity was not present on the birth frame so stretched particles pointed upward until a simulation step",
+  "fix": "Initialize constant animated velocity components in the spawned particle",
+  "before": {
+    "width": 10,
+    "height": 59
+  },
+  "after": {
+    "width": 59,
+    "height": 10
+  },
+  "checks": 22,
+  "fixtureCorrection": "Disable the default stand-in character before measuring rendered particle bounds without changing the aspect-ratio assertion",
+  "unityValidation": "not_rerun_for_this_preview_birth_frame_fix",
+  "schemaValidator": {
+    "initial": "UnicodeDecodeError from Windows GBK default",
+    "correction": "Explicit python -X utf8 for the existing UTF-8 SKILL.md",
+    "result": "passed"
+  }
+}

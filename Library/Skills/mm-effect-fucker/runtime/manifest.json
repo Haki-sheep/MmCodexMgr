@@ -1,0 +1,510 @@
+{
+  "format": "mm-effect-runtime",
+  "version": 1,
+  "source": "FX Forge source snapshot",
+  "sourceCommit": "bfac71bb79bbd8b86f0f7d2eceb367775e10db8a",
+  "builtAt": "2026-11-12T09:33:56.926Z",
+  "sources": [
+    {
+      "path": "src/agent/alignChecks3d.ts",
+      "sha256": "c4686fa6392ca326fa8480b46a9d8d133d3714f9d9a9831d5f3d90c84b471026",
+      "bytes": 6545
+    },
+    {
+      "path": "src/agent/analyze.ts",
+      "sha256": "e31771fb635db0a11bf24b316fc41f33f75e3f3b3a00f394b5c780bf1d66f195",
+      "bytes": 5647
+    },
+    {
+      "path": "src/agent/renderChecks3d.ts",
+      "sha256": "4074cf18a69ba47177212560b8cc63c0eacddb71bbd87b5126825ef7341e3172",
+      "bytes": 4463
+    },
+    {
+      "path": "src/assets/types.ts",
+      "sha256": "135ddf2c075a386db3e44c0ebbcd547c2640fde1daafd99e3f3b282eaa47d091",
+      "bytes": 3214
+    },
+    {
+      "path": "src/core/effectKind.ts",
+      "sha256": "9d95634f2a15a37c2639be437bd075e4b0d0a000b5cd73d5a6c8e786638c65b7",
+      "bytes": 934
+    },
+    {
+      "path": "src/engine/assetImages.ts",
+      "sha256": "6293320f7ddafee88d28c117ae3bae482e339692f331d6d7e47217accfbd7095",
+      "bytes": 1655
+    },
+    {
+      "path": "src/engine/curve.ts",
+      "sha256": "7e662ff1e38c23fa6608428dbd775dbc66b4877e43bb18a51092e5522c62fbe8",
+      "bytes": 3562
+    },
+    {
+      "path": "src/engine/customShaders.ts",
+      "sha256": "5c791be62c5f748dd45d553666c277a9624e1b069d585ca17bc954ff9b00030a",
+      "bytes": 674
+    },
+    {
+      "path": "src/engine/hierarchy3d.ts",
+      "sha256": "660ee897b00fbc8fe474d7eb501a80adcba3e0a64e07f1fbcd4df56036a9f5d3",
+      "bytes": 6210
+    },
+    {
+      "path": "src/engine/meshes/build/common.ts",
+      "sha256": "92b212e48f311644f961247120e5c40728daf6f3b7eb914a1edb48512bf214df",
+      "bytes": 5414
+    },
+    {
+      "path": "src/engine/meshes/build/extrude.ts",
+      "sha256": "50831d7f6cfec74049428b35a5f9e37c2ddf07b0a330b9554ed1c9cabdaf2eaf",
+      "bytes": 2352
+    },
+    {
+      "path": "src/engine/meshes/build/index.ts",
+      "sha256": "9df4523f6edd641045c3784047f803252dad7d678b1f53571f9ab010dd9d51c5",
+      "bytes": 1631
+    },
+    {
+      "path": "src/engine/meshes/build/lathe.ts",
+      "sha256": "9b5356e174966e910c93eab16a74234928a8daba0f5571375ac0068374c49d0f",
+      "bytes": 1842
+    },
+    {
+      "path": "src/engine/meshes/build/sweep.ts",
+      "sha256": "cab885e509e4ccfbc0dedb40e798d6bf0e6b8d4c4bf6f3a056833b4ef3ffedd0",
+      "bytes": 3657
+    },
+    {
+      "path": "src/engine/meshes/build/triangulate.ts",
+      "sha256": "f60b89f9a9a9893f83e12965c1eb445c3f369c864a1876fa78c61148290bf076",
+      "bytes": 1984
+    },
+    {
+      "path": "src/engine/meshes/customMeshes.ts",
+      "sha256": "658d8d3b51c39cb5cbf09804b7281bb96ae49ee5af8b78a113e6d0bd5426a709",
+      "bytes": 909
+    },
+    {
+      "path": "src/engine/meshes/kinds.ts",
+      "sha256": "06e8c36182b632784b09c442f3c4ba8785eef0c69994488c7b6267cf9f38f37b",
+      "bytes": 4100
+    },
+    {
+      "path": "src/engine/meshes/meshData.ts",
+      "sha256": "3010e8c7c08af9606af57b8fb3b9fd38fa17129dadd88da143e24b2316a154d8",
+      "bytes": 4282
+    },
+    {
+      "path": "src/engine/meshes/meshSource.ts",
+      "sha256": "c123071e979dfa5366eea44854e202fdcf1bbaf839cca6732de1efc3360b8d52",
+      "bytes": 7875
+    },
+    {
+      "path": "src/engine/palettes.ts",
+      "sha256": "48585f36602cc71eb9b492c6ed9b4e502fc14421b9d653ef654f7f7af4916110",
+      "bytes": 3835
+    },
+    {
+      "path": "src/engine/preview3d/Preview3D.ts",
+      "sha256": "1e3e07566b8722a884df65639bf4e225ac21eaed4c567663fe21f9c8d0c78e29",
+      "bytes": 4734
+    },
+    {
+      "path": "src/engine/preview3d/index.ts",
+      "sha256": "0e46543dabc92be89f96b7b270b827f725d9c6de6cd690d5a21e5995e17d8bfc",
+      "bytes": 78
+    },
+    {
+      "path": "src/engine/preview3d/layers.ts",
+      "sha256": "515343b2f98ac7377411ded69a2c48a7e6e6e409bcfdead05c473c27f92d2be6",
+      "bytes": 706
+    },
+    {
+      "path": "src/engine/preview3d/lightPool.ts",
+      "sha256": "d31999e6b69c4e136bb9d3b853bac1be7b299cc34c20944c6e0604b05fe64ab7",
+      "bytes": 5882
+    },
+    {
+      "path": "src/engine/preview3d/particleLayers.ts",
+      "sha256": "8dcd3bb81e96bd7aa3c759998f02f492d5d4e5ffe57d2bf0f12faca2ab688d97",
+      "bytes": 7574
+    },
+    {
+      "path": "src/engine/preview3d/particleMaterial.ts",
+      "sha256": "435e126a70a292135d18e2c17eee3a6325974327828b7743fe16736c73d3e27b",
+      "bytes": 7024
+    },
+    {
+      "path": "src/engine/preview3d/postPipeline.ts",
+      "sha256": "1edfe07a12ac2ad694f4032a971ba634bad27b0e3661dff81626e5fa01808f7a",
+      "bytes": 3449
+    },
+    {
+      "path": "src/engine/preview3d/selectionOutline.ts",
+      "sha256": "4baca3a4e5a22b02b5dd7ea419bed444811cda7d4b447293f2334ef2fa7cb594",
+      "bytes": 3352
+    },
+    {
+      "path": "src/engine/preview3d/shaders.ts",
+      "sha256": "eaedc82c17a1db514895edde1115b94c37c0c86abd2c552676b1f2c06a86e0d2",
+      "bytes": 14554
+    },
+    {
+      "path": "src/engine/preview3d/shapeGizmo.ts",
+      "sha256": "89934a245faa09963be9705294651bb64affcac83936c91de5681a3bd35cbfec",
+      "bytes": 4333
+    },
+    {
+      "path": "src/engine/preview3d/stage.ts",
+      "sha256": "ed6f1bfa298cb8c81f1f543e97d799a8f146e79e50a359022164cef79a5563ef",
+      "bytes": 1807
+    },
+    {
+      "path": "src/engine/preview3d/textures.ts",
+      "sha256": "5fb4ca313881732ea6d69e8a3632c8ef3955299e2ff32d09da14247f073a755b",
+      "bytes": 2452
+    },
+    {
+      "path": "src/engine/preview3d/trailLayers.ts",
+      "sha256": "764725338ffbca3584216d25eb985fda4dd1de1be7098facd4eac9223f7c6985",
+      "bytes": 6979
+    },
+    {
+      "path": "src/engine/render.ts",
+      "sha256": "07d9d86f90efcb9c399693767e4816664025e0e8a74af7c41d1419d6aa8677f0",
+      "bytes": 7380
+    },
+    {
+      "path": "src/engine/render3d/bloom.ts",
+      "sha256": "131528776bad3062d9e67025bb3d21b02a41b524ce2ec998f6833221b5d4c2c5",
+      "bytes": 859
+    },
+    {
+      "path": "src/engine/render3d/material.ts",
+      "sha256": "5a32b6503e53ffa3d399dd0e5b6b1762c94900a65989ab9825ae00c6eb3b06e9",
+      "bytes": 3643
+    },
+    {
+      "path": "src/engine/render3d/meshKinds.ts",
+      "sha256": "c651d673bea42db96f56a846e7307828243a99655c60327082672e015f162712",
+      "bytes": 1366
+    },
+    {
+      "path": "src/engine/render3d/sanitize.ts",
+      "sha256": "2a95e0c5443c432a849ed5894c99a4113b9eb9d0f66b0676bbdcdcb6171f2ee7",
+      "bytes": 775
+    },
+    {
+      "path": "src/engine/render3d/sheet.ts",
+      "sha256": "d3096c854012d3c43a66fed706f6e68046c80cca49f4080b5064153db27d7471",
+      "bytes": 2922
+    },
+    {
+      "path": "src/engine/sim3d/constants.ts",
+      "sha256": "8795ff1a5fb2e4bac35ce468dac8e8b2b9ee984c58d4caea9156e2b10001b56d",
+      "bytes": 408
+    },
+    {
+      "path": "src/engine/sim3d/curves.ts",
+      "sha256": "8e1aeb331fb1a2c5584b40c5ba50aeccbed50c1839599b659f7be912258b57df",
+      "bytes": 577
+    },
+    {
+      "path": "src/engine/sim3d/floorCollision.ts",
+      "sha256": "af2b2b1dddf9ed8aa23254555f0c039073c31892be25c671e449feef9f5ac94d",
+      "bytes": 2097
+    },
+    {
+      "path": "src/engine/sim3d/layerTiming.ts",
+      "sha256": "c72e844cf36a0541fd3ca72e0a0fa584af57d70e2d3e0b7dae575052b6c2981a",
+      "bytes": 1571
+    },
+    {
+      "path": "src/engine/sim3d/math.ts",
+      "sha256": "174afcdace9468b631fe3e26cd65dee539c4d4f0e4ca218af321c891c932a4ee",
+      "bytes": 2226
+    },
+    {
+      "path": "src/engine/sim3d/noise.ts",
+      "sha256": "c4471e38fafe97e7cb5a203d6bf0388992e357743cd604b76a9874268e0029bc",
+      "bytes": 2029
+    },
+    {
+      "path": "src/engine/sim3d/output.ts",
+      "sha256": "37cb0cd4800da4644d0de828d77731cc97588895ac6edc9a3ad99f5f33606750",
+      "bytes": 3124
+    },
+    {
+      "path": "src/engine/sim3d/particle.ts",
+      "sha256": "542cff6b82c4b91f8989a3df5ac0056f15a746248bcdb51d6241f221bbc8addb",
+      "bytes": 15483
+    },
+    {
+      "path": "src/engine/sim3d/ribbons.ts",
+      "sha256": "f8118302eeed59a4452f46c4d88dd7d20cf6329601923301fec4fa43e8ea345f",
+      "bytes": 1867
+    },
+    {
+      "path": "src/engine/sim3d/runParticle.ts",
+      "sha256": "6a534e66f3535c32f0dc666999e3a457605448670d8992051e063487f775a699",
+      "bytes": 5556
+    },
+    {
+      "path": "src/engine/sim3d/schedule.ts",
+      "sha256": "a16a2e243ded51d280bb8ed673a3576a35f3bef046737883d8245f9b56c7fb35",
+      "bytes": 3718
+    },
+    {
+      "path": "src/engine/sim3d/shapes.ts",
+      "sha256": "e3db175d356bd6a5573e317183bfa91bb02e536ed4a8750f86c9d0bc2d4e6880",
+      "bytes": 4850
+    },
+    {
+      "path": "src/engine/sim3d/subEmitters.ts",
+      "sha256": "7058a64c90616c11d90a20433c9811a772aa9fbfc55cbfe75549c0fa23c63cf3",
+      "bytes": 8879
+    },
+    {
+      "path": "src/engine/simulate.ts",
+      "sha256": "a69f3543dc84f3c510d3b068b757aea6f51d705ed3f7ffe90c915154bb67bdb6",
+      "bytes": 14987
+    },
+    {
+      "path": "src/engine/simulate3d.ts",
+      "sha256": "afd6557f22991dfa4a3983d02b5625883baa6bf029263ceb73ff1893b837e8b3",
+      "bytes": 4766
+    },
+    {
+      "path": "src/engine/sprites.ts",
+      "sha256": "d055a3f15a24ae02387e4905970bd417cca9fbfb989c48fc1a902c2a8bb680d0",
+      "bytes": 6906
+    },
+    {
+      "path": "src/engine/textures/flipbooks.ts",
+      "sha256": "53ab14e1372d4483cc7555d714c9fa33965669be7f8187e6a6b08c783f277661",
+      "bytes": 4139
+    },
+    {
+      "path": "src/engine/textures/generators/flipbookGens.ts",
+      "sha256": "e1542579aa22ff245c618361d59b37467f45aa845280bc28e673fba6cbb97829",
+      "bytes": 1597
+    },
+    {
+      "path": "src/engine/textures/generators/motifs.ts",
+      "sha256": "ef6da9c248d49114bdd25ca2554bdbe3eb9ac74ed4722c30b506177b04b6d312",
+      "bytes": 7385
+    },
+    {
+      "path": "src/engine/textures/generators/registry.ts",
+      "sha256": "0c1853ef5a929ae206f2dffcc5d0e9a43d1758fca47630bfbede7b4c9f7c087d",
+      "bytes": 1965
+    },
+    {
+      "path": "src/engine/textures/generators/shapes.ts",
+      "sha256": "b896187ba205144a0f0976be36fa88c49c1644e0b9fbb8e5b8d2815c4299cea5",
+      "bytes": 3915
+    },
+    {
+      "path": "src/engine/textures/generators/strokes.ts",
+      "sha256": "817cc90d66a8c4b590049e5617020483f5d9c0a5cddfcdce16535814422f9868",
+      "bytes": 9054
+    },
+    {
+      "path": "src/engine/textures/generators/tiles.ts",
+      "sha256": "f0947e3ba478983ec74cf11d6aaa2f038a746cc507cc81b3886fb1947fc919e7",
+      "bytes": 5781
+    },
+    {
+      "path": "src/engine/textures/generators/types.ts",
+      "sha256": "edf97949764ccfa134d95c140814d7b88f1532336dc3b0661aa40a2b29614ba0",
+      "bytes": 900
+    },
+    {
+      "path": "src/engine/textures/noise.ts",
+      "sha256": "af4b779374ca524beb1229a737c3e1e50e35e62ef530de2a184515a826745ad8",
+      "bytes": 1784
+    },
+    {
+      "path": "src/engine/textures/raster.ts",
+      "sha256": "08477a4be3f415c8085165f0f9d0a785b00bbbdcaa425872fc51c4562b16498d",
+      "bytes": 1521
+    },
+    {
+      "path": "src/engine/textures/tileable.ts",
+      "sha256": "5b2796d37a536247acc415ff92079bc6ec9babd8514f83088c5f851e68bd16ca",
+      "bytes": 1167
+    },
+    {
+      "path": "src/engine/types.ts",
+      "sha256": "bedb947bee5096fb5b05f1baa33e00bbe8a7db384085457be4a9b1824e160510",
+      "bytes": 11398
+    },
+    {
+      "path": "src/engine/types3d.ts",
+      "sha256": "b87c000c1f584b9ea038f5d6892e4f92380f9b3f824b285334d0e263a448e928",
+      "bytes": 29366
+    },
+    {
+      "path": "src/export/customMeshExport.ts",
+      "sha256": "90ae3ec60914939f22a2faebadbf5642a097a801dca4dfb687c3820403cfd2e9",
+      "bytes": 1100
+    },
+    {
+      "path": "src/export/customShaderExport.ts",
+      "sha256": "6cd4634c41b5a03448cf212e2d0df14d656822eb90f3f65856656c9f70cf3ff1",
+      "bytes": 1408
+    },
+    {
+      "path": "src/export/export.ts",
+      "sha256": "fbd812d4981e857b6c80968d201170f3dcd72191dc3aec667ae6fb198de13e66",
+      "bytes": 11306
+    },
+    {
+      "path": "src/export/export3d.ts",
+      "sha256": "3a6fb5ed871145037d52382324082164e31fce827d206548d7d440c393916bde",
+      "bytes": 10243
+    },
+    {
+      "path": "src/export/unity.ts",
+      "sha256": "c70e5722da7081a7aaf6f5cbee77f178e862fc8b641766844b29913adfd58839",
+      "bytes": 5852
+    },
+    {
+      "path": "src/export/unity3d/FxForgeCurveTexture.cs",
+      "sha256": "a2ccf3e9da1b6ee1f08393d8c3ee8c808a6d1a8cf69f98046d51a0e373604325",
+      "bytes": 1458
+    },
+    {
+      "path": "src/export/unity3d/FxForgeCurves.cs",
+      "sha256": "bcdd4bf44a4119ae73beb62d1fff11ab4f4d509b09fbcd9550e52b414e863ccc",
+      "bytes": 7281
+    },
+    {
+      "path": "src/export/unity3d/FxForgeData.cs",
+      "sha256": "43de1b148fd9601d52225ad5aacb198501d668e937973a39a28890af02ed6a13",
+      "bytes": 7618
+    },
+    {
+      "path": "src/export/unity3d/FxForgeDepthTexture.cs",
+      "sha256": "97e9aea43cd6aeb05296ee9e581608f0b176a867f19c68502f3ef19e2be6c7e5",
+      "bytes": 1056
+    },
+    {
+      "path": "src/export/unity3d/FxForgeEffect.cs",
+      "sha256": "930268e4c811a5f1d11ae31c68a46d7376858fdae3edd37d18742464efa49e9a",
+      "bytes": 2812
+    },
+    {
+      "path": "src/export/unity3d/FxForgeImporter.cs",
+      "sha256": "1ed36cd38e8e1232ea7ac836fa735c1821f291d6200c32caf3e59ff61cea3701",
+      "bytes": 10319
+    },
+    {
+      "path": "src/export/unity3d/FxForgeLights.cs",
+      "sha256": "b7d3a874ff20ab41f2fe8dfee3ed4d70b1124fe7212d8d3e1277586b8207237d",
+      "bytes": 709
+    },
+    {
+      "path": "src/export/unity3d/FxForgeMaterials.cs",
+      "sha256": "a8655e70dafa682c2e5287a90567758b1919c95464443eb7acca83d2336bab95",
+      "bytes": 6641
+    },
+    {
+      "path": "src/export/unity3d/FxForgeMeshes.cs",
+      "sha256": "7f796b3daf758f47a042755a2ae206255986532f3aec071dedba76481f913e6c",
+      "bytes": 2296
+    },
+    {
+      "path": "src/export/unity3d/FxForgeModules.cs",
+      "sha256": "453b2b6a28978b88b167ca1b3730752673546c6d681fb4d90bd6d2b6be04954d",
+      "bytes": 18531
+    },
+    {
+      "path": "src/export/unity3d/FxForgeParticle.shader",
+      "sha256": "4fd55a80e57f110335610f54baa4dee0bf0bb860718211a34cd83c3cd930dca3",
+      "bytes": 7219
+    },
+    {
+      "path": "src/export/unity3d/FxForgePipelineChecks.cs",
+      "sha256": "60ee669a9e486bb0b1aedf37450bbd4867e72b88c0d86df778819e4a0a0a75d1",
+      "bytes": 1984
+    },
+    {
+      "path": "src/export/unity3d/FxForgeRendering.cs",
+      "sha256": "b46cc46c3709fe1b239e82d91d6be2076a340465f69b001b176edac7059d9180",
+      "bytes": 3970
+    },
+    {
+      "path": "src/export/unity3d/FxForgeSubEmitters.cs",
+      "sha256": "b8a042714e7bb6db42cba6e14a91b219d26bd022f7d07910ad3a47672f9c314f",
+      "bytes": 4693
+    },
+    {
+      "path": "src/export/unity3d/FxForgeTextureSheet.cs",
+      "sha256": "5ec5df3660b61195ae8c0c9a0cebb5025188f4d0dee97ca4889a0f34ddbb7595",
+      "bytes": 1862
+    },
+    {
+      "path": "src/export/unity3d/FxForgeTrails.cs",
+      "sha256": "734930c0db07a4be0522d418f61e9fda170d7b4c4723dfc29fadabe4b00ff49b",
+      "bytes": 3469
+    },
+    {
+      "path": "src/meshes/types.ts",
+      "sha256": "f6e17994c57e5ba3ac272db6f421a846d9ddd3ce0915e24798ca333343222386",
+      "bytes": 1353
+    },
+    {
+      "path": "src/render/OffscreenRenderer3D.ts",
+      "sha256": "10148cfd0ab4a194b43d3e3888090a93adfac9085f8080551b3a40439475c954",
+      "bytes": 2219
+    },
+    {
+      "path": "src/shaders/compileCheck.ts",
+      "sha256": "7a45b3240068ea784d5603e1ac336effdcedc75dc3e36468fe07a3341e890642",
+      "bytes": 1969
+    },
+    {
+      "path": "src/shaders/dialect.ts",
+      "sha256": "d401e4b42370db6b855679004fb7b585fbfddc32f06dcecba4761548db2ec3c5",
+      "bytes": 5510
+    },
+    {
+      "path": "src/shaders/types.ts",
+      "sha256": "57590ddd935d9de10e91b610a2b46ae42ab170e6a0b23f07c29d50af3cd8ee06",
+      "bytes": 1354
+    }
+  ],
+  "dependencies": [
+    {
+      "name": "three",
+      "version": "0.187.0",
+      "license": "MIT",
+      "buildOnly": false
+    },
+    {
+      "name": "fflate",
+      "version": "0.8.3",
+      "license": "MIT",
+      "buildOnly": false
+    },
+    {
+      "name": "gifenc",
+      "version": "1.0.3",
+      "license": "MIT",
+      "buildOnly": false
+    },
+    {
+      "name": "vite",
+      "version": "8.3.6",
+      "license": "MIT",
+      "buildOnly": true
+    }
+  ],
+  "browser": {
+    "file": "browser/engine.js",
+    "sha256": "86f58e7ca2deef7bba4c55fb56467733fc24a40e557a676cfcdefe76f2afd58f",
+    "bytes": 976592
+  }
+}

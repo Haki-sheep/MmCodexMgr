@@ -1,0 +1,20 @@
+{
+  "ok": false,
+  "completedChecks": [
+    "vendored source hashes",
+    "all seven sample shaders compile in WebGL",
+    "ink sample renders visible detail",
+    "deterministic seek without frame-order dependence",
+    "one-shot empty loop boundary",
+    "missing shader rejected without material fallback",
+    "layer truncation rejected",
+    "silent value clamps rejected",
+    "shader compile failure surfaced",
+    "2D preview renderer",
+    "2D cannot masquerade as ParticleSystem export",
+    "procedural texture generation",
+    "Unity export contains 19 layers seven shaders and embedded texture",
+    "full 115-frame GIF and MP4 capture"
+  ],
+  "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n\n17 !== 16\n\n    at file:///C:/Users/fmz/Desktop/AiWrok/Skill/mm-effect-fucker/scripts/selftest.mjs:57:12\n    at async withBrowser (file:///C:/Users/fmz/Desktop/AiWrok/Skill/mm-effect-fucker/scripts/browser.mjs:81:12)\n    at async file:///C:/Users/fmz/Desktop/AiWrok/Skill/mm-effect-fucker/scripts/selftest.mjs:20:3"
+}

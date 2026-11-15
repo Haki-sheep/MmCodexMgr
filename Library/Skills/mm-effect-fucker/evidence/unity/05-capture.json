@@ -1,0 +1,213 @@
+{
+  "argv": [
+    "editor",
+    "exec",
+    "--code-file",
+    "-",
+    "--timeout",
+    "180",
+    "--request-id",
+    "effect-capture-1b0b6a52-8a70-4669-95de-31e1328374cc"
+  ],
+  "exitCode": 0,
+  "stderr": "",
+  "response": {
+    "schema_version": "1.0",
+    "command": "editor exec",
+    "ok": true,
+    "dry_run": false,
+    "data": {
+      "request_id": "effect-capture-1b0b6a52-8a70-4669-95de-31e1328374cc",
+      "state": "success",
+      "completed": true,
+      "replayed": false,
+      "result": {
+        "activeSceneUnchanged": true,
+        "colorSpace": "Gamma",
+        "countList": [
+          [
+            1,
+            1,
+            1,
+            48,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0
+          ],
+          [
+            1,
+            1,
+            1,
+            48,
+            7,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            1,
+            82,
+            7,
+            0,
+            36,
+            0,
+            14
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            1,
+            82,
+            7,
+            0,
+            36,
+            12,
+            14
+          ]
+        ],
+        "imageList": [
+          "C:\\Users\\fmz\\Documents\\Codex\\2026-11-09\\c-program-files-x86-steam-steamapps\\outputs\\mm-effect-unity-validation-final\\images\\unity_000.png",
+          "C:\\Users\\fmz\\Documents\\Codex\\2026-11-09\\c-program-files-x86-steam-steamapps\\outputs\\mm-effect-unity-validation-final\\images\\unity_001.png",
+          "C:\\Users\\fmz\\Documents\\Codex\\2026-11-09\\c-program-files-x86-steam-steamapps\\outputs\\mm-effect-unity-validation-final\\images\\unity_002.png",
+          "C:\\Users\\fmz\\Documents\\Codex\\2026-11-09\\c-program-files-x86-steam-steamapps\\outputs\\mm-effect-unity-validation-final\\images\\unity_003.png"
+        ],
+        "layerList": [
+          "1式 · 淡墨拖影",
+          "1式 · 浓墨刀弧",
+          "1式 · 枯笔飞白",
+          "1式 · 飞溅墨点",
+          "1式 · 浓墨甩尾",
+          "2式 · 淡墨拖影",
+          "2式 · 浓墨刀弧",
+          "2式 · 枯笔飞白",
+          "2式 · 飞溅墨点",
+          "2式 · 浓墨甩尾",
+          "3式 · 淡墨拖影",
+          "3式 · 浓墨刀弧",
+          "3式 · 枯笔飞白",
+          "3式 · 飞溅墨点",
+          "3式 · 浓墨甩尾",
+          "蓄势 · 墨息",
+          "终式 · 泼墨散锋",
+          "终式 · 墨色晕散",
+          "终式 · 朱砂飞点"
+        ],
+        "pipeline": "Built-in",
+        "playModeValidated": false,
+        "prefab": "Assets/FXForge/Variants/fx_7659e00a9525ad13811c/Effects/sumi_isolation_verification.prefab",
+        "scope": "Editor ParticleSystem Simulate and Camera Render",
+        "timeList": [
+          0.64,
+          0.8,
+          2.76,
+          2.92
+        ],
+        "unityVersion": "2022.3.62f3",
+        "warningList": []
+      },
+      "response": {
+        "protocol_version": "1.1",
+        "request_id": "effect-capture-1b0b6a52-8a70-4669-95de-31e1328374cc",
+        "state": "success",
+        "success": true,
+        "submitted_at": "2026-11-11T03:26:34.3432835Z",
+        "started_at": "2026-11-11T03:26:34.3601986Z",
+        "completed_at": "2026-11-11T03:26:36.4748923Z",
+        "editor_pid": 20960,
+        "editor_instance_id": "20960-639299643451535026",
+        "editor_session_id": "20261111T032633.7089914-20960-15dd950c",
+        "unity_version": "2022.3.62f3",
+        "operation": "roslyn-exec",
+        "code_sha256": "34c68de89a9ec38be6356c3de51719470d70e4a12e378e4580cd5b60179125e8",
+        "payload_sha256": "c8eeef6263c6b36e2c0bc757f2605e22b86f62f5860743e5003c4f3a04387521",
+        "result_json": "{\"activeSceneUnchanged\":true,\"colorSpace\":\"Gamma\",\"countList\":[[1,1,1,48,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0],[1,1,1,48,7,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,1,1,1,82,7,0,36,0,14],[0,0,0,0,0,0,0,0,0,0,1,1,1,82,7,0,36,12,14]],\"imageList\":[\"C:\\\\Users\\\\fmz\\\\Documents\\\\Codex\\\\2026-11-09\\\\c-program-files-x86-steam-steamapps\\\\outputs\\\\mm-effect-unity-validation-final\\\\images\\\\unity_000.png\",\"C:\\\\Users\\\\fmz\\\\Documents\\\\Codex\\\\2026-11-09\\\\c-program-files-x86-steam-steamapps\\\\outputs\\\\mm-effect-unity-validation-final\\\\images\\\\unity_001.png\",\"C:\\\\Users\\\\fmz\\\\Documents\\\\Codex\\\\2026-11-09\\\\c-program-files-x86-steam-steamapps\\\\outputs\\\\mm-effect-unity-validation-final\\\\images\\\\unity_002.png\",\"C:\\\\Users\\\\fmz\\\\Documents\\\\Codex\\\\2026-11-09\\\\c-program-files-x86-steam-steamapps\\\\outputs\\\\mm-effect-unity-validation-final\\\\images\\\\unity_003.png\"],\"layerList\":[\"1式 · 淡墨拖影\",\"1式 · 浓墨刀弧\",\"1式 · 枯笔飞白\",\"1式 · 飞溅墨点\",\"1式 · 浓墨甩尾\",\"2式 · 淡墨拖影\",\"2式 · 浓墨刀弧\",\"2式 · 枯笔飞白\",\"2式 · 飞溅墨点\",\"2式 · 浓墨甩尾\",\"3式 · 淡墨拖影\",\"3式 · 浓墨刀弧\",\"3式 · 枯笔飞白\",\"3式 · 飞溅墨点\",\"3式 · 浓墨甩尾\",\"蓄势 · 墨息\",\"终式 · 泼墨散锋\",\"终式 · 墨色晕散\",\"终式 · 朱砂飞点\"],\"pipeline\":\"Built-in\",\"playModeValidated\":false,\"prefab\":\"Assets/FXForge/Variants/fx_7659e00a9525ad13811c/Effects/sumi_isolation_verification.prefab\",\"scope\":\"Editor ParticleSystem Simulate and Camera Render\",\"timeList\":[0.64,0.8,2.76,2.92],\"unityVersion\":\"2022.3.62f3\",\"warningList\":[]}",
+        "result_text": "{ scope = Editor ParticleSystem Simulate and Camera Render, unityVersion = 2022.3.62f3, pipeline = Built-in, colorSpace = Gamma, prefab = Assets/FXForge/Variants/fx_7659e00a9525ad13811c/Effects/sumi_isolation_verification.prefab, layerList = System.String[], timeList = System.Single[], countList = System.Int32[][], imageList = System.String[], warningList = System.String[], activeSceneUnchanged = True, playModeValidated = False }",
+        "result_type": "<>f__AnonymousType0`12[[System.String, mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089],[System.String, mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089],[System.String, mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089],[System.String, mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089],[System.String, mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089],[System.String[], mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089],[System.Single[], mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089],[System.Int32[][], mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089],[System.String[], mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089],[System.String[], mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089],[System.Boolean, mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089],[System.Boolean, mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089]]",
+        "error_type": "",
+        "error_message": "",
+        "error_stack_trace": "",
+        "diagnostics": [],
+        "artifacts": [],
+        "compile_ms": 1409,
+        "execute_ms": 429
+      },
+      "backend": null,
+      "operation_id": null
+    },
+    "error": null,
+    "meta": {
+      "warnings": [],
+      "truncation": {
+        "truncated": false,
+        "total_count": 0,
+        "cursor": null,
+        "full_output_path": null
+      },
+      "artifacts": {
+        "development_policy": {
+          "effective_mode": "auto",
+          "source": "builtin",
+          "selected_mode": "auto",
+          "selected_source": "builtin",
+          "settings_path": "C:\\Users\\fmz\\AppData\\Local\\Temp\\mm-effect-native-20261110-8d5af6\\UnityProject\\.fuc\\development-settings.json",
+          "settings_error": null,
+          "shared_protection": false
+        },
+        "editor_transitions": [],
+        "operation_artifacts": {
+          "response_path": "C:/Users/fmz/AppData/Local/Temp/mm-effect-native-20261110-8d5af6/UnityProject/Library/FakeUnityCLI/responses/effect-capture-1b0b6a52-8a70-4669-95de-31e1328374cc.json"
+        }
+      },
+      "project": {
+        "root": "C:\\Users\\fmz\\AppData\\Local\\Temp\\mm-effect-native-20261110-8d5af6\\UnityProject",
+        "unity_version": "2022.3.62f3",
+        "index_age_s": null
+      }
+    }
+  }
+}

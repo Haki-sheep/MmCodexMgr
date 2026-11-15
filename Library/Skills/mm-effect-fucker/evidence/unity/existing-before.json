@@ -1,0 +1,76 @@
+{
+  "schema_version": "1.0",
+  "command": "editor exec",
+  "ok": true,
+  "dry_run": false,
+  "data": {
+    "request_id": "effect-existing-before-20261110-8d5af6",
+    "state": "success",
+    "completed": true,
+    "replayed": false,
+    "result": {
+      "activeScene": "",
+      "dependencyHash": "f4ffb59f68dc4a25ff559cea37da65c8",
+      "dirty": false,
+      "prefab": "Assets/FXForge/Effects/sumi_sword_slash_forward.prefab"
+    },
+    "response": {
+      "protocol_version": "1.1",
+      "request_id": "effect-existing-before-20261110-8d5af6",
+      "state": "success",
+      "success": true,
+      "submitted_at": "2026-11-10T15:55:14.8827652Z",
+      "started_at": "2026-11-10T15:55:14.9824536Z",
+      "completed_at": "2026-11-10T15:55:15.1036993Z",
+      "editor_pid": 28212,
+      "editor_instance_id": "28212-639299218670934029",
+      "editor_session_id": "20261110T154509.7459303-28212-7b0525cd",
+      "unity_version": "2022.3.62f3",
+      "operation": "roslyn-exec",
+      "code_sha256": "9687cdb29a9ea1b7c380cde93d4ef808941584eec7c069884e6a58650db2cace",
+      "payload_sha256": "ff0db5c46381e8426241d5b01af8a9f2e0287de55fc54d7c63ce91ffcc3f16c8",
+      "result_json": "{\"activeScene\":\"\",\"dependencyHash\":\"f4ffb59f68dc4a25ff559cea37da65c8\",\"dirty\":false,\"prefab\":\"Assets/FXForge/Effects/sumi_sword_slash_forward.prefab\"}",
+      "result_text": "{ prefab = Assets/FXForge/Effects/sumi_sword_slash_forward.prefab, dependencyHash = f4ffb59f68dc4a25ff559cea37da65c8, activeScene = , dirty = False }",
+      "result_type": "<>f__AnonymousType0`4[[System.String, mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089],[System.String, mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089],[System.String, mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089],[System.Boolean, mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089]]",
+      "error_type": "",
+      "error_message": "",
+      "error_stack_trace": "",
+      "diagnostics": [],
+      "artifacts": [],
+      "compile_ms": 114,
+      "execute_ms": 2
+    },
+    "backend": null,
+    "operation_id": null
+  },
+  "error": null,
+  "meta": {
+    "warnings": [],
+    "truncation": {
+      "truncated": false,
+      "total_count": 0,
+      "cursor": null,
+      "full_output_path": null
+    },
+    "artifacts": {
+      "development_policy": {
+        "effective_mode": "auto",
+        "source": "builtin",
+        "selected_mode": "auto",
+        "selected_source": "builtin",
+        "settings_path": "C:\\Users\\fmz\\AppData\\Local\\Temp\\mm-effect-native-20261110-8d5af6\\UnityProject\\.fuc\\development-settings.json",
+        "settings_error": null,
+        "shared_protection": false
+      },
+      "editor_transitions": [],
+      "operation_artifacts": {
+        "response_path": "C:/Users/fmz/AppData/Local/Temp/mm-effect-native-20261110-8d5af6/UnityProject/Library/FakeUnityCLI/responses/effect-existing-before-20261110-8d5af6.json"
+      }
+    },
+    "project": {
+      "root": "C:\\Users\\fmz\\AppData\\Local\\Temp\\mm-effect-native-20261110-8d5af6\\UnityProject",
+      "unity_version": "2022.3.62f3",
+      "index_age_s": null
+    }
+  }
+}

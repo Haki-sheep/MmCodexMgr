@@ -1,0 +1,80 @@
+{
+  "argv": [
+    "editor",
+    "exec",
+    "--code-file",
+    "-",
+    "--timeout",
+    "180",
+    "--request-id",
+    "effect-stage-8278d8d0-a56e-440f-8031-83291b2ca0a6"
+  ],
+  "exitCode": 65,
+  "stderr": "",
+  "response": {
+    "schema_version": "1.0",
+    "command": "editor exec",
+    "ok": false,
+    "dry_run": false,
+    "data": null,
+    "error": {
+      "code": "FUC_EDITOR_OPERATION_FAILED",
+      "message": "Editor online operation ended in terminal state 'runtime_error'.",
+      "location": null,
+      "suggestions": [],
+      "retryable": false,
+      "recovery": "Inspect response artifact, fix the reported Editor error, then submit a new request ID.",
+      "details": {
+        "transport_ok": true,
+        "operation_ok": false,
+        "terminal_state": "runtime_error",
+        "data": {
+          "request_id": "effect-stage-8278d8d0-a56e-440f-8031-83291b2ca0a6",
+          "state": "runtime_error",
+          "completed": true,
+          "replayed": false,
+          "result": null,
+          "response": {
+            "protocol_version": "1.1",
+            "request_id": "effect-stage-8278d8d0-a56e-440f-8031-83291b2ca0a6",
+            "state": "runtime_error",
+            "success": false,
+            "submitted_at": "2026-11-10T15:41:55.5418580Z",
+            "started_at": "2026-11-10T15:41:55.6236994Z",
+            "completed_at": "2026-11-10T15:41:57.2598579Z",
+            "editor_pid": 28212,
+            "editor_instance_id": "28212-639299218670934029",
+            "editor_session_id": "20261110T153815.8216205-28212-cdf6b3ec",
+            "unity_version": "2022.3.62f3",
+            "operation": "roslyn-exec",
+            "code_sha256": "ad6c2542e3c78fcdec0d8acd53ed5e6ca88b54a4c0abcb57c37cf294f420d66c",
+            "payload_sha256": "e9c3e6ccee71bc04cc1634535d0db5dfd7e9a2fd8f0e599fcd16a6b27bec2a0f",
+            "result_json": "",
+            "result_text": "",
+            "result_type": "",
+            "error_type": "System.NullReferenceException",
+            "error_message": "Object reference not set to an instance of an object",
+            "error_stack_trace": "System.NullReferenceException: Object reference not set to an instance of an object\r\n  at FakeUnityCLI.EditorBridge.RoslynExecutor.Execute (System.String source) [0x000e7] in .\\Packages\\com.fakeunity.cli.editorbridge\\Editor\\RoslynExecutor.cs:88 ",
+            "diagnostics": [],
+            "artifacts": [],
+            "compile_ms": 1335,
+            "execute_ms": 0
+          },
+          "backend": null,
+          "operation_id": null
+        }
+      }
+    },
+    "meta": {
+      "warnings": [],
+      "truncation": {
+        "truncated": false,
+        "total_count": 0,
+        "cursor": null,
+        "full_output_path": null
+      },
+      "artifacts": null,
+      "project": null
+    }
+  }
+}
