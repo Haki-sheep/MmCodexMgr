@@ -1,0 +1,6 @@
+interface:
+  display_name: "mm-image2prefab-fucker"
+  short_description: "将界面图片拆成独立素材并用真实Unity Layout组件还原可修改预制体"
+  default_prompt: "使用 $mm-image2prefab-fucker 将参考图拆成可独立替换的UI素材并装配Unity Prefab 按80分标准交付"
+policy:
+  allow_implicit_invocation: true

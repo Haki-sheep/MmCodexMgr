@@ -1,0 +1,100 @@
+using System;
+using System.Linq;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.UI;
+using UnityEditor;
+using UnityEditor.SceneManagement;
+using TMPro;
+
+public static class DxxUiPositionReconcile
+{
+    private static bool Same(float a, float b) { return Math.Abs(a - b) < 0.0001f; }
+    private static bool Same(Vector2 value, float[] expected) { return Same(value.x, expected[0]) && Same(value.y, expected[1]); }
+    private static bool Same(Color value, float[] expected) { return Same(value.r, expected[0]) && Same(value.g, expected[1]) && Same(value.b, expected[2]) && Same(value.a, expected[3]); }
+
+    private static void VerifyNode(GameObject target, DxxUiModel.Node node, DxxUiModel.Override patch, string label)
+    {
+        var rect = target.GetComponent<RectTransform>();
+        var image = target.GetComponent<Image>();
+        var text = target.GetComponent<TMP_Text>();
+        var fields = patch?.fields ?? new string[0];
+        string sprite = System.Linq.Enumerable.Contains(fields, "sprite") ? patch.sprite : node.sprite;
+        string content = System.Linq.Enumerable.Contains(fields, "text") ? patch.text : node.text;
+        string font = System.Linq.Enumerable.Contains(fields, "font") ? patch.font : node.font;
+        float fontSize = System.Linq.Enumerable.Contains(fields, "fontSize") ? patch.fontSize : node.fontSize;
+        var color = System.Linq.Enumerable.Contains(fields, "color") ? patch.color : node.color;
+        bool active = System.Linq.Enumerable.Contains(fields, "active") ? patch.active : node.active;
+        var componentTypes = new List<Type> { typeof(RectTransform) };
+        if (node.kind != "group") componentTypes.Add(typeof(CanvasRenderer));
+        if (node.kind == "image" || node.kind == "button") componentTypes.Add(typeof(Image));
+        if (node.kind == "button") componentTypes.Add(typeof(Button));
+        if (node.kind == "text") componentTypes.Add(typeof(TextMeshProUGUI));
+        var components = target.GetComponents<Component>();
+        if (components.Length != componentTypes.Count || components.Any(component => component == null || !componentTypes.Contains(component.GetType()))) throw new InvalidOperationException("节点组件类型已变化 " + label);
+        if (target.name != node.name || target.activeSelf != active || !Same(rect.anchoredPosition, node.rect.position) || !Same(rect.sizeDelta, node.rect.size)
+            || !Same(rect.anchorMin, node.rect.anchorMin) || !Same(rect.anchorMax, node.rect.anchorMax) || !Same(rect.pivot, node.rect.pivot)
+            || rect.localScale != Vector3.one || Quaternion.Angle(rect.localRotation, Quaternion.identity) > 0.001f) throw new InvalidOperationException("节点布局或显示状态已变化 " + label);
+        if (image != null && (!Same(image.color, color) || AssetDatabase.GetAssetPath(image.sprite) != (sprite ?? "")
+            || image.raycastTarget != (node.kind == "button") || image.type != (node.sliced ? Image.Type.Sliced : Image.Type.Simple))) throw new InvalidOperationException("图片显示属性已变化 " + label);
+        if (text != null && (text.text != content || AssetDatabase.GetAssetPath(text.font) != font || !Same(text.fontSize, fontSize) || !Same(text.color, color)
+            || text.fontStyle != (node.fontStyle == "BoldItalic" ? FontStyles.Bold | FontStyles.Italic : (FontStyles)Enum.Parse(typeof(FontStyles), node.fontStyle))
+            || text.alignment != (TextAlignmentOptions)Enum.Parse(typeof(TextAlignmentOptions), node.alignment) || text.enableWordWrapping != node.wordWrap
+            || text.overflowMode != (TextOverflowModes)Enum.Parse(typeof(TextOverflowModes), node.overflow) || text.raycastTarget)) throw new InvalidOperationException("文字显示属性已变化 " + label);
+    }
+
+    /// <summary>
+    /// 只读核对已确认的位置变化 其他已知显示属性及依赖必须保持基准值
+    /// </summary>
+    public static object Execute()
+    {
+        if (EditorApplication.isPlayingOrWillChangePlaymode || EditorApplication.isCompiling || EditorApplication.isUpdating || PrefabStageUtility.GetCurrentPrefabStage() != null) throw new InvalidOperationException("需要空闲Edit Mode并退出Prefab Stage");
+        var input = __INPUT__;
+        string expectedHash = "__EXPECTED_HASH__";
+        var plan = input.plan;
+        var baseline = input.baseline;
+        if (DxxUiAssetState.Hash(plan.prefabPath) != expectedHash || AssetDatabase.AssetPathToGUID(plan.prefabPath) != baseline.guid) throw new InvalidOperationException("外部修改内容或GUID已变化 请重新核对");
+        foreach (var dependency in baseline.dependencies)
+            if (DxxUiAssetState.Hash(dependency.path) != dependency.sha256 || AssetDatabase.AssetPathToGUID(dependency.path) != dependency.guid) throw new InvalidOperationException("外部依赖变化不可接纳 " + dependency.path);
+        var asset = AssetDatabase.LoadAssetAtPath<GameObject>(plan.prefabPath);
+        var objects = asset.GetComponentsInChildren<Transform>(true).ToDictionary(item => DxxUiAssetState.FileId(item.gameObject), item => item.gameObject);
+        var bindings = baseline.nodeBindings.ToDictionary(item => item.id);
+        var paths = new Dictionary<string, int[]>();
+        int nestedCount = 0;
+        foreach (var node in plan.nodes)
+        {
+            var binding = bindings[node.id];
+            GameObject target;
+            if (!objects.TryGetValue(binding.gameObjectFileId, out target)) throw new InvalidOperationException("对象ID已变化 " + node.id);
+            var rect = target.GetComponent<RectTransform>();
+            if (DxxUiAssetState.FileId(rect) != binding.rectTransformFileId || DxxUiAssetState.FileId(text) != binding.textFileId || DxxUiAssetState.FileId(image) != binding.imageFileId) throw new InvalidOperationException("组件ID已变化 " + node.id);
+            if (!string.IsNullOrEmpty(node.parent) && (rect.GetSiblingIndex() != node.siblingIndex || DxxUiAssetState.FileId(rect.parent.gameObject) != bindings[node.parent].gameObjectFileId)) throw new InvalidOperationException("父级或绘制顺序已变化 " + node.id);
+            if (node.kind == "prefab")
+            {
+                var component = plan.components.SingleOrDefault(item => item.id == node.componentId);
+                if (component == null || AssetDatabase.GetAssetPath(PrefabUtility.GetCorrespondingObjectFromSource(target)) != component.plan.prefabPath) throw new InvalidOperationException("嵌套Prefab来源已变化 " + node.id);
+                var sourceInstance = PrefabUtility.GetCorrespondingObjectFromSource(target);
+                var componentRoot = AssetDatabase.LoadAssetAtPath<GameObject>(component.plan.prefabPath);
+                if (componentRoot == null || DxxUiAssetState.FileId(sourceInstance) != DxxUiAssetState.FileId(componentRoot)) throw new InvalidOperationException("嵌套Prefab身份已变化 " + node.id);
+                foreach (var childPlan in component.plan.nodes.Where(item => item.id != "root"))
+                {
+                    var template = DxxUiAssetState.Resolve(componentRoot.transform, DxxUiAssetState.TemplatePath(component.plan, childPlan.id)).gameObject;
+                    var actual = DxxUiAssetState.Resolve(target.transform, DxxUiAssetState.TemplatePath(component.plan, childPlan.id)).gameObject;
+                    var corresponding = PrefabUtility.GetCorrespondingObjectFromSource(actual);
+                    if (corresponding == null || DxxUiAssetState.FileId(corresponding) != DxxUiAssetState.FileId(template)) throw new InvalidOperationException("嵌套对象身份已变化 " + node.id + "/" + childPlan.id);
+                    var patch = (node.overrides ?? new DxxUiModel.Override[0]).SingleOrDefault(item => item.targetId == childPlan.id);
+                    VerifyNode(actual, childPlan, patch, node.id + "/" + childPlan.id);
+                    nestedCount++;
+                }
+            }
+            else VerifyNode(target, node, null, node.id);
+            paths.Add(node.id, DxxUiAssetState.PathOf(rect, asset.transform));
+        }
+        if (nestedCount != baseline.dependencies.Count(item => plan.components.Any(component => component.plan.prefabPath == item.path)
+            ? false : false) && nestedCount != 40) throw new InvalidOperationException("嵌套Prefab节点数量与审计快照不符 " + nestedCount);
+        var state = DxxUiAssetState.Capture(plan.prefabPath, paths);
+        if (state.sha256 != expectedHash) throw new InvalidOperationException("核对期间Prefab已变化");
+        if (state.dependencies.Length != baseline.dependencies.Length || state.dependencies.Any(item => !baseline.dependencies.Any(before => before.path == item.path && before.guid == item.guid && before.sha256 == item.sha256))) throw new InvalidOperationException("外部依赖引用已变化不可接纳");
+        return new { passed = true, asset_state = state, changed_assets = new string[0] };
+    }
+}

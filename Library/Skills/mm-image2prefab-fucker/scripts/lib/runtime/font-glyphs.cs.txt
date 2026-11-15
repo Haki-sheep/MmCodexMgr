@@ -1,0 +1,52 @@
+public sealed class DxxUiFontGlyphs
+{
+    private UnityEngine.Font loadedSource;
+
+    /// <summary>
+    /// 检查图集与真实动态字体源 避免系统字体回退掩盖缺字
+    /// </summary>
+    public bool HasCharacter(TMPro.TMP_FontAsset font, int code)
+    {
+        var visited = new System.Collections.Generic.HashSet<TMPro.TMP_FontAsset>();
+        if (HasCharacter(font, code, visited)) return true;
+        if (TMPro.TMP_Settings.instance == null) return false;
+        if (TMPro.TMP_Settings.fallbackFontAssets != null)
+            foreach (var fallback in TMPro.TMP_Settings.fallbackFontAssets)
+                if (HasCharacter(fallback, code, visited)) return true;
+        return HasCharacter(TMPro.TMP_Settings.defaultFontAsset, code, visited);
+    }
+
+    public void RequireText(TMPro.TMP_FontAsset font, string text, string context)
+    {
+        if (font == null) throw new System.InvalidOperationException("字体不存在 " + context);
+        for (int index = 0; index < text.Length; index++)
+        {
+            int code = char.ConvertToUtf32(text, index);
+            if (char.IsHighSurrogate(text[index])) index++;
+            if (!char.IsWhiteSpace((char)code) && !HasCharacter(font, code)) throw new System.InvalidOperationException("字体及动态源字体缺字 U+" + code.ToString("X") + " " + context);
+        }
+    }
+
+    private bool HasCharacter(TMPro.TMP_FontAsset font, int code, System.Collections.Generic.HashSet<TMPro.TMP_FontAsset> visited)
+    {
+        if (font == null || !visited.Add(font)) return false;
+        if (font.HasCharacter(code)) return true;
+        if (font.atlasPopulationMode == TMPro.AtlasPopulationMode.Dynamic && font.sourceFontFile != null)
+        {
+            var source = font.sourceFontFile;
+            if (loadedSource != source)
+            {
+                string path = UnityEditor.AssetDatabase.GetAssetPath(source);
+                var result = UnityEngine.TextCore.LowLevel.FontEngine.LoadFontFace(path, 90);
+                if (result != UnityEngine.TextCore.LowLevel.FontEngineError.Success) throw new System.InvalidOperationException("字体源加载失败 " + path + " " + result);
+                loadedSource = source;
+            }
+            UnityEngine.TextCore.Glyph glyph;
+            if (UnityEngine.TextCore.LowLevel.FontEngine.TryGetGlyphWithUnicodeValue((uint)code, UnityEngine.TextCore.LowLevel.GlyphLoadFlags.LOAD_DEFAULT, out glyph)) return true;
+        }
+        if (font.fallbackFontAssetTable != null)
+            foreach (var fallback in font.fallbackFontAssetTable)
+                if (HasCharacter(fallback, code, visited)) return true;
+        return false;
+    }
+}
