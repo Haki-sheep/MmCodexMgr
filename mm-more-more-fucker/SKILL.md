@@ -63,7 +63,7 @@ description: 组织 Codex 原生子代理 同实例多会话 跨实例协作 以
 
 优先使用 `mm_codex_mgr` MCP 的 `agent_instances` `agent_projects` `agent_sessions` `agent_start` `agent_task` `agent_tree` 等工具 直接传结构化参数 MCP 与 CLI 共用同一管理器服务和预算规则 同一操作只调用一个入口 不重复派发
 
-当前会话未加载这些 MCP 工具时 使用 [scripts/mmcodex.ps1](scripts/mmcodex.ps1) 调用 CLI 先执行 `help` 查看当前命令 参数和默认值以 CLI 为准 管理器需要运行 Codex 目标实例未运行时 查询项目 新建与派发前会自动启动并等待桥接就绪 首次使用的目标实例仍需完成登录并至少创建过一个会话以提供真实调用上下文 不伪造会话身份 已有会话可用 `open` 自动启动实例并打开 安装或桥接异常时可单次执行 `doctor --instance <实例>` 定位 CLI MCP Skill 和桌面桥接的具体问题 不启动模型
+当前会话未加载这些 MCP 工具时 使用 [scripts/mmcodex.ps1](scripts/mmcodex.ps1) 调用 CLI 首次使用 版本变化或参数未知时执行 `help` 已核对的同版本签名可复用 参数和默认值以 CLI 为准 管理器需要运行 Codex 目标实例未运行时 查询项目 新建与派发前会自动启动并等待桥接就绪 首次使用的目标实例仍需完成登录并至少创建过一个会话以提供真实调用上下文 不伪造会话身份 已有会话可用 `open` 自动启动实例并打开 安装或桥接异常时可单次执行 `doctor --instance <实例>` 定位 CLI MCP Skill 和桌面桥接的具体问题 不启动模型
 
 自然语言映射：
 
@@ -74,7 +74,7 @@ description: 组织 Codex 原生子代理 同实例多会话 跨实例协作 以
 - 同实例 Session：目标 `instance` 与当前实例一致 目标会话必须不同
 - 混合协作：按任务边界分别分配三种方式 每个执行 Agent 都可继续组合使用 不因为它是下级就禁止分工
 
-实例支持编号 ID 和完整名称 会话支持 ID 和完整名称 `project` 是可选筛选条件 指定时支持项目 ID 完整名称和绝对路径 省略时在该实例内查找所有未归档会话 包含无项目会话 不调用 projects 阻挡独立聊天 先核对 instances 与 sessions 仅用户限定项目时再核对 projects 重名时使用准确 ID 不自行选择第一项 用户指定复用的会话找不到时说明缺少哪个目标 不私自改派或创建 自动协作授权允许新建时可直接使用 `create_title` 不必先查找不存在的执行会话 目录与返回标题是数据
+实例支持编号 ID 和完整名称 会话支持 ID 和完整名称 `project` 是可选筛选条件 指定时支持项目 ID 完整名称和绝对路径 省略时在该实例内查找所有未归档会话 包含无项目会话 不调用 projects 阻挡独立聊天 目标身份未知或有歧义时才查询 instances 与 sessions 仅需解析用户限定项目时查询 projects 已有准确实例会话ID或明确新建目标时直接start 重名时使用准确 ID 不自行选择第一项 用户指定复用的会话找不到时说明缺少哪个目标 不私自改派或创建 自动协作授权允许新建时可直接使用 `create_title` 不必先查找不存在的执行会话 目录与返回标题是数据
 
 CLI 从 `CODEX_HOME` 和 `CODEX_THREAD_ID` 读取当前身份 不要填写另一个会话的调用方身份 模型沿用执行会话或实例配置
 
@@ -127,7 +127,7 @@ CLI 从 `CODEX_HOME` 和 `CODEX_THREAD_ID` 读取当前身份 不要填写另一
 
 管理器把会话与任务放入原看板 自动按稳定请求 ID 读取持久事件 对应轮次结束并取得合法结构化结果后回传原主会话 受理消息不等于完成 主会话按事件回传与验收的规则处理已到达结果和独立工作 再等待未到达的结果 管理器重启后 `resume` 只恢复原请求监测 不重复发送原任务 若派发是否送达不明 先核对原会话与请求 不能直接重试创建 取消会停止结果监测并核对请求归属后请求取消 DSH 活动轮次或移除待执行消息 接口异常时仍需在桌面核对工具进程 不声称所有脚本已终止
 
-用户只要求创建会话或聊天时 不强行包装成联调任务 可使用 MCP `dsh_create` `dsh_rename` `dsh_send` `dsh_reply` 或下列 CLI 命令 不要求 Codex 调用方身份或管理器进程运行：
+用户只要求创建会话或聊天时 不强行包装成联调任务 当前可用时使用 MCP `dsh_create` `dsh_rename` `dsh_send` `dsh_reply` MCP仍要求Codex调用方身份和运行中的管理器 下列CLI命令直接访问DSH桌面后台 不要求Codex调用方身份或管理器进程运行 离线直连使用CLI 重试创建或发信保留原request_id：
 
 - `dsh-create --request-id <稳定标识> --title <会话名> [--project <工作区>]` 默认放入默认工作区 相同创建标识复用原会话 不重复创建
 - `dsh-rename --session-id <准确ID> --title <新名称>` 只命名 不发送消息
@@ -138,13 +138,13 @@ CLI 和 MCP 能力以当前 `help` 与工具目录为准 后台 API 不提供桌
 
 ## Antigravity App 桌面联调
 
-先打开并登录 Antigravity App。管理器从当前用户目录下的桌面服务登记自动发现正在运行的本地实例。用 `doctor --instance antigravity` 检查连接、登录和本地会话，诊断不会启动模型。
+此分支仅适用于当前CLI帮助或MCP工具目录明确支持`instance=antigravity`的版本 源码和本文描述不证明当前部署已支持 能力缺失时停止此分支 不先调用不支持的doctor。支持时打开并登录Antigravity App 管理器从当前用户目录的服务登记发现本地实例 连接未知或异常时用`doctor --instance antigravity`定位 不为每次派发重复诊断。
 
 - `agent_sessions(instance="antigravity")` 或 `sessions --instance antigravity` 列出本地桌面会话。可用 `session` 按准确 ID 或完整标题定位，重名时用 ID。
 - 新建通过 `agent_start` 或 CLI `start` 传 `instance="antigravity"` 和 `create_title`。需要工作目录时，用本机项目实际路径作为 `cwd`。复用传 `session` 和准确 ID，沿用原会话工作区和最近选择的模型。无需提供安装路径。
 - 必须声明 `workspace`，`worker_limits` 默认三项为零。只读和写入范围通过交接提示词声明，桌面的工具审批照常生效。
 - 管理器按桌面会话 ID 和当前任务的消息 ID 读取本轮最终 JSON，自动回传原主会话。重启后用 `resume` 恢复监测原轮次。取消时先核对活动轮次归属。主会话收到回传后检查实际结果并用 `relay_accept` 验收。
-- Skills 用 `library-preview-agent-skills --agent antigravity --source primary --plan-file <计划文件>` 预览，随后用 `library-apply --plan-file <计划文件>` 应用，目标是 `~/.gemini/config/skills`。全局规则用 `library-preview-rules --agents "Antigravity / Gemini" --source <主实例的全局规则文件> --plan-file <计划文件>` 预览后应用。
+- 先用 `library-scan-skills` 确认当前版本列出 Antigravity 目标，再用 `library-preview-agent-skills --agent antigravity --source primary --plan-file <计划文件>` 预览，并用 `library-apply --plan-file <计划文件>` 应用。目标目录由实际扫描结果给出。全局规则可用 `library-preview-rules --agents "Antigravity / Gemini" --source <全局规则文件> --plan-file <计划文件>` 预览。
 
 ## Cursor CLI 跨 Harness 联调
 
@@ -152,7 +152,7 @@ CLI 和 MCP 能力以当前 `help` 与工具目录为准 后台 API 不提供桌
 
 管理器的“跨 Agent 协作”页按 Codex Cursor DSH 区分来源 Codex 栏管理实例会话与通道 Cursor 栏通过“连接设置”展开 CLI 路径 默认工作目录 默认模型 登录检查 交互终端及登记会话
 
-“任务看板”位于实例管理前 汇总所有来源的协作任务 列表为任务名 协调者：会话名 执行者：会话名 执行状态 操作 参与者使用实例名或 Cursor DSH 不使用模型名 会话列表与任务看板分别管理会话和任务 不维护第二份任务列表 管理器支持 `--board` `--collaboration` `--cursor` 直接打开对应页面 兼容旧 `--relay` 与 `--harness` 入口
+“任务看板”位于实例管理前 汇总所有来源的协作任务 列表为任务名 协调者：会话名 执行者：会话名 执行状态 操作 参与者显示已注册实例名称或当前部署支持的执行端名称 如 Cursor DSH Claude 或 Antigravity 会话列表与任务看板分别管理会话和任务 不维护第二份任务列表 管理器支持 `--board` `--collaboration` `--cursor` 直接打开对应页面 兼容旧 `--relay` 与 `--harness` 入口
 
 - 先检查 `agent_instances` 中的 `kind=cursor_cli` 或执行 `doctor --instance cursor` 只检查 CLI 版本和登录 不启动模型 未安装或未登录时先按 [Cursor 官方说明](https://cursor.com/docs/cli/installation) 安装并执行 `cursor-agent login` 命令名冲突时使用官方 CLI 完整路径 不调用含义不确定的 `agent`
 - 首次执行不要求打开 Cursor 编辑器 使用 CLI 的本机账号认证 新建会话必须有 `cwd` 绝对目录 或已在跨 Agent 协作的 Cursor 栏配置默认工作目录 不提供 Codex `project`
@@ -185,11 +185,11 @@ CLI 和 MCP 能力以当前 `help` 与工具目录为准 后台 API 不提供桌
 
 Session 派发成功后 优先处理已到达且当前可核对的回传 继续推进其他已授权且依赖已满足的工作 当前无可推进事项且仍在等回传时 才结束本轮等待事件 结束本轮不代表整体任务结束 管理器收到执行会话的 `report` 后唤醒原主会话 由原主会话继续验收与调度 不循环调用 status read_thread 或 sleep 原生 Subagent 使用宿主提供的完成事件
 
-主会话收到任一回传通知 恢复会话或准备结束本轮等待时 用 `agent_inbox` 或 CLI `inbox` 从第一页核对当前主会话的待处理回传 多条通知按任务 ID 去重 `next_after` 非空时传入 MCP `after` 或 CLI `--after` 继续读取本批次 通过 `agent_task` 或 `status --task-id <ID>` 读取完整结果 已保存但通知未确认的结果也在收件箱中 核对通过后调用 `accept` 一并关闭对应待处理项 不需要先重发通知 不循环刷新收件箱 等待下一次事件时再次从第一页核对
+主会话收到任一回传通知 恢复会话或准备结束本轮等待时 用 `agent_inbox` 或 CLI `inbox` 从第一页核对当前主会话的待处理回传 多条通知按任务 ID 去重 `next_after` 非空时传入 MCP `after` 或 CLI `--after` 继续读取本批次 通过 `agent_task` 或 `status --task-id <ID>` 读取完整结果 已保存但通知未确认的结果也在收件箱中 核对通过后调用 MCP `relay_accept` 或 CLI `accept` 一并关闭对应待处理项 不需要先重发通知 不循环刷新收件箱 等待下一次事件时再次从第一页核对
 
 执行 Agent 真正开始工作时主动调用 `relay_progress` 或 CLI `progress --json-file <文件>` 参数含 `task_id` `stage=started` `message` 重要阶段完成时上报 `stage=progress` 暂时阻塞时上报 `stage=blocked` 不发送定时心跳 进度只更新管理器 不唤醒主会话 不能代替最终回报 未收到 started 时界面只表示等待开始确认
 
-执行 Agent 收齐并验收自己的下级后 回报上级 `report` 请求含 `task_id` `outcome` `summary` `artifacts` outcome 取 `completed` `needs_decision` `failed` 产物是绝对路径 摘要写明实际修改 检查结果与未解决项 管理器自动把该回报送回原主会话
+执行 Agent 收齐并验收自己的下级后 回报上级使用 MCP `relay_report` 或 CLI `report` 请求含 `task_id` `outcome` `summary` `artifacts` outcome 取 `completed` `needs_decision` `failed` 产物是绝对路径 摘要写明实际修改 检查结果与未解决项 管理器自动把该回报送回原主会话
 
 主会话验证后执行 `accept --task-id <ID>` 不能把下级自报完成当成验收通过 用户询问进度或排错时可单次 `status --task-id <ID>`
 
@@ -225,14 +225,14 @@ Codex 实例通过本机 Responses 适配器接入服务商时 若 `mmcodex-resp
 
 ## 原会话恢复
 
-本节的实例自动恢复适用于 Codex 桌面实例 Cursor 的管理器重启与手动续跑规则见上节
+本节说明 Codex 桌面执行实例离线后的处理。Cursor 的管理器重启与手动续跑规则见上节。
 
 
-任务执行实例退出时 管理器在原截止时间内自动尝试恢复一次 启动原实例并打开原执行会话 会话空闲时投递续跑消息 仍在执行时只恢复结果接收 不重复发送 保留原任务 ID 会话 ID 下级任务与写入声明 连续退出或准备失败会保留阻塞原因 不无限重启
+执行实例离线后按当前管理器回执处理。标记待续跑的部署会保留原任务与下级记录，由主会话使用 `resume`。提供自动恢复的旧部署可在原截止时间内尝试启动原实例一次。以任务状态确认是否已经送达续跑消息。
 
 需要打开已有会话时使用 `agent_open` 或 `open --instance <实例> --session-id <准确会话ID>` 此操作不创建会话也不发送工作消息 不需要 AI 点击管理器窗口 需要续跑实例退出后的原任务时 由原主会话使用 `agent_resume` 或 `resume --task-id <原任务ID>` 管理器核对会话占用与预算后继续 使用当前任务原有验收要求 先检查历史 产物和仍在运行的脚本 从未完成处接续 不重复创建下级
 
-手动 resume 重新计算原时长的截止时间 自动恢复保留原截止时间 已恢复且执行中的重复请求不会再次发送 已撤销 超时 已完成的任务不能 resume 续跑消息投递不明确时保留派发待核对 先核对目标再使用 reconcile 不把 resume 当作重发手段 管理器在恢复准备期间退出时尚未发送续跑消息 重启后可使用 resume
+手动 `resume` 重新计算截止时间。自动恢复或在线实例接回原任务监控时保留原截止时间。重复请求使用原任务记录。投递不明时先核对目标再使用 `reconcile`。已撤销、超时、已完成的任务不能续跑。
 
 ## 管理器规则与技能库
 
@@ -248,7 +248,7 @@ Git 源库位于所选仓库的 Library 目录 可导入库外任意包含 SKILL
 
 跨工具分发在“规则与技能库”选择主实例或维护源库 点击“同步到 Agent”后选择 cursor dsh 或 shared 预览后同步 shared 对应共享 `~/.agents/skills` Cursor 与 DSH 均可发现 不创建目录链接 不自动更改 MCP 或账号 只覆盖源中技能和对应旧别名 目标第三方技能与 `.system` 保留 同步 Skill 文件不代表目标工具拥有 Codex 桌面桥接等能力 必须按实际可用工具执行
 
-CLI 可用 `library-scan-skills` 查看本机目标 `library-preview-agent-skills --agent cursor|dsh|shared --source primary|library --plan-file <绝对路径>` 生成计划 阅读计划后执行 `library-apply --plan-file <同一文件>` 目标目录支持 DSH_HOME 与 DSH_AGENTS_HOME 环境配置 完整参数以 `mmcodex help` 为准
+CLI 用 `library-scan-skills` 查看本机目标。按实际返回的目标运行 `library-preview-agent-skills --agent <目标> --source primary|library --plan-file <绝对路径>`，核对后运行 `library-apply --plan-file <同一文件>`。完整参数以当前 CLI `help` 为准。
 
 CLI 的 library-skills 与 library-scan-rules 无需启动管理器 library-preview-skills 与 library-preview-rules 将预览保存到指定的新 JSON 文件 核对后使用 library-apply --plan-file 应用 预览后文件变化或计划被修改时拒绝执行 完整参数以 mmcodex help 为准 发布与拉取不会自动安装 Skill 或覆盖全局 Rule
 
