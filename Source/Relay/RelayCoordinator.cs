@@ -15,14 +15,16 @@ public sealed partial class RelayCoordinator : IDisposable
     public RelayChannel? Channel { get; private set; }
     public CursorRelayRunner? Cursor { get; }
     public DshRelayRunner? Dsh { get; }
+    public AntigravityRelayRunner? Antigravity { get; }
 
     #region Lifecycle
-    public RelayCoordinator(RelayStore Store, IRelayBridge Bridge, CursorRelayRunner? Cursor = null, DshRelayRunner? Dsh = null)
+    public RelayCoordinator(RelayStore Store, IRelayBridge Bridge, CursorRelayRunner? Cursor = null, DshRelayRunner? Dsh = null, AntigravityRelayRunner? Antigravity = null)
     {
         this.Store = Store;
         this.Bridge = Bridge;
         this.Cursor = Cursor;
         this.Dsh = Dsh;
+        this.Antigravity = Antigravity;
         if (Bridge is IRelayProcessEvents Events) Events.InstanceExited += OnInstanceExited;
         Channel = Store.LoadChannel();
         foreach (string Id in Store.PendingIds())
@@ -31,6 +33,8 @@ public sealed partial class RelayCoordinator : IDisposable
             if (Item.State == eRelayState.Returning && Item.ReturnNotificationQueued) continue;
             if (Item.State == eRelayState.Running && Item.Channel.WorkerInstance.Id == CursorRelayRunner.InstanceId) Change(Item, eRelayState.Interrupted, "管理器重启 Cursor 原执行进程未确认 请核对产物后 resume 原任务 不自动重复执行");
             else if (Item.State == eRelayState.Running && Item.Channel.WorkerInstance.Id == DshRelayRunner.InstanceId) Change(Item, eRelayState.Interrupted, "管理器重启 DSH 会话保留 使用 resume 仅恢复原请求监测 不自动重复发送");
+            else if (Item.State == eRelayState.Running && Item.Channel.WorkerInstance.Id == AntigravityRelayRunner.InstanceId)
+                Change(Item, eRelayState.Interrupted, "管理器重启 请使用 resume 恢复 Antigravity 原轮次监测");
             else if (Item.State == eRelayState.Running) { ArmDeadline(Item); _ = WatchWorkerAsync(Item); }
             else if (Item.State == eRelayState.Recovering) Change(Item, eRelayState.Interrupted, "管理器在恢复准备期间退出 尚未投递续跑消息 可使用 resume 继续");
             else Change(Item, Item.State == eRelayState.Sending ? eRelayState.DispatchUncertain : eRelayState.ReturnUncertain, "管理器在投递期间退出 请核对目标会话后处理");
@@ -117,8 +121,13 @@ public sealed partial class RelayCoordinator : IDisposable
             Change(Item, eRelayState.Sending, "主会话已交接 正在发送到执行会话");
             try
             {
-                if (Bridge is DesktopRelayBridge && Current.CallbackCliPath.Length == 0 && Current.WorkerInstance.Id != DshRelayRunner.InstanceId) RelayToolInstaller.RequireInstalled(Current.WorkerInstance);
-                if (Current.WorkerInstance.Id == DshRelayRunner.InstanceId)
+                if (Bridge is DesktopRelayBridge && Current.CallbackCliPath.Length == 0 && Current.WorkerInstance.Id != AntigravityRelayRunner.InstanceId && Current.WorkerInstance.Id != DshRelayRunner.InstanceId) RelayToolInstaller.RequireInstalled(Current.WorkerInstance);
+                if (Current.WorkerInstance.Id == AntigravityRelayRunner.InstanceId)
+                {
+                    if (Antigravity is null) throw new InvalidOperationException("当前管理器未启用 Antigravity 执行端");
+                    await AntigravityRelayRunner.PrepareAsync(Item, Lifetime.Token, () => Store.Save(Item));
+                }
+                else if (Current.WorkerInstance.Id == DshRelayRunner.InstanceId)
                 {
                     await (Dsh ?? throw new InvalidOperationException("当前管理器未启用 DSH 执行端")).PrepareAsync(Item, Lifetime.Token, () => Store.Save(Item), ResolvedDsh);
                 }
@@ -133,10 +142,17 @@ public sealed partial class RelayCoordinator : IDisposable
                     Item.Channel.WorkerTitle = Created.Title;
                 }
                 else await Bridge.SendAsync(Item.Channel.WorkerInstance, Item.Channel.WorkerThreadId, BuildWorkerPrompt(Item), "", Lifetime.Token);
-                Change(Item, eRelayState.Running, Current.WorkerInstance.Id == DshRelayRunner.InstanceId ? "DSH 会话已准备 等待桌面请求确认" : Current.WorkerInstance.Id == CursorRelayRunner.InstanceId ? "Cursor 会话已准备 等待 CLI 执行开始事件" : "桌面已接收派发 等待执行会话主动回调");
+                Change(Item, eRelayState.Running, Current.WorkerInstance.Id switch
+                {
+                    AntigravityRelayRunner.InstanceId => "Antigravity 会话已准备 等待桌面请求确认",
+                    DshRelayRunner.InstanceId => "DSH 会话已准备 等待桌面请求确认",
+                    CursorRelayRunner.InstanceId => "Cursor 会话已准备 等待 CLI 执行开始事件",
+                    _ => "桌面已接收派发 等待执行会话主动回调"
+                });
                 ArmDeadline(Item);
                 if (Current.WorkerInstance.Id == CursorRelayRunner.InstanceId) LaunchCursor(Item);
                 else if (Current.WorkerInstance.Id == DshRelayRunner.InstanceId) LaunchDsh(Item, Resolved: ResolvedDsh);
+                else if (Current.WorkerInstance.Id == AntigravityRelayRunner.InstanceId) LaunchAntigravity(Item);
                 else _ = WatchWorkerAsync(Item);
             }
             catch (Exception Error)
@@ -205,8 +221,9 @@ public sealed partial class RelayCoordinator : IDisposable
             StopDeadline(Item.Id);
             Cursor?.Stop(Item.Id);
             Dsh?.Stop(Item.Id);
+            Antigravity?.Stop(Item.Id);
             CancelDescendants(Item.Id);
-            Change(Item, eRelayState.Cancelled, "用户撤销联调 后续回调将被拒绝 Cursor CLI 进程树会停止 DSH 核对归属后请求取消 Codex 工具进程需在执行会话中停止");
+            Change(Item, eRelayState.Cancelled, "用户撤销联调 后续回调将被拒绝 Cursor CLI 进程树会停止 DSH 与 Antigravity 核对归属后请求取消 Codex 工具进程需在执行会话中停止");
         }
         finally { Gate.Release(); }
     }
@@ -263,9 +280,10 @@ public sealed partial class RelayCoordinator : IDisposable
                 StopDeadline(Id);
                 Cursor?.Stop(Id);
                 Dsh?.Stop(Id);
+                Antigravity?.Stop(Id);
                 CancelDescendants(Id);
                 if (Item.State != eRelayState.Cancelled)
-                    Change(Item, eRelayState.Cancelled, "用户清空已阻塞记录 联调已中断 后续回调将被拒绝 Cursor CLI 会停止 DSH 核对归属后请求取消 Codex 模型与脚本需另行停止");
+                    Change(Item, eRelayState.Cancelled, "用户清空已阻塞记录 联调已中断 后续回调将被拒绝 Cursor CLI 会停止 DSH 与 Antigravity 核对归属后请求取消 Codex 模型与脚本需另行停止");
                 Store.DeleteFinished(Id);
             }
             Changed?.Invoke();
@@ -394,6 +412,7 @@ public sealed partial class RelayCoordinator : IDisposable
                 {
                     Cursor?.Stop(Item.Id);
                     Dsh?.Stop(Item.Id);
+                    Antigravity?.Stop(Item.Id);
                     CancelDescendants(Item.Id);
                     Change(Item, eRelayState.TimedOut, "执行超时 未收到明确回调 请查看执行会话 后续回调将被拒绝");
                     await NotifyFailureAsync(Item, "执行超时 未收到执行会话的明确回调");
@@ -420,11 +439,18 @@ public sealed partial class RelayCoordinator : IDisposable
     private async Task WatchWorkerAsync(RelayTask Item)
     {
         if (Item.Channel.WorkerInstance.Id == DshRelayRunner.InstanceId) { LaunchDsh(Item, true); return; }
+        if (Item.Channel.WorkerInstance.Id == AntigravityRelayRunner.InstanceId) { LaunchAntigravity(Item, true); return; }
         if (Bridge is not IRelayProcessEvents Events) return;
         try { await Events.WatchAsync(Item.Channel.WorkerInstance, Lifetime.Token); }
         catch (OperationCanceledException) when (Lifetime.IsCancellationRequested) { }
         catch (Exception Error) { Program.LogError(Error); }
     }
+
+    private void LaunchAntigravity(RelayTask Item, bool ObserveOnly = false) =>
+        (Antigravity ?? throw new InvalidOperationException("当前管理器未启用 Antigravity 执行端")).Launch(Item,
+            (Stage, Message) => ProgressAsync(AntigravityRelayRunner.InstanceId, Item.Channel.WorkerThreadId, Item.Id, Stage, Message),
+            Result => ReportAsync(AntigravityRelayRunner.InstanceId, Item.Channel.WorkerThreadId, Item.Id, Result.Outcome, Result.Summary, Result.Artifacts, WaitForNotification: false),
+            Lifetime.Token, ObserveOnly);
 
     private void LaunchDsh(RelayTask Item, bool ObserveOnly = false, DshConnection? Resolved = null) => (Dsh ?? throw new InvalidOperationException("DSH 执行端未连接")).Launch(Item,
         (Stage, Message) => ProgressAsync(DshRelayRunner.InstanceId, Item.Channel.WorkerThreadId, Item.Id, Stage, Message),
@@ -500,7 +526,8 @@ public sealed partial class RelayCoordinator : IDisposable
                 StopDeadline(Id);
                 Cursor?.Stop(Id);
                 Dsh?.Stop(Id);
-                Change(Item, eRelayState.Cancelled, "上级联调已终止 本任务不再接收回调 Cursor CLI 会停止 DSH 核对归属后请求取消 Codex 模型与脚本需另行停止");
+                Antigravity?.Stop(Id);
+                Change(Item, eRelayState.Cancelled, "上级联调已终止 本任务不再接收回调 Cursor CLI 会停止 DSH 与 Antigravity 核对归属后请求取消 Codex 模型与脚本需另行停止");
             }
     }
 

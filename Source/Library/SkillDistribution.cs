@@ -16,7 +16,14 @@ public static class SkillDistribution
         string Dsh = string.IsNullOrWhiteSpace(DshSetting) ? Path.Combine(Home, ".dsh") : DshSetting;
         string Agents = string.IsNullOrWhiteSpace(AgentsSetting) ? Path.Combine(Home, ".agents") : AgentsSetting;
         if (!Path.IsPathFullyQualified(Dsh) || !Path.IsPathFullyQualified(Agents)) throw new IOException("DSH Skill 根目录必须是绝对路径");
-        return new() { new("cursor", Path.Combine(Cursor, "skills"), Directory.Exists(Cursor)), new("dsh", Path.Combine(Dsh, "skills"), Directory.Exists(Dsh)), new("shared", Path.Combine(Agents, "skills"), Directory.Exists(Home)) };
+        string Gemini = Path.Combine(Home, ".gemini");
+        return new()
+        {
+            new("cursor", Path.Combine(Cursor, "skills"), Directory.Exists(Cursor)),
+            new("dsh", Path.Combine(Dsh, "skills"), Directory.Exists(Dsh)),
+            new("shared", Path.Combine(Agents, "skills"), Directory.Exists(Home)),
+            new("antigravity", Path.Combine(Gemini, "config", "skills"), Directory.Exists(Gemini))
+        };
     }
 
     /// <summary>

@@ -83,7 +83,7 @@ internal static class HarnessUiTests
                 if (TimeoutInput.Minimum != 0 || TimeoutInput.Value != 0 || !Descendants(Collaboration).OfType<Label>().Any(Item => Item.Text.Contains("0无限"))) throw new Exception("Moved channel editor lost unlimited timeout setting");
                 Count++;
                 var Sources = Descendants(Collaboration).OfType<ThemeTabControl>().Single();
-                if (!Sources.TabPages.Select(Item => Item.Text).SequenceEqual(new[] { "Codex", "Cursor", "DSH" })) throw new Exception("Agent sources missing");
+                if (!Sources.TabPages.Select(Item => Item.Text).SequenceEqual(new[] { "Codex", "Cursor", "DSH", "Antigravity" })) throw new Exception("Agent sources missing");
                 Count++;
                 Sources.SelectedTab = Sources.TabPages[0];
                 Application.DoEvents();

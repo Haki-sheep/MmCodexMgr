@@ -54,6 +54,9 @@ public sealed class CollaborationPage : UserControl
         SourceTabs.TabPages.Add(CodexPage);
         SourceTabs.TabPages.Add(CursorPage);
         SourceTabs.TabPages.Add(DshPage);
+        var AntigravitySourcePage = new NavigationPage("Antigravity");
+        AntigravitySourcePage.Controls.Add(new AntigravityPage());
+        SourceTabs.TabPages.Add(AntigravitySourcePage);
         Root.Controls.Add(SourceTabs);
         Root.Controls.Add(Status);
         Controls.Add(Root);
@@ -68,6 +71,7 @@ public sealed class CollaborationPage : UserControl
     {
         string InstanceId = SourceTabs.SelectedTab == CursorPage ? CursorRelayRunner.InstanceId : CodexSessions.SelectedInstance?.Id ?? Settings.SelectedId;
         if (SourceTabs.SelectedTab?.Text == "DSH") InstanceId = DshRelayRunner.InstanceId;
+        if (SourceTabs.SelectedTab?.Text == "Antigravity") InstanceId = AntigravityRelayRunner.InstanceId;
         using var Dialog = new Form { Text = "健康检查 · " + AgentDisplay.Instance(Settings, InstanceId, InstanceId), Font = Font, ClientSize = new Size(760, 420), StartPosition = FormStartPosition.CenterParent };
         using var Cancellation = new CancellationTokenSource();
         var Body = new TextBox { Dock = DockStyle.Fill, Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical, Text = "正在检查 CLI MCP Skill 路径与桌面桥接…" };

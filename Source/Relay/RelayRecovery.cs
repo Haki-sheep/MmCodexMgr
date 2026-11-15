@@ -4,6 +4,7 @@ public sealed partial class RelayCoordinator
 {
     public async Task OpenSessionAsync(InstanceProfile Instance, string ThreadId, CancellationToken Cancellation)
     {
+        if (Instance.Id == AntigravityRelayRunner.InstanceId) throw new InvalidOperationException("请在 Antigravity App 按标题打开会话");
         if (Instance.Id == CursorRelayRunner.InstanceId)
         {
             await (Cursor ?? throw new InvalidOperationException("当前管理器未启用 Cursor 执行端")).OpenAsync(ThreadId, Cancellation);
@@ -50,6 +51,16 @@ public sealed partial class RelayCoordinator
 
     private async Task ResumeCoreAsync(RelayTask Item, bool Automatic)
     {
+        if (Item.Channel.WorkerInstance.Id == AntigravityRelayRunner.InstanceId)
+        {
+            if (Antigravity is null || Item.Outcome.Length != 0 || Item.Channel.WorkerThreadId.Length == 0)
+                throw new InvalidOperationException("Antigravity 恢复需要仍未回报的原桌面会话");
+            Item.RecoveryCount++;
+            Change(Item, eRelayState.Running, "恢复 Antigravity 原轮次监测");
+            ArmDeadline(Item);
+            LaunchAntigravity(Item, true);
+            return;
+        }
         if (Item.Channel.WorkerInstance.Id == DshRelayRunner.InstanceId)
         {
             if (Item.Outcome.Length != 0) throw new InvalidOperationException("任务已有结果 禁止重复执行");

@@ -86,7 +86,7 @@ internal static class LibraryTests
         Package(Target, ".system", "builtin", "protected");
         File.WriteAllText(Path.Combine(Target, "MmCodingFucker.md"), "flat legacy");
         var Targets = SkillDistribution.Scan(Home);
-        Require(Targets.Select(Item => Item.Agent).SequenceEqual(new[] { "cursor", "dsh", "shared" }), "skill targets include Cursor DSH and the common root");
+        Require(Targets.Select(Item => Item.Agent).SequenceEqual(new[] { "cursor", "dsh", "shared", "antigravity" }), "skill targets include Cursor DSH and the common root");
         Require(Targets.Single(Item => Item.Agent == "cursor").Available && !Targets.Single(Item => Item.Agent == "dsh").Available, "missing DSH installation is explicit");
         var Cursor = Targets.Single(Item => Item.Agent == "cursor");
         var Plan = SkillDistribution.Preview(Source, Cursor);

@@ -1,6 +1,6 @@
 ---
 name: mm-more-more-fucker
-description: 组织 Codex 原生子代理 同实例多会话 跨实例协作 以及 DeepSeek Harness（DSH）和 Cursor CLI 联调 用于实际分工和任务派发 不用于仅解释协作概念 上下文或 Token 对比
+description: 组织 Codex 原生子代理 同实例多会话 跨实例协作 以及 DeepSeek Harness（DSH）和 Cursor CLI 联调 用于实际分工和任务派发 不用于仅解释协作概念 上下文或 Token 对比 支持 Antigravity App 桌面联调
 ---
 
 # mm-more-more-fucker
@@ -135,6 +135,16 @@ CLI 从 `CODEX_HOME` 和 `CODEX_THREAD_ID` 读取当前身份 不要填写另一
 - `dsh-reply --session-id <准确ID> --request-id <原请求标识>` 单次读取原请求 对应轮次结束才 `completed=true` 此命令不启动模型 不将别的请求或流式片段当成本轮最终回复
 
 CLI 和 MCP 能力以当前 `help` 与工具目录为准 后台 API 不提供桌面选中会话导航 创建后可在 DSH 对应工作区按名称查看 连接失败时报告具体错误 不静默切换到 headless 或 GUI 桌面后台协议随 DSH 版本变化时先执行 doctor 核实 当前已实测桌面版本 0.2.1-rc.5 和 0.2.2-rc.3 后者已验证新建会话与复用已有会话两条路径自动回传并通过主会话验收
+
+## Antigravity App 桌面联调
+
+先打开并登录 Antigravity App。管理器从当前用户目录下的桌面服务登记自动发现正在运行的本地实例。用 `doctor --instance antigravity` 检查连接、登录和本地会话，诊断不会启动模型。
+
+- `agent_sessions(instance="antigravity")` 或 `sessions --instance antigravity` 列出本地桌面会话。可用 `session` 按准确 ID 或完整标题定位，重名时用 ID。
+- 新建通过 `agent_start` 或 CLI `start` 传 `instance="antigravity"` 和 `create_title`。需要工作目录时，用本机项目实际路径作为 `cwd`。复用传 `session` 和准确 ID，沿用原会话工作区和最近选择的模型。无需提供安装路径。
+- 必须声明 `workspace`，`worker_limits` 默认三项为零。只读和写入范围通过交接提示词声明，桌面的工具审批照常生效。
+- 管理器按桌面会话 ID 和当前任务的消息 ID 读取本轮最终 JSON，自动回传原主会话。重启后用 `resume` 恢复监测原轮次。取消时先核对活动轮次归属。主会话收到回传后检查实际结果并用 `relay_accept` 验收。
+- Skills 用 `library-preview-agent-skills --agent antigravity --source primary --plan-file <计划文件>` 预览，随后用 `library-apply --plan-file <计划文件>` 应用，目标是 `~/.gemini/config/skills`。全局规则用 `library-preview-rules --agents "Antigravity / Gemini" --source <主实例的全局规则文件> --plan-file <计划文件>` 预览后应用。
 
 ## Cursor CLI 跨 Harness 联调
 

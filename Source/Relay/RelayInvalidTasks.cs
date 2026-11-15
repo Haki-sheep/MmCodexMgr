@@ -32,6 +32,17 @@ public sealed class RelayActivityProbe : IRelayActivityProbe
     private async Task<RelayActivity> ProbeAsync(InstanceProfile Instance, string ThreadId, CancellationToken Cancellation)
     {
         if (ThreadId.Length == 0) return new(eRelayActivity.Unknown, "会话创建结果尚未确认");
+        if (Instance.Id == AntigravityRelayRunner.InstanceId)
+        {
+            try
+            {
+                using var Client = AntigravityDesktopClient.Connect();
+                var Session = (await Client.SessionsAsync(Cancellation)).SingleOrDefault(Value => Value.Id == ThreadId);
+                return Session is null ? new(eRelayActivity.Unknown, "Antigravity 原会话未找到")
+                    : new(Session.Running ? eRelayActivity.Active : eRelayActivity.Idle, "Antigravity 桌面会话状态");
+            }
+            catch (Exception Error) when (!Cancellation.IsCancellationRequested) { return new(eRelayActivity.Unknown, "Antigravity 活动状态未确认 " + Error.Message); }
+        }
         if (Instance.Id == DshRelayRunner.InstanceId)
         {
             try
@@ -92,7 +103,7 @@ public sealed class RelayTaskValidator
         string Unknown = "";
         foreach (var Endpoint in EndpointList.DistinctBy(Value => (Value.Instance.Id, Value.Thread)))
         {
-            var Profile = Endpoint.Instance.Id == DshRelayRunner.InstanceId ? Endpoint.Instance : Endpoint.Instance.Id == CursorRelayRunner.InstanceId ? CursorRelayRunner.Profile : Settings.InstanceList.SingleOrDefault(Value => Value.Id == Endpoint.Instance.Id);
+            var Profile = Endpoint.Instance.Id == AntigravityRelayRunner.InstanceId || Endpoint.Instance.Id == DshRelayRunner.InstanceId ? Endpoint.Instance : Endpoint.Instance.Id == CursorRelayRunner.InstanceId ? CursorRelayRunner.Profile : Settings.InstanceList.SingleOrDefault(Value => Value.Id == Endpoint.Instance.Id);
             if (Profile is null) continue;
             var Activity = await Probe.ReadAsync(Profile, Endpoint.Thread, CancellationToken.None);
             if (Activity.State == eRelayActivity.Active) return new(false, "主会话或下级仍有活动执行");

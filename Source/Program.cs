@@ -75,7 +75,7 @@ public static class Program
             using var CompatSupervisor = new ResponsesCompatSupervisor(SettingsStore.Load, CliPath, LogError);
             using var Cursor = new CursorRelayRunner();
             using var Dsh = new DshRelayRunner();
-            using var Coordinator = new RelayCoordinator(TaskStore, DesktopBridge, Cursor, Dsh);
+            using var Coordinator = new RelayCoordinator(TaskStore, DesktopBridge, Cursor, Dsh, Antigravity: new AntigravityRelayRunner());
             using var Form = new MainForm(SettingsStore.Load(), false, TaskStore, Coordinator);
             if (Background) { Form.WindowState = FormWindowState.Minimized; Form.ShowInTaskbar = false; }
             var AgentService = new AgentManagementService(TaskStore, Coordinator, new AgentCatalog(), CliPath);

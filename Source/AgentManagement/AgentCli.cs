@@ -28,6 +28,7 @@ public static class AgentCli
           project 可选 省略时查找实例内所有会话 新建时创建无项目会话
           instance=cursor 使用 Cursor CLI 新建必须提供 cwd 绝对目录 不使用 project
           instance=dsh 使用正在运行的 DSH 桌面服务 project 选择工作区 省略时新建于默认工作区
+          instance=antigravity 使用运行中的 Antigravity App 新建可选 cwd 复用沿用原工作区 worker_limits 全零 自动回传
           DSH 沿用桌面模型 worker_limits 必须全零 管理器自动读取并回传结果 不需要操作窗口
           Cursor 可选 model cursor_cli_path 已有会话不能更换目录 CLI 或模型
           Cursor 只执行当前任务 worker_limits 必须为零 默认全部为零
@@ -51,8 +52,8 @@ public static class AgentCli
         cleanup --state <interrupted|blocked|finished>
           清理当前主会话名下的联调记录 不删除 Codex 对话或项目文件
           interrupted=实例退出后阻塞 blocked=所有阻塞 finished=已验收或已撤销
-          清理未结束记录会中断其下级联调 Cursor CLI 会停止 DSH 核对归属后请求取消 Codex 模型或脚本需另行停止
-        cancel --task-id <任务ID>  中断联调 Cursor CLI 及其子进程会停止 DSH 核对归属后请求取消 Codex 模型或脚本需另行停止
+          清理未结束记录会中断其下级联调 Cursor CLI 会停止 DSH 与 Antigravity 核对归属后请求取消 Codex 模型或脚本需另行停止
+        cancel --task-id <任务ID>  中断联调 Cursor CLI 及其子进程会停止 DSH 与 Antigravity 核对归属后请求取消 Codex 模型或脚本需另行停止
         accept --task-id <任务ID>
         progress --json-file <UTF-8 JSON文件>  task_id stage(started|progress|blocked) message
         tree --task-id <任务ID> [--offset 0]
@@ -68,8 +69,8 @@ public static class AgentCli
         library-config [--repository <仓库根>] [--skill-source <技能源目录>] [--rule-source <规则MD>] [--excluded <name逗号列表|none>]
           无参数查看本机配置 默认不排除任何 Skill 不限制技能名称或数量
         library-scan-rules  扫描各 Agent 的全局规则位置 无需启动管理器
-        library-scan-skills  扫描 Cursor DSH 与共享 Skill 目录
-        library-preview-agent-skills --agent <cursor|dsh|shared> [--source primary|library] --plan-file <绝对路径>
+        library-scan-skills  扫描各 Agent 的 Skill 目录
+        library-preview-agent-skills --agent <cursor|dsh|shared|antigravity> [--source primary|library] --plan-file <绝对路径>
           预览向其他 Agent 分发相同技能包 要求小写连字符标识 原内容先备份 保留第三方技能
           shared 对应 ~/.agents/skills 由 Cursor 与 DSH 共同发现 DSH_HOME 与 DSH_AGENTS_HOME 可覆盖默认目录
         library-preview-skills --instance <目标实例> [--source primary|library] --plan-file <绝对路径>
@@ -148,7 +149,7 @@ public static class AgentCli
             if (Call.Command == "doctor")
             {
                 var Report = await AgentDoctor.RunAsync(Settings, ExecutablePath, Call.OptionDict.GetValueOrDefault("instance"), Cancellation);
-                if (Report.InstanceId == DshRelayRunner.InstanceId) { await Writer.WriteLineAsync(JsonSerializer.Serialize(Report)); return Report.Healthy ? 0 : 1; }
+                if (Report.InstanceId is DshRelayRunner.InstanceId or AntigravityRelayRunner.InstanceId) { await Writer.WriteLineAsync(JsonSerializer.Serialize(Report)); return Report.Healthy ? 0 : 1; }
                 try
                 {
                     await RelayHost.RequestAsync(new(Report.InstanceId == CursorRelayRunner.InstanceId ? Settings.SelectedId : Report.InstanceId, "", "agent_ping", JsonSerializer.SerializeToElement(new { })), Cancellation, PipeName);

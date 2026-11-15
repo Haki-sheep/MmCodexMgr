@@ -38,14 +38,17 @@ public sealed partial class AgentManagementService
         {
             case "agent_instances":
                 return Settings.InstanceList.Select((Item, Index) => (object)new { number = Index + 1, id = Item.Id, name = Item.Name, home = Item.HomePath, kind = "codex" })
+                    .Concat(Coordinator.Antigravity is null ? Array.Empty<object>() : new object[] { new { number = (int?)null, id = AntigravityRelayRunner.InstanceId, name = AntigravityRelayRunner.Name, home = AntigravityDesktopClient.HomePath, kind = "antigravity_desktop" } })
                     .Concat(Coordinator.Cursor is null ? Array.Empty<object>() : new object[] { new { number = (int?)null, id = CursorRelayRunner.InstanceId, name = "Cursor CLI", home = CursorRelayRunner.Profile.HomePath, kind = "cursor_cli" } })
                     .Concat(Coordinator.Dsh is null ? Array.Empty<object>() : new object[] { new { number = (int?)null, id = DshRelayRunner.InstanceId, name = "DeepSeek Harness", home = Settings.Dsh.HomePath, kind = "dsh_desktop" } }).ToArray();
             case "agent_projects":
+                if (Text(Arguments, "instance") == AntigravityRelayRunner.InstanceId) throw new InvalidOperationException("Antigravity 使用 cwd 指定新会话工作目录");
                 if (Text(Arguments, "instance") == DshRelayRunner.InstanceId) return await DshCli.QueryAsync("projects", Settings.Dsh, Arguments, Cancellation);
                 if (Text(Arguments, "instance") == CursorRelayRunner.InstanceId) throw new InvalidOperationException("Cursor CLI 使用 cwd 指定工作目录 不使用 Codex 项目登记");
                 return await Catalog.ProjectsAsync(ResolveInstance(Settings, Text(Arguments, "instance")), Cancellation);
             case "agent_sessions":
             {
+                if (Text(Arguments, "instance") == AntigravityRelayRunner.InstanceId) return await ListAntigravitySessionsAsync(Arguments, Cancellation);
                 if (Text(Arguments, "instance") == DshRelayRunner.InstanceId) return await DshCli.QueryAsync("sessions", Settings.Dsh, Arguments, Cancellation);
                 if (Text(Arguments, "instance") == CursorRelayRunner.InstanceId)
                 {
@@ -77,6 +80,7 @@ public sealed partial class AgentManagementService
             }
             case "agent_open":
             {
+                if (Text(Arguments, "instance") == AntigravityRelayRunner.InstanceId) throw new InvalidOperationException("请在 Antigravity App 按标题打开会话");
                 if (Text(Arguments, "instance") == DshRelayRunner.InstanceId) throw new InvalidOperationException("DSH 后台接口不提供桌面导航 请在默认工作区按会话名称选择 已有会话可直接通过 start 复用");
                 if (Text(Arguments, "instance") == CursorRelayRunner.InstanceId)
                 {
@@ -109,6 +113,16 @@ public sealed partial class AgentManagementService
                     if (Request.Command == "agent_retry_return") await Coordinator.RetryReturnAsync(Item.Id);
                     else
                     {
+                        if (Item.Channel.WorkerInstance.Id == AntigravityRelayRunner.InstanceId)
+                        {
+                            string Id = Text(Arguments, "session_id");
+                            if (Id != Item.Channel.WorkerThreadId) throw new InvalidOperationException("Antigravity 核对必须使用原会话 ID");
+                            using var Client = AntigravityDesktopClient.Connect();
+                            var AntigravitySession = (await Client.SessionsAsync(Cancellation)).SingleOrDefault(Value => Value.Id == Id)
+                                ?? throw new InvalidOperationException("未找到原 Antigravity 会话 " + Id);
+                            await Coordinator.ReconcileAsync(Caller.Id, Request.ThreadId, Item.Id, AntigravitySession.Id, AntigravitySession.Title);
+                            return Describe(Store.Get(Item.Id));
+                        }
                         if (Item.Channel.WorkerInstance.Id == DshRelayRunner.InstanceId)
                         {
                             using var Client = await DshDesktopClient.ConnectAsync(DshRelayRunner.Settings(Item), Cancellation);
@@ -144,6 +158,8 @@ public sealed partial class AgentManagementService
         var Workspace = ReadWorkspace(Arguments);
         if (Existing is null && Workspace is null) throw new InvalidOperationException("新任务必须声明 workspace.access 只读任务填 read_only 写入任务同时提供 write_paths");
         if (Text(Arguments, "instance") == CursorRelayRunner.InstanceId) return await StartCursorAsync(Settings, Caller, ThreadId, Arguments, Existing, Workspace, Key, Cancellation);
+        if (Text(Arguments, "instance") == AntigravityRelayRunner.InstanceId)
+            return await StartAntigravityAsync(Caller, ThreadId, Arguments, Existing, Workspace, Key, Cancellation);
         if (Text(Arguments, "instance") == DshRelayRunner.InstanceId) return await StartDshAsync(Settings, Caller, ThreadId, Arguments, Existing, Workspace, Key, Cancellation);
         foreach (string CursorParameter in new[] { "cwd", "model", "cursor_cli_path" })
             if (Arguments.TryGetProperty(CursorParameter, out _)) throw new InvalidOperationException(CursorParameter + " 仅适用于 instance=cursor");

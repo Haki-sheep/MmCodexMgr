@@ -12,6 +12,7 @@ internal static class Tests
     [STAThread]
     private static int Main(string[] ArgumentList)
     {
+        if (ArgumentList.Contains("--antigravity")) return AntigravityTests.Run();
         if (ArgumentList.Contains("--library")) return LibraryTests.Run();
         if (ArgumentList.Contains("--startup")) return StartupTests.Run();
         if (ArgumentList.Length == 2 && ArgumentList[0] == "--startup-render") return StartupTests.Run(ArgumentList[1]);
