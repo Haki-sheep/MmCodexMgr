@@ -1,0 +1,14 @@
+{
+  "source": "eng/unity6-core/CoreOracle.cs generated YAML Only observed classes",
+  "map": {
+    "1": "GameObject",
+    "4": "Transform",
+    "29": "OcclusionCullingSettings",
+    "65": "BoxCollider",
+    "104": "RenderSettings",
+    "114": "MonoBehaviour",
+    "157": "LightmapSettings",
+    "196": "NavMeshSettings",
+    "1660057539": "SceneRoots"
+  }
+}

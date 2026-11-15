@@ -1,0 +1,71 @@
+{
+  "full_name": "UnityEngine.Transform",
+  "type_id": 4,
+  "fields": [
+    {
+      "name": "m_ObjectHideFlags",
+      "type": "int",
+      "kind": "Primitive"
+    },
+    {
+      "name": "m_CorrespondingSourceObject",
+      "type": "PPtr<Object>",
+      "kind": "UnityObjectRef"
+    },
+    {
+      "name": "m_PrefabInstance",
+      "type": "PPtr<Object>",
+      "kind": "UnityObjectRef"
+    },
+    {
+      "name": "m_PrefabAsset",
+      "type": "PPtr<Object>",
+      "kind": "UnityObjectRef"
+    },
+    {
+      "name": "m_GameObject",
+      "type": "PPtr<Object>",
+      "kind": "UnityObjectRef"
+    },
+    {
+      "name": "serializedVersion",
+      "type": "int",
+      "kind": "Primitive"
+    },
+    {
+      "name": "m_LocalRotation",
+      "type": "Quaternion",
+      "kind": "Struct"
+    },
+    {
+      "name": "m_LocalPosition",
+      "type": "Vector3",
+      "kind": "Struct"
+    },
+    {
+      "name": "m_LocalScale",
+      "type": "Vector3",
+      "kind": "Struct"
+    },
+    {
+      "name": "m_ConstrainProportionsScale",
+      "type": "bool",
+      "kind": "Primitive"
+    },
+    {
+      "name": "m_Children",
+      "type": "vector",
+      "kind": "Array"
+    },
+    {
+      "name": "m_Father",
+      "type": "PPtr<Object>",
+      "kind": "UnityObjectRef"
+    },
+    {
+      "name": "m_LocalEulerAnglesHint",
+      "type": "Vector3",
+      "kind": "Struct"
+    }
+  ]
+}
