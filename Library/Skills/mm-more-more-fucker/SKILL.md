@@ -1,6 +1,6 @@
 ---
 name: mm-more-more-fucker
-description: 组织并执行 Codex 原生子代理 同实例多会话 跨实例与 Cursor CLI 协作 用于用户要求实际分工联调 或适用规则要求的并行执行 不用于仅解释协作概念 上下文或 Token 对比
+description: 组织 Codex 原生子代理 同实例多会话 跨实例协作 以及 DeepSeek Harness（DSH）和 Cursor CLI 联调 用于实际分工和任务派发 不用于仅解释协作概念 上下文或 Token 对比
 ---
 
 # mm-more-more-fucker
@@ -111,7 +111,15 @@ CLI 从 `CODEX_HOME` 和 `CODEX_THREAD_ID` 读取当前身份 不要填写另一
 
 用户指定 DeepSeek Harness 或 DSH 桌面端时 使用 `instance=dsh` 通过本机桌面服务后台操作 不使用 Computer Use 不以 `dsh headless` 替代用户指定的桌面会话
 
+启动 DSH 后，目标明确就直接用 `agent_start` 传 `instance=dsh`，新建填写 `create_title`，复用填写 `session`。默认工作区可省略 `project`。目标不明确时只查所需的 `agent_projects` 或 `agent_sessions`；连接失败再用 `agent_doctor(instance=dsh)` 区分桌面未打开、监听未就绪和认证失败。MCP 不可用时用本 Skill 的 CLI 入口。
+
+模型和推理等级从 DSH 的模型选择器设置，新会话沿用 DSH 默认值，原会话沿用自己的选择。可选项以供应商真实提供的为准；供应商未报告推理等级时用模型默认值。
+
 先启动 DSH 桌面端 管理器默认从运行进程识别数据目录与监听端口 不依赖用户名 安装盘符或固定端口 支持 `DSH_HOME` 与 `DSH_SERVER_URL` 显式覆盖 可用 `dsh-config --home <绝对目录|auto> --server-url <本机地址|auto>` 保存管理器连接配置 保存值优先 空值回到环境变量与自动发现 服务地址只接受回环 IP 多服务或多数据目录无法唯一选择时明确报错 不猜测第一个候选 不修改 DSH 的模型或凭据文件 `doctor --instance dsh` 检查真实认证和工作区 不启动模型
+
+若直连 CLI 可读会话而 MCP 的 `doctor --instance dsh` 仍找不到服务 核对管理器进程实际读取的连接配置。Windows 打包的 Codex 可能把 CLI 写入的 AppData 配置重定向到应用自己的 LocalCache。通过管理器的 DSH 连接设置或从非打包的 Windows 终端执行 `dsh-config` 填入实际监听的回环地址，以 MCP doctor 恢复为准。临时覆盖在派发后恢复原值。
+
+桌面认证通过只证明能访问 DSH 后台。收到受理回执但模型轮次报错时，在 DSH 模型设置核对供应商协议、Key 与会话选择，用实际可用的模型做短消息测试。验证联调时为新建和复用指定不同回传标记，按任务 ID 核对执行会话 ID、完成状态和内容，再调用 `relay_accept`。直连回复只能验证 DSH 消息链路。
 
 `projects --instance dsh` 列出桌面工作区 `sessions --instance dsh` 列出未归档的主会话 支持 `--project <default|工作区ID|名称|绝对路径>` 与 `--session <准确ID|完整名称>` 重名必须指定 ID
 
@@ -126,13 +134,13 @@ CLI 从 `CODEX_HOME` 和 `CODEX_THREAD_ID` 读取当前身份 不要填写另一
 - `dsh-send --json-file <UTF-8请求文件>` 请求字段为 `session_id` `request_id` `message` 相同请求标识由桌面服务去重 返回 `accepted` 仅表示已受理
 - `dsh-reply --session-id <准确ID> --request-id <原请求标识>` 单次读取原请求 对应轮次结束才 `completed=true` 此命令不启动模型 不将别的请求或流式片段当成本轮最终回复
 
-CLI 和 MCP 能力以当前 `help` 与工具目录为准 后台 API 不提供桌面选中会话导航 创建后可在 DSH 对应工作区按名称查看 连接失败时报告具体错误 不静默切换到 headless 或 GUI 桌面后台协议随 DSH 版本变化时先执行 doctor 核实 当前已实测桌面版本 0.2.1-rc.5
+CLI 和 MCP 能力以当前 `help` 与工具目录为准 后台 API 不提供桌面选中会话导航 创建后可在 DSH 对应工作区按名称查看 连接失败时报告具体错误 不静默切换到 headless 或 GUI 桌面后台协议随 DSH 版本变化时先执行 doctor 核实 当前已实测桌面版本 0.2.1-rc.5 和 0.2.2-rc.3 后者已验证新建会话与复用已有会话两条路径自动回传并通过主会话验收
 
 ## Cursor CLI 跨 Harness 联调
 
 用户指定 Cursor 时使用同一套 `agent_start` 或 CLI `start` 目标固定为 `instance="cursor"` 不将 Cursor 添加为 Codex 实例 不提取模型 Key 不反代 Cursor
 
-管理器的“跨 Agent 协作”页按 Codex Cursor DSH 区分来源 Codex 栏管理实例会话与通道 Cursor 栏通过“连接设置”展开 CLI 路径 默认工作目录 默认模型 登录检查 交互终端及登记会话 DSH 尚未接入 不冒充 Cursor 或 Codex 实例代替它
+管理器的“跨 Agent 协作”页按 Codex Cursor DSH 区分来源 Codex 栏管理实例会话与通道 Cursor 栏通过“连接设置”展开 CLI 路径 默认工作目录 默认模型 登录检查 交互终端及登记会话
 
 “任务看板”位于实例管理前 汇总所有来源的协作任务 列表为任务名 协调者：会话名 执行者：会话名 执行状态 操作 参与者使用实例名或 Cursor DSH 不使用模型名 会话列表与任务看板分别管理会话和任务 不维护第二份任务列表 管理器支持 `--board` `--collaboration` `--cursor` 直接打开对应页面 兼容旧 `--relay` 与 `--harness` 入口
 

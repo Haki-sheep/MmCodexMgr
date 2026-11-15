@@ -25,9 +25,10 @@ public static class DshDiscovery
         string Home = ResolveHome(RequestedHome, HostList);
         if (RequestedUrl is not null) return new(Home, ValidateOrigin(RequestedUrl));
         var HostHashList = HostList.Where(Host => ManagerPaths.Same(Host.HomePath, Home)).Select(Host => Host.ProcessId).ToHashSet();
+        if (HostHashList.Count == 0) throw new InvalidOperationException("没有找到匹配数据目录的 DSH 桌面后台进程 请打开 DeepSeek Harness 后重试 数据目录 " + Home);
         var PortList = ListeningPorts(HostHashList).Distinct().ToList();
         if (PortList.Count != 1) throw new InvalidOperationException(PortList.Count == 0
-            ? "未找到此 DSH_HOME 对应的桌面服务 请先启动 DeepSeek Harness 或配置本机 ServerUrl " + Home
+            ? "已找到 DSH 桌面后台进程 但尚无本机回环监听 请等待桌面就绪后重试 数据目录 " + Home
             : "发现多个 DSH 桌面服务 请配置准确的 ServerUrl 与 HomePath");
         return new(Home, new Uri("http://127.0.0.1:" + PortList[0]));
     }
@@ -56,7 +57,7 @@ public static class DshDiscovery
         if (Entry < 0 || Entry + 2 >= ArgumentList.Count) return null;
         string Profile = ManagerPaths.Normalize(ArgumentList[Entry + 2]);
         var Profiles = Directory.GetParent(Profile);
-        if (Profiles?.Name != "profiles" || Profiles.Parent is null) throw new InvalidDataException("无法从 DSH 桌面进程解析数据目录 请配置 HomePath");
+        if (Profiles is null || !Profiles.Name.Equals("profiles", StringComparison.OrdinalIgnoreCase) || Profiles.Parent is null) throw new InvalidDataException("无法从 DSH 桌面进程解析数据目录 请配置 HomePath");
         return new(ProcessId, Profiles.Parent.FullName);
     }
 
@@ -82,20 +83,23 @@ public static class DshDiscovery
     #region Native
     private static List<int> ListeningPorts(HashSet<int> ProcessHashList)
     {
+        const int IPv4 = 2;
+        const int ListenersWithOwnerPid = 3;
         int Length = 0;
-        uint Result = GetExtendedTcpTable(IntPtr.Zero, ref Length, false, 2, 3, 0);
+        uint Result = GetExtendedTcpTable(IntPtr.Zero, ref Length, false, IPv4, ListenersWithOwnerPid, 0);
         if (Result != 122 && Result != 0) throw new System.ComponentModel.Win32Exception((int)Result);
         var Buffer = Marshal.AllocHGlobal(Length);
         try
         {
-            Result = GetExtendedTcpTable(Buffer, ref Length, false, 2, 3, 0);
+            Result = GetExtendedTcpTable(Buffer, ref Length, false, IPv4, ListenersWithOwnerPid, 0);
             if (Result != 0) throw new System.ComponentModel.Win32Exception((int)Result);
             int Count = Marshal.ReadInt32(Buffer);
             var PortList = new List<int>();
             for (int Index = 0; Index < Count; Index++)
             {
                 var Row = IntPtr.Add(Buffer, 4 + Index * 24);
-                if (Marshal.ReadInt32(Row) != 2 || !ProcessHashList.Contains(Marshal.ReadInt32(Row, 20))) continue;
+                // 查询已限定为监听端点 部分 Windows 版本仍会返回非 LISTEN 的状态值
+                if (!ProcessHashList.Contains(Marshal.ReadInt32(Row, 20))) continue;
                 var Address = new IPAddress(unchecked((uint)Marshal.ReadInt32(Row, 4)));
                 if (!IPAddress.IsLoopback(Address)) continue;
                 int Port = (Marshal.ReadByte(Row, 8) << 8) | Marshal.ReadByte(Row, 9);
