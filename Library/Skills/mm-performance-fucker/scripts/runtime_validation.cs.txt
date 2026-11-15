@@ -1,0 +1,49 @@
+using System;
+using System.IO;
+using MmPerformance;
+using UnityEngine;
+
+public sealed class MmPerformanceFixtureContext : IPerformanceContext
+{
+    public static bool Reject;
+
+    public ContextSnapshot Capture()
+    {
+        return new ContextSnapshot { health_verified = true, healthy = !Reject, visual_status = Reject ? "invalid" : "valid",
+            evidence = "synthetic fixture assertions only not rendered visual QA", project_json = "{\"fixture\":true}" };
+    }
+}
+
+public sealed class MmPerformanceRuntimeValidation : MonoBehaviour
+{
+    private RuntimeCapture capture;
+    private byte[] allocationList;
+    private bool running;
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+    private static void Init()
+    {
+        if (Application.isEditor) return;
+        var ArgsList = Environment.GetCommandLineArgs();
+        int Index = Array.IndexOf(ArgsList, "-mmperf-output");
+        if (Index < 0) return;
+        string Path = ArgsList[Index + 1];
+        var Host = new GameObject("MmPerformance fixture");
+        var Driver = Host.AddComponent<MmPerformanceRuntimeValidation>();
+        Driver.capture = Host.AddComponent<RuntimeCapture>();
+        Driver.capture.Begin(new CaptureOptions { seconds = 1, warmup = 0.2, max_frames = 100000, phase = "native-player-fixture",
+            context_type = typeof(MmPerformanceFixtureContext).AssemblyQualifiedName, code_revision = "0.2.0-fixture",
+            conditions_json = "{\"protocol_id\":\"fixture\",\"workload_id\":\"stationary\"}" }, Path);
+        Driver.running = true;
+    }
+
+    private void Update()
+    {
+        if (!running) return;
+        allocationList = new byte[1024];
+        if (capture.Active) return;
+        var Report = JsonUtility.FromJson<CaptureReport>(File.ReadAllText(capture.ResultPath));
+        bool Success = Report.job.state == "completed" && Report.job.reason == "duration_reached" && Report.samplesList.Count > 0;
+        Application.Quit(Success ? 0 : 1);
+    }
+}
