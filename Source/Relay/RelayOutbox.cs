@@ -85,8 +85,7 @@ public static class RelayOutbox
         byte[] ContentList = JsonSerializer.SerializeToUtf8Bytes(Canonical);
         if (ContentList.Length > RelayLimits.MaxFrameBytes) throw new InvalidDataException("回报超过发件箱限制");
         Directory.CreateDirectory(DirectoryPath);
-        string Key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(Request.InstanceId + "/" + Request.ThreadId + "/" + TaskId)));
-        string PathValue = Path.Combine(DirectoryPath, Key + ".pending.json");
+        string PathValue = PendingPath(Request.InstanceId, Request.ThreadId, TaskId, DirectoryPath);
         string Temporary = PathValue + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
         {
@@ -107,5 +106,11 @@ public static class RelayOutbox
         }
         finally { if (File.Exists(Temporary)) File.Delete(Temporary); }
         return PathValue;
+    }
+
+    internal static string PendingPath(string InstanceId, string ThreadId, string TaskId, string DirectoryPath)
+    {
+        string Key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(InstanceId + "/" + ThreadId + "/" + TaskId)));
+        return Path.Combine(DirectoryPath, Key + ".pending.json");
     }
 }

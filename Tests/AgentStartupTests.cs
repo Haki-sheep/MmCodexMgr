@@ -32,9 +32,14 @@ internal static class AgentStartupTests
             var Creation = Desktop.CallList.Single();
             Require(Created.Id == "created-thread" && Creation.Caller == "target-context" && Creation.Tool == "create_thread", "startup creates once using a real target context even when its history is archived");
             Require(Creation.Arguments.GetProperty("target").GetProperty("type").GetString() == "projectless" && Creation.Arguments.GetProperty("prompt").GetString() == "执行已授权任务", "standalone creation preserves the task prompt without attaching a project");
+            Require(!Creation.Arguments.TryGetProperty("model", out _) && !Creation.Arguments.TryGetProperty("thinking", out _), "legacy creation omits model overrides and retains host defaults");
             var Project = new AgentProject("project", "项目", Root, true);
-            await Catalog.CreateAsync(Instance, Project, "项目执行", "执行项目任务", CancellationToken.None);
-            Require(Desktop.PrepareCount == 2 && Desktop.CallList.Last().Arguments.GetProperty("target").GetProperty("projectId").GetString() == Project.Id, "project creation prepares the desktop and preserves the selected project");
+            IAgentCatalog RoutedCatalog = Catalog;
+            await RoutedCatalog.CreateAsync(Instance, Project, "项目执行", "执行项目任务", "provider-model", "xhigh", CancellationToken.None);
+            var ProjectCreation = Desktop.CallList.Last();
+            Require(Desktop.PrepareCount == 2 && ProjectCreation.Arguments.GetProperty("target").GetProperty("projectId").GetString() == Project.Id, "project creation prepares the desktop and preserves the selected project");
+            Require(ProjectCreation.Tool == "create_thread" && ProjectCreation.Arguments.GetProperty("model").GetString() == "provider-model" &&
+                ProjectCreation.Arguments.GetProperty("thinking").GetString() == "xhigh", "the actual desktop create_thread arguments include the selected model and thinking");
             var ProjectList = await Catalog.ProjectsAsync(Instance, CancellationToken.None);
             Require(Desktop.PrepareCount == 3 && ProjectList.Single().Id == "project", "project lookup prepares the desktop before querying");
             await Catalog.RequireIdleAsync(Instance, "existing-thread", CancellationToken.None);

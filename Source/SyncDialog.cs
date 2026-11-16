@@ -7,7 +7,7 @@ public sealed class SyncDialog : Form
     private readonly CheckBox McpOption = new() { Text = "MCP 配置", Checked = true, AutoSize = true };
     private readonly CheckBox RulesOption = new() { Text = "AGENTS.md 与 rules", Checked = true, AutoSize = true };
     private readonly CheckBox PluginsOption = new() { Text = "插件配置与缓存", AutoSize = true };
-    private readonly TextBox PreviewText = new() { Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Both, WordWrap = false, Dock = DockStyle.Fill, BackColor = Color.White };
+    private readonly TextBox PreviewText = new() { Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Both, WordWrap = false, Dock = DockStyle.Fill, Font = StudioFonts.Mono };
     private readonly Label Summary = new() { Dock = DockStyle.Fill, AutoSize = true };
     private readonly Button ApplyButton;
     private readonly Button PreviewButton;
@@ -28,7 +28,7 @@ public sealed class SyncDialog : Form
         ClientSize = new Size(760, 550);
         MinimumSize = new Size(720, 520);
         StartPosition = FormStartPosition.CenterParent;
-        var Root = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(20), ColumnCount = 1, RowCount = 7 };
+        var Root = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(22, 18, 22, 16), ColumnCount = 1, RowCount = 7 };
         Root.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
         Root.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
         Root.RowStyles.Add(new RowStyle(SizeType.Absolute, 60));

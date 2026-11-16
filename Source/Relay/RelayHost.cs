@@ -12,13 +12,16 @@ public sealed class RelayHost : IDisposable
     private readonly Task[] ListenerList;
     private readonly string PipeName;
     private readonly AgentManagementService? AgentService;
+    /// <summary> 编队命令服务 </summary>
+    private readonly FormationService? Formation;
     public event Action<Exception>? Failed;
 
-    public RelayHost(RelayCoordinator Coordinator, string? PipeName = null, AgentManagementService? AgentService = null)
+    public RelayHost(RelayCoordinator Coordinator, string? PipeName = null, AgentManagementService? AgentService = null, FormationService? Formation = null)
     {
         this.Coordinator = Coordinator;
         this.PipeName = PipeName ?? RelayLimits.PipeName;
         this.AgentService = AgentService;
+        this.Formation = Formation;
         ListenerList = new[] { ListenAsync(), ListenAsync() };
     }
 
@@ -67,20 +70,25 @@ public sealed class RelayHost : IDisposable
 
     private async Task<object> ExecuteAsync(RelayRequest Request)
     {
+        if (Request.Command.StartsWith("formation_", StringComparison.Ordinal))
+            return await FormationCli.HandleRequestAsync(Formation ?? throw new InvalidOperationException("当前管理器未启用编队"), Request, Lifetime.Token);
         if (Request.Command.StartsWith("agent_", StringComparison.Ordinal) || Request.Command.StartsWith("dsh_", StringComparison.Ordinal))
             return await (AgentService ?? throw new InvalidOperationException("当前管理器未启用 CLI 服务 请更新并重启管理器")).ExecuteAsync(Request, Lifetime.Token);
         var Arguments = Request.Arguments;
         switch (Request.Command)
         {
             case "relay_channel":
-                return Coordinator.Channel ?? throw new InvalidOperationException("请先绑定联调通道");
+                return Coordinator.Channel ?? throw new InvalidOperationException("未配置旧式联调通道 请使用 agent_start 或 mmcodex start 指定执行实例与会话");
             case "relay_dispatch":
             {
                 var Item = await Coordinator.DispatchAsync(Request.InstanceId, Request.ThreadId, Request.InstanceId + "/" + Request.ThreadId + "/" + Arguments.GetProperty("request_id").GetString(), Arguments.GetProperty("title").GetString()!, Arguments.GetProperty("instructions").GetString()!, Arguments.GetProperty("acceptance").GetString()!);
                 return Describe(Item, Item.State == eRelayState.Running ? RelayLimits.DispatchWaitInstruction : "按已保存的任务状态继续处理 不重复派发");
             }
             case "relay_report":
-                return Describe(await Coordinator.ReportAsync(Request.InstanceId, Request.ThreadId, Arguments.GetProperty("task_id").GetString()!, Arguments.GetProperty("outcome").GetString()!, Arguments.GetProperty("summary").GetString()!, Arguments.GetProperty("artifacts").EnumerateArray().Select(Item => Item.GetString()!).ToList(), WaitForNotification: false), "执行结果已保存 主会话可从收件箱读取");
+            {
+                var Item = await Coordinator.ReportAsync(Request.InstanceId, Request.ThreadId, Arguments.GetProperty("task_id").GetString()!, Arguments.GetProperty("outcome").GetString()!, Arguments.GetProperty("summary").GetString()!, Arguments.GetProperty("artifacts").EnumerateArray().Select(Item => Item.GetString()!).ToList(), WaitForNotification: false);
+                return Describe(Item, Item.Channel.FormationRunId.Length == 0 ? "执行结果已保存 主会话可从收件箱读取" : "执行结果已保存 编队将处理原轮次");
+            }
             case "relay_progress":
                 return Describe(await Coordinator.ProgressAsync(Request.InstanceId, Request.ThreadId, Arguments.GetProperty("task_id").GetString()!, Arguments.GetProperty("stage").GetString()!, Arguments.GetProperty("message").GetString()!));
             case "relay_accept":

@@ -4,6 +4,39 @@ namespace CodexInstanceManager;
 
 public sealed partial class RelayStore
 {
+    private static readonly TimeSpan FinishedBoardDuration = TimeSpan.FromMinutes(10);
+    private static readonly TimeSpan BlockedBoardDuration = TimeSpan.FromHours(1);
+    private static readonly string FinishedBoardPredicate = $"state IN ({(int)eRelayState.Accepted},{(int)eRelayState.Cancelled})";
+    private static readonly string BlockedBoardPredicate = $"""
+        (state IN ({(int)eRelayState.DispatchUncertain},{(int)eRelayState.ReturnUncertain},{(int)eRelayState.TimedOut},{(int)eRelayState.Interrupted})
+        OR (state = {(int)eRelayState.Running} AND COALESCE(json_extract(data,'$.ProgressStage'),'')='blocked')
+        OR (state IN ({(int)eRelayState.Returning},{(int)eRelayState.Returned}) AND COALESCE(json_extract(data,'$.Outcome'),'')<>'completed'))
+        """;
+    private const string BoardRootPredicate = "(COALESCE(json_extract(t.data,'$.ParentTaskId'),'')='' OR NOT EXISTS(SELECT 1 FROM visible p WHERE p.id=json_extract(t.data,'$.ParentTaskId')))";
+
+    private static string BoardRows(eRelayBoardView View) => "WITH visible AS (SELECT id,title,state,updated_at,data FROM relay_tasks WHERE " + (View switch
+    {
+        eRelayBoardView.All => "1",
+        eRelayBoardView.Current => $"(NOT ({FinishedBoardPredicate}) OR updated_at>$finishedCutoff) AND (NOT {BlockedBoardPredicate} OR updated_at>$blockedCutoff)",
+        eRelayBoardView.Blocked => BlockedBoardPredicate,
+        eRelayBoardView.History => FinishedBoardPredicate,
+        _ => throw new ArgumentOutOfRangeException(nameof(View))
+    }) + ") ";
+
+    private static void BindBoardCutoffs(Microsoft.Data.Sqlite.SqliteCommand Command, eRelayBoardView View, DateTimeOffset? Now)
+    {
+        if (View != eRelayBoardView.Current) return;
+        var CurrentTime = (Now ?? DateTimeOffset.UtcNow).ToUniversalTime();
+        Command.Parameters.AddWithValue("$finishedCutoff", (CurrentTime - FinishedBoardDuration).ToString("O"));
+        Command.Parameters.AddWithValue("$blockedCutoff", (CurrentTime - BlockedBoardDuration).ToString("O"));
+    }
+
+    public int BoardBlockedCount()
+    {
+        using var Database = Open();
+        return Convert.ToInt32(ConversationDatabase.Scalar(Database, "SELECT COUNT(*) FROM relay_tasks WHERE " + BlockedBoardPredicate));
+    }
+
     public List<RelayReservation> Reservations()
     {
         using var Database = Open();
@@ -15,12 +48,13 @@ public sealed partial class RelayStore
         return ResultList;
     }
 
-    public List<RelayTreeEntry> TreePage(string? ParentId, int Offset = 0)
+    public List<RelayTreeEntry> TreePage(string? ParentId, int Offset = 0, eRelayBoardView View = eRelayBoardView.All, DateTimeOffset? Now = null)
     {
         using var Database = Open();
         using var Command = Database.CreateCommand();
-        Command.CommandText = "SELECT t.id,t.title,t.state,COALESCE(json_extract(t.data,'$.Outcome'),''),COALESCE(json_extract(t.data,'$.ParentTaskId'),''),(SELECT COUNT(*) FROM relay_tasks c WHERE json_extract(c.data,'$.ParentTaskId')=t.id),json_extract(t.data,'$.Channel.MainInstance.Name'),json_extract(t.data,'$.Channel.WorkerInstance.Name'),COALESCE(json_extract(t.data,'$.ProgressStage'),''),COALESCE(json_extract(t.data,'$.ProgressMessage'),''),json_extract(t.data,'$.ProgressAt'),COALESCE(json_extract(t.data,'$.Channel.MainTitle'),''),COALESCE(json_extract(t.data,'$.Channel.WorkerTitle'),''),json_extract(t.data,'$.Channel.MainInstance.Id'),json_extract(t.data,'$.Channel.WorkerInstance.Id'),json_extract(t.data,'$.Channel.MainThreadId'),json_extract(t.data,'$.Channel.WorkerThreadId') FROM relay_tasks t WHERE " +
-            (ParentId is null ? "(COALESCE(json_extract(t.data,'$.ParentTaskId'),'')='' OR NOT EXISTS(SELECT 1 FROM relay_tasks p WHERE p.id=json_extract(t.data,'$.ParentTaskId')))" : "json_extract(t.data,'$.ParentTaskId')=$parent") + " ORDER BY t.updated_at DESC,t.id LIMIT $limit OFFSET $offset";
+        Command.CommandText = BoardRows(View) + "SELECT t.id,t.title,t.state,COALESCE(json_extract(t.data,'$.Outcome'),''),COALESCE(json_extract(t.data,'$.ParentTaskId'),''),(SELECT COUNT(*) FROM visible c WHERE json_extract(c.data,'$.ParentTaskId')=t.id),json_extract(t.data,'$.Channel.MainInstance.Name'),json_extract(t.data,'$.Channel.WorkerInstance.Name'),COALESCE(json_extract(t.data,'$.ProgressStage'),''),COALESCE(json_extract(t.data,'$.ProgressMessage'),''),json_extract(t.data,'$.ProgressAt'),COALESCE(json_extract(t.data,'$.Channel.MainTitle'),''),COALESCE(json_extract(t.data,'$.Channel.WorkerTitle'),''),json_extract(t.data,'$.Channel.MainInstance.Id'),json_extract(t.data,'$.Channel.WorkerInstance.Id'),json_extract(t.data,'$.Channel.MainThreadId'),json_extract(t.data,'$.Channel.WorkerThreadId') FROM visible t WHERE " +
+            (ParentId is null ? BoardRootPredicate : "json_extract(t.data,'$.ParentTaskId')=$parent") + " ORDER BY t.updated_at DESC,t.id LIMIT $limit OFFSET $offset";
+        BindBoardCutoffs(Command, View, Now);
         if (ParentId is not null) Command.Parameters.AddWithValue("$parent", ParentId);
         Command.Parameters.AddWithValue("$limit", RelayLimits.PageSize);
         Command.Parameters.AddWithValue("$offset", Offset);
@@ -30,9 +64,12 @@ public sealed partial class RelayStore
         return ResultList;
     }
 
-    public int RootCount()
+    public int RootCount(eRelayBoardView View = eRelayBoardView.All, DateTimeOffset? Now = null)
     {
         using var Database = Open();
-        return Convert.ToInt32(ConversationDatabase.Scalar(Database, "SELECT COUNT(*) FROM relay_tasks t WHERE COALESCE(json_extract(t.data,'$.ParentTaskId'),'')='' OR NOT EXISTS(SELECT 1 FROM relay_tasks p WHERE p.id=json_extract(t.data,'$.ParentTaskId'))"));
+        using var Command = Database.CreateCommand();
+        Command.CommandText = BoardRows(View) + "SELECT COUNT(*) FROM visible t WHERE " + BoardRootPredicate;
+        BindBoardCutoffs(Command, View, Now);
+        return Convert.ToInt32(Command.ExecuteScalar());
     }
 }

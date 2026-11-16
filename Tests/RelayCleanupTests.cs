@@ -10,7 +10,42 @@ internal static class RelayCleanupTests
         string Root = Path.Combine(Path.GetTempPath(), "CodexBlockedCleanup-" + Guid.NewGuid().ToString("N"));
         await VerifyStatesAsync(Path.Combine(Root, "states"));
         await VerifyDescendantsAsync(Path.Combine(Root, "tree"));
+        await VerifyBoardVisibilityAsync(Path.Combine(Root, "board"));
         Console.WriteLine($"PASS blocked cleanup {Count} assertions; fixture={Root}");
+    }
+
+    private static async Task VerifyBoardVisibilityAsync(string Root)
+    {
+        var Store = new RelayStore(Root);
+        var Bridge = new FakeBridge();
+        using var Coordinator = new RelayCoordinator(Store, Bridge);
+        var Channel = new RelayChannel
+        {
+            MainInstance = new() { Id = "main" }, WorkerInstance = new() { Id = "worker" },
+            MainThreadId = "main-thread", WorkerThreadId = "worker-thread"
+        };
+        var Blocked = await Coordinator.DispatchAsync("main", "main-thread", "board-blocked", "待处理", "处理", "检查", Channel);
+        await Coordinator.ProgressAsync("worker", "worker-thread", Blocked.Id, "blocked", "等待输入");
+        var Active = new RelayTask { ParentTaskId = Blocked.Id, RequestKey = "board-active", State = eRelayState.Running };
+        var Finished = new RelayTask { RequestKey = "board-finished", State = eRelayState.Accepted };
+        var AwaitingReview = new RelayTask { RequestKey = "board-review", State = eRelayState.Returned, Outcome = "completed", Channel = Channel };
+        foreach (var Item in new[] { Active, Finished, AwaitingReview }) Store.Save(Item);
+        var Now = DateTimeOffset.UtcNow;
+        var View = new RelayTreeView(Store);
+        View.Refresh(0, eRelayBoardView.Current, Now);
+        Require(View.RowList.Any(Row => Row.Entry.Id == Finished.Id) && View.RowList.Any(Row => Row.Entry.Id == Blocked.Id && Row.Entry.ChildCount == 1), "fresh finished and blocked tasks remain visible");
+        View.Refresh(0, eRelayBoardView.Current, Now.AddMinutes(11));
+        Require(View.RowList.All(Row => Row.Entry.Id != Finished.Id) && View.RowList.Any(Row => Row.Entry.Id == Blocked.Id), "only finished rows age out after ten minutes");
+        View.Refresh(0, eRelayBoardView.Current, Now.AddHours(2));
+        Require(View.RowList.Select(Row => Row.Entry.Id).ToHashSet().SetEquals(new[] { Active.Id, AwaitingReview.Id }) && Store.RootCount(eRelayBoardView.Current, Now.AddHours(2)) == 2, "active child and pending acceptance stay visible after the parent is hidden");
+        Require(Store.TreePage(null, View: eRelayBoardView.History).Single().Id == Finished.Id &&
+            Store.TreePage(null, View: eRelayBoardView.Blocked).Single().Id == Blocked.Id && Store.BoardBlockedCount() == 1, "hidden records remain reachable with the history and pending filters");
+        Require(Store.Count() == 4 && Store.Get(Active.Id).State == eRelayState.Running &&
+            Store.Reservations().Any(Item => Item.Id == Blocked.Id) && Store.Inbox("main", "main-thread", "").Any(Item => Item.Id == AwaitingReview.Id), "board filters leave records, reservations and inbox untouched");
+        Active.State = eRelayState.Accepted;
+        Store.Save(Active);
+        await Coordinator.ReportAsync("worker", "worker-thread", Blocked.Id, "completed", "收到原任务回报", new());
+        Require(Store.Get(Blocked.Id).State == eRelayState.Returned, "a hidden running task can still report normally");
     }
 
     private static async Task VerifyStatesAsync(string Root)

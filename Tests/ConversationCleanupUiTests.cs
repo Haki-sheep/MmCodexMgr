@@ -15,7 +15,9 @@ internal static class ConversationCleanupUiTests
         var Settings = new ManagerSettings { InstanceList = new() { new() { Id = "source", Name = "其他实例", HomePath = Root + "-other" }, Profile }, SelectedId = Profile.Id };
         using var Form = new MainForm(Settings, true);
         Form.Show();
+        Form.ShowAgentPage();
         Application.DoEvents();
+        if (Descendants(Form).OfType<AgentPage>().Single().Selected != Profile) throw new InvalidOperationException("cleanup fixture must target the selected instance card");
         foreach (string ActionName in new[] { "保留项目清空会话", "清空所有项目和会话" })
         {
             bool Found = false;

@@ -12,6 +12,8 @@ internal static class Tests
     [STAThread]
     private static int Main(string[] ArgumentList)
     {
+        if (ArgumentList.Contains("--agent-appearance")) return AgentAppearanceTests.Run();
+        if (ArgumentList.Contains("--agent-appearance-live")) return AgentAppearanceTests.VerifyLive();
         if (ArgumentList.Contains("--antigravity")) return AntigravityTests.Run();
         if (ArgumentList.Contains("--library")) return LibraryTests.Run();
         if (ArgumentList.Contains("--startup")) return StartupTests.Run();
@@ -24,7 +26,14 @@ internal static class Tests
         if (ArgumentList.Length == 2 && ArgumentList[0] == "--collaboration-ui-preview") return HarnessUiTests.Run(ArgumentList[1]);
         if (ArgumentList.Contains("--cursor-relay")) { Task.Run(() => CursorRelayTests.RunAsync()).GetAwaiter().GetResult(); return 0; }
         if (ArgumentList.Contains("--cursor-live")) { Task.Run(() => CursorRelayTests.RunAsync(true)).GetAwaiter().GetResult(); return 0; }
+        if (ArgumentList.Contains("--claude-live")) { Task.Run(ClaudeRelayTests.RunAsync).GetAwaiter().GetResult(); return 0; }
         if (ArgumentList.Contains("--app-path")) return AppPathTests.Run(ArgumentList.Contains("--app-launch"));
+        if (ArgumentList.Contains("--formation-avatar-ui")) return FormationAvatarUiTests.Run();
+        if (ArgumentList.Contains("--formation-lifecycle")) { Task.Run(FormationLifecycleTests.RunAsync).GetAwaiter().GetResult(); return 0; }
+        if (ArgumentList.Contains("--formation-lifecycle-preview")) { Task.Run(FormationLifecycleTests.PreviewLiveAsync).GetAwaiter().GetResult(); return 0; }
+        if (ArgumentList.Contains("--navigation-ui")) return NavigationUiTests.Run();
+        if (ArgumentList.Contains("--formation-ui")) return FormationUiTests.Run();
+        if (ArgumentList.Contains("--formation")) { Task.Run(FormationTests.RunAsync).GetAwaiter().GetResult(); return 0; }
         if (ArgumentList.Contains("--recovery")) { RecoveryTests.Run(); return 0; }
         if (ArgumentList.Contains("--recovery-live")) return RecoveryTests.LiveProbe();
         if (ArgumentList.Contains("--agent-cleanup")) { AgentCleanupTests.Run(); return 0; }

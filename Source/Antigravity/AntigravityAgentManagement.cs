@@ -28,7 +28,7 @@ public sealed partial class AgentManagementService
         Selector is null || Session.Id.Equals(Selector, StringComparison.OrdinalIgnoreCase) || Session.Title == Selector;
 
     private async Task<object> StartAntigravityAsync(InstanceProfile Caller, string ThreadId, JsonElement Arguments, RelayTask? Existing,
-        RelayWorkspace? Workspace, string Key, CancellationToken Cancellation)
+        RelayWorkspace? Workspace, string Key, string FormationRunId, CancellationToken Cancellation)
     {
         foreach (string Parameter in new[] { "project", "cursor_cli_path", "model" })
             if (Arguments.TryGetProperty(Parameter, out _))
@@ -73,6 +73,7 @@ public sealed partial class AgentManagementService
         var Main = Catalog.Session(Caller, ThreadId);
         var Route = new RelayChannel
         {
+            FormationRunId = FormationRunId,
             MainInstance = Caller, MainThreadId = ThreadId, MainTitle = Main.Title,
             WorkerInstance = new() { Id = AntigravityRelayRunner.InstanceId, Name = AntigravityRelayRunner.Name, HomePath = AntigravityDesktopClient.HomePath },
             WorkerThreadId = WorkerId, WorkerTitle = WorkerTitle, CreateTitle = CreateTitle ?? "",

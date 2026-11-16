@@ -121,7 +121,7 @@ internal static class DshTests
         var Again = await Coordinator.DispatchAsync("main", "main-thread", "stable-task", "DSH 测试", "返回测试标记", "核对回传", Route, WorkerLimits: new() { SubagentMax = 0, SessionMax = 0, CrossAgentMax = 0 }, Workspace: new() { Access = "read_only" });
         Require(Again.Id == Item.Id && Handler.Prompts == 1 && Handler.Created == 1, "same task request never recreates or resends");
         using var Observer = new DshRelayRunner((Settings, Cancellation) => Task.FromResult(new DshDesktopClient(new(Root, new Uri("http://127.0.0.1:37891")), new SharedHandler(Handler))));
-        var Observed = new TaskCompletionSource<CursorReport>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var Observed = new TaskCompletionSource<RelayWorkerReport>(TaskCreationOptions.RunContinuationsAsynchronously);
         Observer.Launch(Item, (_, _) => Task.CompletedTask, Report => { Observed.SetResult(Report); return Task.CompletedTask; }, CancellationToken.None, true);
         Require((await Observed.Task.WaitAsync(TimeSpan.FromSeconds(5))).Summary == "DSH_TEST_OK" && Handler.Prompts == 1, "recovery observes durable original request without replay");
     }
@@ -136,7 +136,7 @@ internal static class DshTests
         using var Runner = new DshRelayRunner();
         using var Timeout = new CancellationTokenSource(TimeSpan.FromSeconds(90));
         await Runner.PrepareAsync(Item, Timeout.Token);
-        var Result = new TaskCompletionSource<CursorReport>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var Result = new TaskCompletionSource<RelayWorkerReport>(TaskCreationOptions.RunContinuationsAsynchronously);
         Runner.Launch(Item, (_, _) => Task.CompletedTask, Report => { Result.SetResult(Report); return Task.CompletedTask; }, Timeout.Token);
         var Report = await Result.Task.WaitAsync(Timeout.Token);
         Require(Report.Outcome == "completed" && Report.Summary == "DSH_LIVE_OK" && Report.Artifacts.Count == 0, "real desktop session=" + Item.Channel.WorkerThreadId + " result=" + JsonSerializer.Serialize(Report));

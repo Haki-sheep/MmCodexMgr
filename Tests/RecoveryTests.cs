@@ -8,8 +8,9 @@ internal static class RecoveryTests
 
     public static void Run() => Task.Run(async () =>
     {
-        await VerifyAutomaticAsync();
+        await VerifyOfflineAsync();
         await VerifyActiveAsync();
+        await VerifyOfflineRestartAsync();
         await VerifyFailuresAsync();
         await VerifyCliAsync();
         VerifyRestart();
@@ -33,32 +34,27 @@ internal static class RecoveryTests
     }
 
     #region Verification
-    private static async Task VerifyAutomaticAsync()
+    private static async Task VerifyOfflineAsync()
     {
-        var Store = new RelayStore(Path.Combine(Root, "automatic"));
-        var Bridge = new RecoveryBridge { Ready = new(TaskCreationOptions.RunContinuationsAsynchronously) };
+        var Store = new RelayStore(Path.Combine(Root, "offline"));
+        var Bridge = new RecoveryBridge { OfflineMain = true };
         using var Coordinator = new RelayCoordinator(Store, Bridge);
         var Parent = await Dispatch(Coordinator, "parent", "main", "worker");
         var Child = await Dispatch(Coordinator, "child", "worker", "child");
-        var Deadline = Parent.DeadlineAt;
         Bridge.RaiseExit("worker");
-        Require(Store.Get(Parent.Id).State == eRelayState.Recovering && Store.HasBlockingTask() && Store.Reservations().Count == 2, "recovery retains the original slot and its child reservation while desktop startup waits");
-        Bridge.Ready.SetResult();
-        await Until(() => Store.Get(Parent.Id).State == eRelayState.Running);
-        var Restored = Store.Get(Parent.Id);
-        Require(Restored.RecoveryCount == 1 && Restored.DeadlineAt == Deadline && Restored.Channel.WorkerThreadId == "worker", "automatic recovery preserves task identity original session and original deadline");
-        Require(Store.Get(Child.Id).State == eRelayState.Running && Bridge.SentList.Last().Prompt.Contains(Child.Id), "parent recovery preserves children and includes pending child ids in the continuation prompt");
-        Require(Bridge.SentList.Last().Prompt.Contains("不要重复已完成操作") && Restored.ProgressStage == "", "recovery requests continuation from existing evidence and waits for a new start acknowledgement");
-        await Coordinator.ProgressAsync("worker", "worker", Parent.Id, "started", "继续原任务");
+        await Until(() => Store.Get(Parent.Id).EventList.Last().Contains("异常详情已保留"));
+        var Blocked = Store.Get(Parent.Id);
+        Require(Blocked.State == eRelayState.Interrupted && Blocked.RecoveryCount == 0 && Blocked.WorkerOffline, "offline worker is marked resumable without launching or consuming a recovery attempt");
+        Require(Bridge.PrepareCount == 0 && Bridge.SentList.Count == 2 && Store.Get(Child.Id).State == eRelayState.Running, "offline notification does not start either instance or interrupt the child");
+        await Coordinator.ResumeAsync("main", "main", Parent.Id);
+        Require(Store.Get(Parent.Id).State == eRelayState.Running && Store.Get(Parent.Id).RecoveryCount == 1 && Bridge.SentList.Last().Prompt.Contains(Child.Id), "explicit resume retains the original task and its child");
         Bridge.RaiseExit("worker");
         await Until(() => Store.Get(Parent.Id).State == eRelayState.Interrupted);
-        Require(Bridge.PrepareCount == 1 && Store.Get(Child.Id).State == eRelayState.Running, "repeated exit stops automatic crash loops without cancelling independent child work");
-        await Coordinator.ResumeAsync("main", "main", Parent.Id);
-        Require(Store.Get(Parent.Id).State == eRelayState.Running && Store.Get(Parent.Id).RecoveryCount == 2, "explicit recovery can continue the same interrupted parent while its child still occupies a slot");
         await Coordinator.ReportAsync("child", "child", Child.Id, "completed", "下级证据", new());
         await Coordinator.ReviewAsync("worker", "worker", Child.Id);
-        await Coordinator.ReportAsync("worker", "worker", Parent.Id, "completed", "恢复后完成", new());
-        Require(Store.Get(Parent.Id).State == eRelayState.Returned, "restored task accepts the original worker callback after child acceptance");
+        await Coordinator.ReportAsync("worker", "worker", Parent.Id, "completed", "离线前完成", new());
+        Require(Store.Get(Parent.Id).State == eRelayState.ReturnUncertain &&
+            Store.Inbox("main", "main", "").Any(Item => Item.Id == Parent.Id), "late callback stays in the inbox when its coordinator is offline");
     }
 
     private static async Task VerifyActiveAsync()
@@ -67,9 +63,29 @@ internal static class RecoveryTests
         var Bridge = new RecoveryBridge { Idle = false };
         using var Coordinator = new RelayCoordinator(Store, Bridge);
         var Item = await Dispatch(Coordinator, "active", "main", "worker");
+        var Online = new RecoveryBridge();
+        using (var Reattached = new RelayCoordinator(Store, Online))
+            Require(Store.Get(Item.Id).State == eRelayState.Running && Online.PrepareCount == 0 && Online.SentList.Count == 0, "manager startup reattaches an active worker without sending or reopening");
         Bridge.RaiseExit("worker");
-        await Until(() => Store.Get(Item.Id).RecoveryCount == 1 && Store.Get(Item.Id).State == eRelayState.Running);
-        Require(Bridge.SentList.Count == 1, "an already active original session is reattached without sending another work message");
+        await Until(() => Store.Get(Item.Id).State == eRelayState.Interrupted);
+        await Coordinator.ResumeAsync("main", "main", Item.Id);
+        Require(Bridge.SentList.Count == 2 && Store.Get(Item.Id).State == eRelayState.Running, "manual reattachment to an active original session does not send a continuation");
+    }
+
+    private static async Task VerifyOfflineRestartAsync()
+    {
+        var Store = new RelayStore(Path.Combine(Root, "offline-restart"));
+        var Channel = new RelayChannel { MainInstance = Profile("main"), MainThreadId = "main", WorkerInstance = Profile("worker"), WorkerThreadId = "worker", TimeoutMinutes = 0 };
+        var Pending = new RelayTask { RequestKey = "offline-restart", State = eRelayState.Running, Channel = Channel };
+        var Result = new RelayTask { RequestKey = "queued-restart", State = eRelayState.Returning, ReturnNotificationQueued = true, Outcome = "completed", Result = "已落盘", Channel = Channel };
+        Store.Save(Pending);
+        Store.Save(Result);
+        var Bridge = new RecoveryBridge { OfflineMain = true, OfflineWorker = true };
+        using var Coordinator = new RelayCoordinator(Store, Bridge);
+        Coordinator.StartQueuedReturns();
+        await Until(() => Store.Get(Pending.Id).State == eRelayState.Interrupted && Store.Get(Result.Id).State == eRelayState.ReturnUncertain);
+        Require(Bridge.PrepareCount == 0 && Bridge.SentList.Count == 0, "offline startup and queued notification use no launch-capable path");
+        Require(Store.Inbox("main", "main", "").Single().Id == Result.Id && Store.Get(Pending.Id).WorkerOffline, "restart preserves the inbox and offline task for explicit recovery");
     }
 
     private static async Task VerifyFailuresAsync()
@@ -80,11 +96,14 @@ internal static class RecoveryTests
             var Bridge = new RecoveryBridge();
             using var Coordinator = new RelayCoordinator(Store, Bridge);
             var Item = await Dispatch(Coordinator, "failure", "main", "worker");
+            Bridge.RaiseExit("worker");
+            await Until(() => Store.Get(Item.Id).EventList.Last().Contains("异常通知"));
             Bridge.FailPrepare = !DuringSend;
             Bridge.FailSend = DuringSend;
-            Bridge.RaiseExit("worker");
+            try { await Coordinator.ResumeAsync("main", "main", Item.Id); throw new InvalidOperationException("expected failure"); }
+            catch (IOException Error) when (Error.Message.StartsWith("fixture ")) { }
             var Expected = DuringSend ? eRelayState.DispatchUncertain : eRelayState.Interrupted;
-            await Until(() => Store.Get(Item.Id).State == Expected && Store.Get(Item.Id).EventList.Last().Contains("异常通知"));
+            Require(Store.Get(Item.Id).State == Expected, "explicit resume preserves the correct pre-send or uncertain state");
             Require(Store.Get(Item.Id).EventList.Any(Value => Value.Contains(DuringSend ? "fixture send uncertainty" : "fixture startup failed")), "recovery persists the original failure context");
             if (DuringSend)
             {
@@ -160,21 +179,30 @@ internal static class RecoveryTests
     {
         public event Action<string>? InstanceExited;
         public List<(string Thread, string Prompt)> SentList { get; } = new();
-        public TaskCompletionSource? Ready { get; init; }
         public bool Idle { get; init; } = true;
+        public bool OfflineMain { get; init; }
+        public bool OfflineWorker { get; init; }
         public bool FailPrepare { get; set; }
         public bool FailSend { get; set; }
         public int PrepareCount { get; private set; }
         public int OpenCount { get; private set; }
         public void RaiseExit(string InstanceId) => InstanceExited?.Invoke(InstanceId);
-        public Task WatchAsync(InstanceProfile Instance, CancellationToken Cancellation) => Task.CompletedTask;
+        public Task WatchAsync(InstanceProfile Instance, CancellationToken Cancellation)
+        {
+            if (OfflineWorker) RaiseExit(Instance.Id);
+            return Task.CompletedTask;
+        }
         public Task OpenAsync(InstanceProfile Instance, string ThreadId, CancellationToken Cancellation) { OpenCount++; return Task.CompletedTask; }
-        public async Task<bool> PrepareResumeAsync(InstanceProfile Instance, string ThreadId, CancellationToken Cancellation)
+        public Task<bool> PrepareResumeAsync(InstanceProfile Instance, string ThreadId, CancellationToken Cancellation)
         {
             PrepareCount++;
             if (FailPrepare) throw new IOException("fixture startup failed");
-            if (Ready is not null) await Ready.Task.WaitAsync(Cancellation);
-            return Idle;
+            return Task.FromResult(Idle);
+        }
+        public Task SendToRunningAsync(InstanceProfile Instance, string ThreadId, string Prompt, string Model, CancellationToken Cancellation)
+        {
+            if (OfflineMain && Instance.Id == "main") throw new DesktopUnavailableException("fixture offline main");
+            return SendAsync(Instance, ThreadId, Prompt, Model, Cancellation);
         }
         public Task SendAsync(InstanceProfile Instance, string ThreadId, string Prompt, string Model, CancellationToken Cancellation)
         {

@@ -8,6 +8,17 @@ namespace CodexInstanceManager;
 public interface IRelayBridge
 {
     Task SendAsync(InstanceProfile Instance, string ThreadId, string Prompt, string Model, CancellationToken Cancellation);
+    Task SendAsync(InstanceProfile Instance, string ThreadId, string Prompt, string Model, string Thinking, CancellationToken Cancellation)
+        => Thinking.Length == 0
+            ? SendAsync(Instance, ThreadId, Prompt, Model, Cancellation)
+            : throw new NotSupportedException("当前桌面桥接不支持指定 Codex 推理档位");
+
+    Task SendToRunningAsync(InstanceProfile Instance, string ThreadId, string Prompt, string Model, CancellationToken Cancellation)
+        => SendAsync(Instance, ThreadId, Prompt, Model, Cancellation);
+    Task SendToRunningAsync(InstanceProfile Instance, string ThreadId, string Prompt, string Model, string Thinking, CancellationToken Cancellation)
+        => Thinking.Length == 0
+            ? SendToRunningAsync(Instance, ThreadId, Prompt, Model, Cancellation)
+            : throw new NotSupportedException("当前桌面桥接不支持指定 Codex 推理档位");
 }
 
 public interface IRelayProcessEvents
@@ -20,6 +31,11 @@ public interface IRelayRecoveryBridge
 {
     Task OpenAsync(InstanceProfile Instance, string ThreadId, CancellationToken Cancellation);
     Task<bool> PrepareResumeAsync(InstanceProfile Instance, string ThreadId, CancellationToken Cancellation);
+}
+
+public sealed class DesktopUnavailableException : IOException
+{
+    public DesktopUnavailableException(string Message) : base(Message) { }
 }
 
 public sealed partial class DesktopRelayBridge : IRelayBridge, IRelayProcessEvents, IRelayRecoveryBridge, IDisposable
@@ -79,11 +95,23 @@ public sealed partial class DesktopRelayBridge : IRelayBridge, IRelayProcessEven
         return ResultList;
     }
 
-    public async Task SendAsync(InstanceProfile Instance, string ThreadId, string Prompt, string Model, CancellationToken Cancellation)
+    public Task SendAsync(InstanceProfile Instance, string ThreadId, string Prompt, string Model, CancellationToken Cancellation)
+        => SendAsync(Instance, ThreadId, Prompt, Model, "", Cancellation);
+
+    public async Task SendAsync(InstanceProfile Instance, string ThreadId, string Prompt, string Model, string Thinking, CancellationToken Cancellation)
     {
         await EnsureAvailableAsync(Instance, Cancellation);
+        await SendToRunningAsync(Instance, ThreadId, Prompt, Model, Thinking, Cancellation);
+    }
+
+    public Task SendToRunningAsync(InstanceProfile Instance, string ThreadId, string Prompt, string Model, CancellationToken Cancellation)
+        => SendToRunningAsync(Instance, ThreadId, Prompt, Model, "", Cancellation);
+
+    public async Task SendToRunningAsync(InstanceProfile Instance, string ThreadId, string Prompt, string Model, string Thinking, CancellationToken Cancellation)
+    {
         var Arguments = new Dictionary<string, object> { ["threadId"] = ThreadId, ["hostId"] = "local", ["prompt"] = Prompt };
         if (Model.Length != 0) Arguments["model"] = Model;
+        if (Thinking.Length != 0) Arguments["thinking"] = Thinking;
         await CallAsync(Instance, ThreadId, "send_message_to_thread", Arguments, Cancellation);
     }
 
@@ -101,6 +129,11 @@ public sealed partial class DesktopRelayBridge : IRelayBridge, IRelayProcessEven
     public static async Task<JsonElement> CallAsync(InstanceProfile Instance, string CallerThreadId, string Tool, object Arguments, CancellationToken Cancellation)
     {
         await Task.Run(() => ResponsesCompatProfile.EnsureRunning(Instance, AgentCliDeployment.LoadPath()), Cancellation);
+        return await CallLifecycleAsync(Instance, CallerThreadId, Tool, Arguments, Cancellation);
+    }
+
+    public static async Task<JsonElement> CallLifecycleAsync(InstanceProfile Instance, string CallerThreadId, string Tool, object Arguments, CancellationToken Cancellation)
+    {
         using var Timeout = CancellationTokenSource.CreateLinkedTokenSource(Cancellation);
         Timeout.CancelAfter(TimeSpan.FromSeconds(RelayLimits.RequestTimeoutSeconds));
         using var Client = await ConnectAsync(Instance, Timeout.Token);

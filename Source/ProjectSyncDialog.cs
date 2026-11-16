@@ -19,7 +19,7 @@ public sealed class ProjectSyncDialog : Form
         ClientSize = new Size(620, 300);
         MinimumSize = new Size(580, 330);
         StartPosition = FormStartPosition.CenterParent;
-        var Root = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(20), ColumnCount = 1, RowCount = 5 };
+        var Root = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(22, 18, 22, 16), ColumnCount = 1, RowCount = 5 };
         Root.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
         Root.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
         Root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));

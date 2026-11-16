@@ -117,7 +117,7 @@ internal static class CursorRelayTests
         var Fake = new FakeCli { Hold = true };
         using var Cursor = new CursorRelayRunner(Path.Combine(Root, "restart-cursor"), Fake, Path.Combine(Root, "restart-outbox"), AutoOpenLog: () => false);
         string SessionId = Guid.NewGuid().ToString();
-        new CursorSessionStore(Path.Combine(Root, "restart-cursor", "sessions")).Save(new(SessionId, "原会话", Root, "", CliPath));
+        new RelayCliSessionStore(Path.Combine(Root, "restart-cursor", "sessions")).Save(new(SessionId, "原会话", Root, "", CliPath));
         var Store = new RelayStore(Path.Combine(Root, "restart-store"));
         var Item = new RelayTask { Id = "restart", RequestKey = "restart", Title = "续跑", Instructions = "只读", Acceptance = "确认", State = eRelayState.Running, Workspace = new() { Access = "read_only" }, Channel = new() { MainInstance = Settings.InstanceList[0], MainThreadId = "main-thread", WorkerInstance = CursorRelayRunner.Profile, WorkerThreadId = SessionId, WorkingDirectory = Root, CursorCliPath = CliPath } };
         Store.Save(Item);
@@ -143,7 +143,7 @@ internal static class CursorRelayTests
         try { CursorRelayRunner.ParseResult(Outer(Valid, SessionId), SessionId, "different final response"); } catch (InvalidDataException) { MismatchRejected = true; }
         Require(MismatchRejected, "terminal result must agree with the final assistant response");
         bool PathRejected = false;
-        try { new CursorSessionStore(Path.GetTempPath()).Get("../outside"); } catch (InvalidDataException) { PathRejected = true; }
+        try { new RelayCliSessionStore(Path.GetTempPath()).Get("../outside"); } catch (InvalidDataException) { PathRejected = true; }
         Require(PathRejected, "session selector cannot escape metadata directory");
     }
 

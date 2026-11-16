@@ -4,7 +4,7 @@ namespace CodexInstanceManager;
 
 public sealed partial class AgentManagementService
 {
-    private async Task<object> StartDshAsync(ManagerSettings Settings, InstanceProfile Caller, string ThreadId, JsonElement Arguments, RelayTask? Existing, RelayWorkspace? Workspace, string Key, CancellationToken Cancellation)
+    private async Task<object> StartDshAsync(ManagerSettings Settings, InstanceProfile Caller, string ThreadId, JsonElement Arguments, RelayTask? Existing, RelayWorkspace? Workspace, string Key, string FormationRunId, CancellationToken Cancellation)
     {
         if (Coordinator.Dsh is null) throw new InvalidOperationException("当前管理器未启用 DSH 请更新并重启管理器");
         foreach (string Parameter in new[] { "cwd", "model", "cursor_cli_path" })
@@ -28,6 +28,7 @@ public sealed partial class AgentManagementService
         var Main = Catalog.Session(Caller, ThreadId);
         var Route = new RelayChannel
         {
+            FormationRunId = FormationRunId,
             MainInstance = Caller, MainThreadId = ThreadId, MainTitle = Main.Title,
             WorkerInstance = new() { Id = DshRelayRunner.InstanceId, Name = "DeepSeek Harness", HomePath = Client.Connection.HomePath },
             WorkerThreadId = Session?.Id ?? "", WorkerTitle = Session?.Title ?? CreateTitle!, CreateTitle = CreateTitle ?? "",

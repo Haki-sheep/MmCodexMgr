@@ -5,16 +5,16 @@ using Microsoft.Win32.SafeHandles;
 
 namespace CodexInstanceManager;
 
-public static class CursorProcessJob
+internal static class RelayProcessJob
 {
-    public static SafeFileHandle Attach(Process Process)
+    public static SafeFileHandle Attach(Process Process, string Agent)
     {
         var Job = CreateJobObject(IntPtr.Zero, null);
         try
         {
-            if (Job.IsInvalid) throw new Win32Exception(Marshal.GetLastWin32Error(), "无法创建 Cursor 进程作业");
+            if (Job.IsInvalid) throw new Win32Exception(Marshal.GetLastWin32Error(), "无法创建 " + Agent + " 进程作业");
             var Limits = new ExtendedLimits { Basic = new BasicLimits { LimitFlags = 0x2000 } };
-            if (!SetInformationJobObject(Job, 9, ref Limits, (uint)Marshal.SizeOf<ExtendedLimits>()) || !AssignProcessToJobObject(Job, Process.Handle)) throw new Win32Exception(Marshal.GetLastWin32Error(), "无法绑定 Cursor 进程 生命周期无法由管理器接管");
+            if (!SetInformationJobObject(Job, 9, ref Limits, (uint)Marshal.SizeOf<ExtendedLimits>()) || !AssignProcessToJobObject(Job, Process.Handle)) throw new Win32Exception(Marshal.GetLastWin32Error(), "无法绑定 " + Agent + " 进程 生命周期无法由管理器接管");
             return Job;
         }
         catch

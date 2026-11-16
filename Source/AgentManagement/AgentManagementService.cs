@@ -40,11 +40,12 @@ public sealed partial class AgentManagementService
                 return Settings.InstanceList.Select((Item, Index) => (object)new { number = Index + 1, id = Item.Id, name = Item.Name, home = Item.HomePath, kind = "codex" })
                     .Concat(Coordinator.Antigravity is null ? Array.Empty<object>() : new object[] { new { number = (int?)null, id = AntigravityRelayRunner.InstanceId, name = AntigravityRelayRunner.Name, home = AntigravityDesktopClient.HomePath, kind = "antigravity_desktop" } })
                     .Concat(Coordinator.Cursor is null ? Array.Empty<object>() : new object[] { new { number = (int?)null, id = CursorRelayRunner.InstanceId, name = "Cursor CLI", home = CursorRelayRunner.Profile.HomePath, kind = "cursor_cli" } })
-                    .Concat(Coordinator.Dsh is null ? Array.Empty<object>() : new object[] { new { number = (int?)null, id = DshRelayRunner.InstanceId, name = "DeepSeek Harness", home = Settings.Dsh.HomePath, kind = "dsh_desktop" } }).ToArray();
+                    .Concat(Coordinator.Dsh is null ? Array.Empty<object>() : new object[] { new { number = (int?)null, id = DshRelayRunner.InstanceId, name = "DeepSeek Harness", home = Settings.Dsh.HomePath, kind = "dsh_desktop" } })
+                    .Concat(Coordinator.Claude is null ? Array.Empty<object>() : new object[] { new { number = (int?)null, id = ClaudeRelayRunner.InstanceId, name = "Claude Code", home = ClaudeRelayRunner.Profile.HomePath, kind = "claude_cli" } }).ToArray();
             case "agent_projects":
                 if (Text(Arguments, "instance") == AntigravityRelayRunner.InstanceId) throw new InvalidOperationException("Antigravity 使用 cwd 指定新会话工作目录");
                 if (Text(Arguments, "instance") == DshRelayRunner.InstanceId) return await DshCli.QueryAsync("projects", Settings.Dsh, Arguments, Cancellation);
-                if (Text(Arguments, "instance") == CursorRelayRunner.InstanceId) throw new InvalidOperationException("Cursor CLI 使用 cwd 指定工作目录 不使用 Codex 项目登记");
+                if (Text(Arguments, "instance") is CursorRelayRunner.InstanceId or ClaudeRelayRunner.InstanceId) throw new InvalidOperationException("该执行端使用 cwd 指定工作目录 不使用 Codex 项目登记");
                 return await Catalog.ProjectsAsync(ResolveInstance(Settings, Text(Arguments, "instance")), Cancellation);
             case "agent_sessions":
             {
@@ -55,12 +56,19 @@ public sealed partial class AgentManagementService
                     if (OptionalText(Arguments, "project") is not null) throw new InvalidOperationException("Cursor CLI 会话不使用 project 筛选 请按会话 ID 或完整名称查找");
                     return RequireCursor().List(OptionalText(Arguments, "session"), Number(Arguments, "offset", 0));
                 }
+                if (Text(Arguments, "instance") == ClaudeRelayRunner.InstanceId)
+                {
+                    if (OptionalText(Arguments, "project") is not null) throw new InvalidOperationException("Claude Code 会话请按 ID 或完整名称查找");
+                    return RequireClaude().List(OptionalText(Arguments, "session"), Number(Arguments, "offset", 0));
+                }
                 var Target = ResolveInstance(Settings, Text(Arguments, "instance"));
                 string? ProjectSelector = OptionalText(Arguments, "project");
                 var Project = ProjectSelector is null ? null : await ResolveProjectAsync(Target, ProjectSelector, Cancellation);
                 return Catalog.Sessions(Target, Project, OptionalText(Arguments, "session"), Number(Arguments, "offset", 0));
             }
-            case "agent_start": return await StartAsync(Settings, Caller, Request.ThreadId, Arguments, Cancellation);
+            case "agent_start":
+                if (Arguments.TryGetProperty("formation_run_id", out _)) throw new InvalidOperationException("编队标识只能由管理器内部派发写入");
+                return await StartAsync(Settings, Caller, Request.ThreadId, Arguments, "", Cancellation);
             case "agent_inbox":
             {
                 string After = OptionalText(Arguments, "after") ?? "";
@@ -88,6 +96,12 @@ public sealed partial class AgentManagementService
                     await RequireCursor().OpenAsync(CursorSession.Id, Cancellation);
                     return new { opened = true, instance_id = CursorRelayRunner.InstanceId, thread_id = CursorSession.Id, title = CursorSession.Title };
                 }
+                if (Text(Arguments, "instance") == ClaudeRelayRunner.InstanceId)
+                {
+                    var ClaudeSession = RequireClaude().Session(Text(Arguments, "session_id"));
+                    await Coordinator.OpenSessionAsync(ClaudeRelayRunner.Profile, ClaudeSession.Id, Cancellation);
+                    return new { opened = true, instance_id = ClaudeRelayRunner.InstanceId, thread_id = ClaudeSession.Id, title = ClaudeSession.Title };
+                }
                 var Target = ResolveInstance(Settings, Text(Arguments, "instance"));
                 var Session = Catalog.Session(Target, Text(Arguments, "session_id"));
                 await Coordinator.OpenSessionAsync(Target, Session.Id, Cancellation);
@@ -104,6 +118,8 @@ public sealed partial class AgentManagementService
                 bool Main = Item.Channel.MainInstance.Id == Caller.Id && Item.Channel.MainThreadId == Request.ThreadId;
                 bool Worker = Item.Channel.WorkerInstance.Id == Caller.Id && Item.Channel.WorkerThreadId == Request.ThreadId;
                 if (!Main && !Worker || Request.Command is "agent_cancel" or "agent_retry_return" or "agent_reconcile" or "agent_resume" && !Main) throw new InvalidOperationException("当前会话无权操作该任务");
+                if (Item.Channel.FormationRunId.Length != 0 && Request.Command is "agent_cancel" or "agent_retry_return" or "agent_reconcile" or "agent_resume")
+                    throw new InvalidOperationException("此轮次由编队管理 请使用 formation 操作");
                 if (Request.Command == "agent_resume") return Describe(await Coordinator.ResumeAsync(Caller.Id, Request.ThreadId, Item.Id));
                 if (Request.Command == "agent_cancel") await Coordinator.CancelAsync(Item.Id);
                 if (Request.Command == "agent_tree") return Store.TreePage(Item.Id, Number(Arguments, "offset", 0)).Select(Entry => new { task_id = Entry.Id, parent_task_id = Entry.ParentTaskId, title = Entry.Title, state = RelayLimits.StateText(Entry.State), children = Entry.ChildCount, main_instance = Entry.MainName, worker_instance = Entry.WorkerName, progress_at = Entry.ProgressAt }).ToArray();
@@ -131,7 +147,7 @@ public sealed partial class AgentManagementService
                             await Coordinator.ReconcileAsync(Caller.Id, Request.ThreadId, Item.Id, DshSession.Id, DshSession.Title);
                             return Describe(Store.Get(Item.Id));
                         }
-                        if (Item.Channel.WorkerInstance.Id == CursorRelayRunner.InstanceId) throw new InvalidOperationException("Cursor 派发待核对任务不可仅凭进程启动手动恢复结果接收 请核对 CLI 会话和产物后处理原记录");
+                        if (Item.Channel.WorkerInstance.Id is CursorRelayRunner.InstanceId or ClaudeRelayRunner.InstanceId) throw new InvalidOperationException("CLI 派发待核对任务请核对原会话和产物 本命令仅恢复桌面结果接收");
                         var Session = Catalog.Session(Item.Channel.WorkerInstance, Text(Arguments, "session_id"));
                         if (Item.Channel.ProjectId.Length != 0)
                         {
@@ -151,19 +167,38 @@ public sealed partial class AgentManagementService
     #endregion
 
     #region Dispatch
-    private async Task<object> StartAsync(ManagerSettings Settings, InstanceProfile Caller, string ThreadId, JsonElement Arguments, CancellationToken Cancellation)
+    internal Task<object> StartFormationAsync(string FormationRunId, string InstanceId, string ThreadId, JsonElement Arguments, CancellationToken Cancellation)
+    {
+        if (!Guid.TryParseExact(FormationRunId, "N", out _)) throw new InvalidOperationException("编队运行 ID 无效");
+        var Settings = LoadSettings();
+        var Caller = ResolveInstance(Settings, InstanceId);
+        Catalog.Session(Caller, ThreadId);
+        return StartAsync(Settings, Caller, ThreadId, Arguments, FormationRunId, Cancellation);
+    }
+
+    internal Task StopFormationAsync(string FormationRunId, string TaskId) => Coordinator.CancelFormationAsync(FormationRunId, TaskId);
+
+    private async Task<object> StartAsync(ManagerSettings Settings, InstanceProfile Caller, string ThreadId, JsonElement Arguments, string FormationRunId, CancellationToken Cancellation)
     {
         string Key = Caller.Id + "/" + ThreadId + "/" + Text(Arguments, "request_id");
         var Existing = Store.FindRequest(Key);
+        if (Existing is not null && Existing.Channel.FormationRunId != FormationRunId) throw new InvalidOperationException("同一请求标识属于其他编队或普通联调");
         var Workspace = ReadWorkspace(Arguments);
         if (Existing is null && Workspace is null) throw new InvalidOperationException("新任务必须声明 workspace.access 只读任务填 read_only 写入任务同时提供 write_paths");
-        if (Text(Arguments, "instance") == CursorRelayRunner.InstanceId) return await StartCursorAsync(Settings, Caller, ThreadId, Arguments, Existing, Workspace, Key, Cancellation);
-        if (Text(Arguments, "instance") == AntigravityRelayRunner.InstanceId)
-            return await StartAntigravityAsync(Caller, ThreadId, Arguments, Existing, Workspace, Key, Cancellation);
-        if (Text(Arguments, "instance") == DshRelayRunner.InstanceId) return await StartDshAsync(Settings, Caller, ThreadId, Arguments, Existing, Workspace, Key, Cancellation);
-        foreach (string CursorParameter in new[] { "cwd", "model", "cursor_cli_path" })
-            if (Arguments.TryGetProperty(CursorParameter, out _)) throw new InvalidOperationException(CursorParameter + " 仅适用于 instance=cursor");
-        var Target = ResolveInstance(Settings, Text(Arguments, "instance"));
+        string Instance = Text(Arguments, "instance");
+        string? Thinking = ReadModelOption(Arguments, "thinking");
+        if (Thinking is { Length: > 0 } && Instance is CursorRelayRunner.InstanceId or ClaudeRelayRunner.InstanceId or DshRelayRunner.InstanceId or AntigravityRelayRunner.InstanceId)
+            throw new InvalidOperationException("执行端 " + Instance + " 不支持 thinking");
+        if (Instance == CursorRelayRunner.InstanceId) return await StartCursorAsync(Settings, Caller, ThreadId, Arguments, Existing, Workspace, Key, FormationRunId, Cancellation);
+        if (Instance == AntigravityRelayRunner.InstanceId) return await StartAntigravityAsync(Caller, ThreadId, Arguments, Existing, Workspace, Key, FormationRunId, Cancellation);
+        if (Instance == DshRelayRunner.InstanceId) return await StartDshAsync(Settings, Caller, ThreadId, Arguments, Existing, Workspace, Key, FormationRunId, Cancellation);
+        if (Instance == ClaudeRelayRunner.InstanceId) return await StartClaudeAsync(Caller, ThreadId, Arguments, Existing, Workspace, Key, FormationRunId, Cancellation);
+        if (Thinking is not null && !RelayLimits.CodexThinkingList.Contains(Thinking))
+            throw new InvalidOperationException("thinking 必须为 " + string.Join(" ", RelayLimits.CodexThinkingList));
+        string? Model = ReadModelOption(Arguments, "model");
+        foreach (string Parameter in new[] { "cwd", "cursor_cli_path" })
+            if (Arguments.TryGetProperty(Parameter, out _)) throw new InvalidOperationException(Parameter + " 不适用于 Codex 实例");
+        var Target = ResolveInstance(Settings, Instance);
         string? ProjectSelector = OptionalText(Arguments, "project");
         var Project = ProjectSelector is null ? null : await ResolveProjectAsync(Target, ProjectSelector, Cancellation);
         string? CreateTitle = OptionalText(Arguments, "create_title");
@@ -178,13 +213,15 @@ public sealed partial class AgentManagementService
             MainInstance = Caller, MainThreadId = ThreadId, MainTitle = Main.Title,
             WorkerInstance = Target, WorkerThreadId = Worker?.Id ?? "", WorkerTitle = Worker?.Title ?? CreateTitle!,
             ProjectId = Project?.Id ?? "", CreateTitle = CreateTitle ?? "", CallbackCliPath = CliPath,
+            WorkerModel = string.IsNullOrWhiteSpace(Model) ? "" : Model, WorkerThinking = Thinking ?? "",
+            FormationRunId = FormationRunId,
             TimeoutMinutes = Number(Arguments, "timeout_minutes", 60)
         };
         if (!File.Exists(CliPath)) throw new FileNotFoundException("回调 CLI 尚未部署", CliPath);
         int SubagentMax = ReadSubagentMax(Arguments, Caller, ThreadId, Existing);
         var Item = await Coordinator.DispatchAsync(Caller.Id, ThreadId, Key, Text(Arguments, "title"), Text(Arguments, "instructions"), Text(Arguments, "acceptance"), Route,
             Number(Arguments, "session_max", 1), SubagentMax,
-            CreateTitle is null ? null : TaskItem => Catalog.CreateAsync(Target, Project, CreateTitle, RelayCoordinator.BuildWorkerPrompt(TaskItem), Cancellation),
+            CreateTitle is null ? null : TaskItem => Catalog.CreateAsync(Target, Project, CreateTitle, RelayCoordinator.BuildWorkerPrompt(TaskItem), TaskItem.Channel.WorkerModel, TaskItem.Channel.WorkerThinking, Cancellation),
             Number(Arguments, "cross_agent_max", 1), ReadWorkerLimits(Arguments, SubagentMax), ReadTreeBudget(Arguments), Workspace);
         string Instruction = Item.State switch
         {
@@ -192,7 +229,14 @@ public sealed partial class AgentManagementService
             eRelayState.DispatchUncertain or eRelayState.ReturnUncertain => "投递状态待核对 请查看任务记录与目标对话 不得自动重复创建或发送",
             _ => "按已保存的任务状态继续处理 不得重新执行已完成或终止的任务"
         };
-        return new { task_id = Item.Id, state = RelayLimits.StateText(Item.State), instance_id = Target.Id, project_id = Project?.Id ?? "", thread_id = Item.Channel.WorkerThreadId, session_max = Item.SessionMax, subagent_max = Item.SubagentMax, cross_agent_max = Item.CrossAgentMax, worker_limits = Item.WorkerLimits, tree_budget = Item.TreeBudget, tree_depth = Item.TreeDepth, workspace = Item.Workspace, instruction = Instruction };
+        return new { task_id = Item.Id, state = RelayLimits.StateText(Item.State), instance_id = Target.Id, project_id = Project?.Id ?? "", thread_id = Item.Channel.WorkerThreadId, model = Item.Channel.WorkerModel, thinking = Item.Channel.WorkerThinking, session_max = Item.SessionMax, subagent_max = Item.SubagentMax, cross_agent_max = Item.CrossAgentMax, worker_limits = Item.WorkerLimits, tree_budget = Item.TreeBudget, tree_depth = Item.TreeDepth, workspace = Item.Workspace, instruction = Instruction };
+    }
+
+    private static string? ReadModelOption(JsonElement Arguments, string Name)
+    {
+        if (!Arguments.TryGetProperty(Name, out var Value) || Value.ValueKind == JsonValueKind.Null) return null;
+        if (Value.ValueKind != JsonValueKind.String) throw new InvalidOperationException(Name + " 必须为字符串");
+        return Value.GetString();
     }
 
     private static RelayTreeBudget? ReadTreeBudget(JsonElement Arguments) => Arguments.TryGetProperty("tree_session_max", out _) || Arguments.TryGetProperty("max_depth", out _) ? new() { MaxSessions = Number(Arguments, "tree_session_max", RelayLimits.DefaultTreeSessionMax), MaxDepth = Number(Arguments, "max_depth", RelayLimits.DefaultTreeMaxDepth) } : null;
@@ -224,7 +268,7 @@ public sealed partial class AgentManagementService
         state = RelayLimits.StateText(Item.State), display_state = RelayLimits.ProgressStateText(Item.State, Item.Outcome, Item.ProgressStage),
         outcome = Item.Outcome, summary = Item.Result, artifacts = Item.ArtifactList,
         main = new { instance_id = Item.Channel.MainInstance.Id, thread_id = Item.Channel.MainThreadId },
-        worker = new { instance_id = Item.Channel.WorkerInstance.Id, thread_id = Item.Channel.WorkerThreadId, project_id = Item.Channel.ProjectId, create_title = Item.Channel.CreateTitle, cwd = Item.Channel.WorkingDirectory, model = Item.Channel.WorkerModel },
+        worker = new { instance_id = Item.Channel.WorkerInstance.Id, thread_id = Item.Channel.WorkerThreadId, project_id = Item.Channel.ProjectId, create_title = Item.Channel.CreateTitle, cwd = Item.Channel.WorkingDirectory, model = Item.Channel.WorkerModel, thinking = Item.Channel.WorkerThinking },
         worker_limits = Item.WorkerLimits,
         tree_budget = Item.TreeBudget, tree_root_id = Item.TreeRootId, tree_depth = Item.TreeDepth,
         workspace = new { access = Item.Workspace.Access, write_path_count = Item.Workspace.WritePathList.Count },

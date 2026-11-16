@@ -14,8 +14,7 @@ public sealed partial class RelayCoordinator
                 if (Item.State is not (eRelayState.Accepted or eRelayState.Cancelled))
                 {
                     StopDeadline(Id);
-                    Cursor?.Stop(Id);
-                    Dsh?.Stop(Id);
+                    StopWorker(Id);
                     CancelDescendants(Id);
                     Change(Item, eRelayState.Cancelled, "主会话通过 CLI 或 MCP 清理记录 已中断下级联调 Cursor CLI 会停止 DSH 核对归属后请求取消 Codex 模型与脚本需另行停止");
                 }
@@ -35,7 +34,7 @@ public sealed partial class RelayStore
         if (State is not ("interrupted" or "blocked" or "finished")) throw new InvalidOperationException("清理状态必须为 interrupted blocked 或 finished");
         using var Database = Open();
         using var Command = Database.CreateCommand();
-        Command.CommandText = "SELECT id,state,COALESCE(json_extract(data,'$.Outcome'),''),COALESCE(json_extract(data,'$.ProgressStage'),'') FROM relay_tasks WHERE json_extract(data,'$.Channel.MainInstance.Id')=$instance AND json_extract(data,'$.Channel.MainThreadId')=$thread";
+        Command.CommandText = "SELECT id,state,COALESCE(json_extract(data,'$.Outcome'),''),COALESCE(json_extract(data,'$.ProgressStage'),'') FROM relay_tasks WHERE json_extract(data,'$.Channel.MainInstance.Id')=$instance AND json_extract(data,'$.Channel.MainThreadId')=$thread AND " + StandaloneTaskPredicate;
         Command.Parameters.AddWithValue("$instance", InstanceId);
         Command.Parameters.AddWithValue("$thread", ThreadId);
         using var Reader = Command.ExecuteReader();

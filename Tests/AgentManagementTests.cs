@@ -113,12 +113,20 @@ internal static class AgentManagementTests
         await Coordinator.CancelAsync(Cross.GetProperty("task_id").GetString()!);
         var NewRequest = Start("created", "second", null);
         NewRequest["create_title"] = "资源执行 子对话";
+        NewRequest["model"] = "provider-model";
+        NewRequest["thinking"] = "ultra";
         var New = await StartAsync(NewRequest, Root, PipeName, Settings);
         int SentBefore = Bridge.SentList.Count;
         await StartAsync(NewRequest, Root, PipeName, Settings);
         Require(Catalog.CreateCount == 1 && Bridge.SentList.Count == SentBefore && New.GetProperty("thread_id").GetString() == "created-thread", "new conversation receives prompt in creation and retry never creates or sends twice");
+        Require(Catalog.LastCreateOptions == ("provider-model", "ultra") && New.GetProperty("thinking").GetString() == "ultra", "CLI forwards new Codex session options to the catalog and reports them");
         var Changed = new Dictionary<string, object>(NewRequest) { ["create_title"] = "another title" };
         await RejectAsync(() => StartAsync(Changed, Root, PipeName, Settings), "idempotency includes new conversation identity");
+        var ChangedThinking = new Dictionary<string, object>(NewRequest) { ["thinking"] = "medium" };
+        await RejectAsync(() => StartAsync(ChangedThinking, Root, PipeName, Settings), "same request ID rejects a different thinking level", "同一请求标识");
+        var ChangedModel = new Dictionary<string, object>(NewRequest) { ["model"] = "other-provider-model" };
+        await RejectAsync(() => StartAsync(ChangedModel, Root, PipeName, Settings), "same request ID rejects a different model", "同一请求标识");
+        Require(Catalog.CreateCount == 1, "changing model options for a saved request does not create another session");
         await Coordinator.CancelAsync(New.GetProperty("task_id").GetString()!);
         Catalog.Busy = true;
         int BeforeBusy = Bridge.SentList.Count;
@@ -148,15 +156,31 @@ internal static class AgentManagementTests
         int ProjectCalls = Catalog.ProjectCalls;
         var LooseRequest = Start("loose-session", "second", "loose-session");
         LooseRequest.Remove("project");
+        LooseRequest["model"] = "existing-session-model";
+        LooseRequest["thinking"] = "none";
         var Loose = await StartAsync(LooseRequest, Root, PipeName, Settings);
+        Require(Bridge.LastWorkerOptions == ("existing-session-model", "none"), "existing Codex session receives this request's model and explicit no-thinking option");
         Require(Loose.GetProperty("project_id").GetString() == "" && Loose.GetProperty("thread_id").GetString() == "loose-session" && Catalog.ProjectCalls == ProjectCalls && Catalog.LastSessionProject is null, "standalone session starts without querying projects or imposing project ownership");
         await Coordinator.CancelAsync(Loose.GetProperty("task_id").GetString()!);
         var LooseCreate = Start("loose-create", "second", null);
         LooseCreate.Remove("project");
         LooseCreate["create_title"] = "独立执行会话";
+        LooseCreate["model"] = "";
         var CreatedLoose = await StartAsync(LooseCreate, Root, PipeName, Settings);
         Require(CreatedLoose.GetProperty("project_id").GetString() == "" && Catalog.LastCreateProject is null && Catalog.ProjectCalls == ProjectCalls, "standalone creation passes no project to the desktop catalog");
         await Coordinator.CancelAsync(CreatedLoose.GetProperty("task_id").GetString()!);
+        Require(Catalog.LastCreateOptions == ("", ""), "an empty model leaves the host model and thinking at their defaults");
+        int BeforeInvalidOptions = Store.Count();
+        var InvalidThinking = Start("invalid-thinking", "second", "session-b");
+        InvalidThinking["thinking"] = "High";
+        await RejectAsync(() => StartAsync(InvalidThinking, Root, PipeName, Settings), "Codex thinking is a strict case-sensitive enum", "thinking 必须为");
+        foreach (string External in new[] { "cursor", "claude", "dsh", "antigravity" })
+        {
+            var Unsupported = Start("unsupported-thinking-" + External, External, "session-b");
+            Unsupported["thinking"] = "high";
+            await RejectAsync(() => StartAsync(Unsupported, Root, PipeName, Settings), "external workers reject thinking before connecting", External + " 不支持 thinking");
+        }
+        Require(Store.Count() == BeforeInvalidOptions, "invalid thinking creates no task or dispatch");
         var LooseSessions = await CliAsync(new[] { "sessions", "--instance", "second", "--session", "loose-session" }, Root, PipeName, Settings);
         Require(LooseSessions[0].GetProperty("Id").GetString() == "loose-session" && Catalog.ProjectCalls == ProjectCalls, "CLI lists standalone sessions without a project option");
         await VerifySubagentDefaultsAsync(Root, PipeName, Settings, Coordinator, Store);
@@ -270,7 +294,11 @@ internal static class AgentManagementTests
         using var Output = new MemoryStream();
         using var Error = new StringWriter();
         int Exit = await AgentCli.RunAsync(Arguments.Concat(new[] { "--caller-instance", "main", "--caller-thread", CallerThread }).ToArray(), Input, Output, Error, Environment.ProcessPath!, CancellationToken.None, PipeName, () => Settings, Path.Combine(Root, "outbox"));
-        if (Exit != 0) throw new InvalidOperationException("CLI exit=" + Exit + " " + Error);
+        if (Exit != 0)
+        {
+            using var Problem = JsonDocument.Parse(Error.ToString());
+            throw new InvalidOperationException("CLI exit=" + Exit + " " + Problem.RootElement.GetProperty("error").GetString());
+        }
         using var Result = JsonDocument.Parse(Output.ToArray());
         return Result.RootElement.Clone();
     }
@@ -313,6 +341,14 @@ internal static class AgentManagementTests
     private sealed class FakeBridge : IRelayBridge
     {
         public List<(string Thread, string Prompt)> SentList { get; } = new();
+        public (string Model, string Thinking) LastWorkerOptions { get; private set; }
+
+        public Task SendAsync(InstanceProfile Instance, string ThreadId, string Prompt, string Model, string Thinking, CancellationToken Cancellation)
+        {
+            LastWorkerOptions = (Model, Thinking);
+            return SendAsync(Instance, ThreadId, Prompt, Model, Cancellation);
+        }
+
         public Task SendAsync(InstanceProfile Instance, string ThreadId, string Prompt, string Model, CancellationToken Cancellation)
         {
             SentList.Add((ThreadId, Prompt));
@@ -330,11 +366,18 @@ internal static class AgentManagementTests
         public int ProjectCalls { get; private set; }
         public AgentProject? LastSessionProject { get; private set; }
         public AgentProject? LastCreateProject { get; private set; }
+        public (string Model, string Thinking) LastCreateOptions { get; private set; }
         public FakeCatalog(string Root) => this.Root = Root;
         public Task<List<AgentProject>> ProjectsAsync(InstanceProfile Instance, CancellationToken Cancellation) { ProjectCalls++; return Task.FromResult(new List<AgentProject> { new("project", "项目 有空格", Root, true) }); }
         public AgentSession Session(InstanceProfile Instance, string Id) => new(Id, Id, "project", Root);
         public List<AgentSession> Sessions(InstanceProfile Instance, AgentProject? Project, string? Selector, int Offset) { LastSessionProject = Project; return Duplicate ? new() { Session(Instance, "dup-a"), Session(Instance, "dup-b") } : new() { Session(Instance, Selector!) }; }
         public Task RequireIdleAsync(InstanceProfile Instance, string ThreadId, CancellationToken Cancellation) => Busy ? Task.FromException(new InvalidOperationException("fixture active")) : Task.CompletedTask;
+        public Task<RelayThread> CreateAsync(InstanceProfile Instance, AgentProject? Project, string Title, string Prompt, string Model, string Thinking, CancellationToken Cancellation)
+        {
+            LastCreateOptions = (Model, Thinking);
+            return CreateAsync(Instance, Project, Title, Prompt, Cancellation);
+        }
+
         public Task<RelayThread> CreateAsync(InstanceProfile Instance, AgentProject? Project, string Title, string Prompt, CancellationToken Cancellation)
         {
             LastCreateProject = Project;
@@ -351,10 +394,10 @@ internal static class AgentManagementTests
         Count++;
     }
 
-    private static async Task RejectAsync(Func<Task> Action, string Message)
+    private static async Task RejectAsync(Func<Task> Action, string Message, string? ErrorText = null)
     {
         try { await Action(); }
-        catch (InvalidOperationException) { Count++; return; }
+        catch (InvalidOperationException Failure) when (ErrorText is null || Failure.Message.Contains(ErrorText, StringComparison.Ordinal)) { Count++; return; }
         throw new Exception("FAILED agents: " + Message);
     }
     #endregion

@@ -5,6 +5,8 @@ public enum eRelayState
     Sending, Running, Returning, Returned, Accepted, DispatchUncertain, ReturnUncertain, Cancelled, TimedOut, Interrupted, Recovering
 }
 
+public enum eRelayBoardView { All, Current, Blocked, History }
+
 public sealed class RelayChannel
 {
     public InstanceProfile MainInstance { get; set; } = new();
@@ -19,6 +21,10 @@ public sealed class RelayChannel
     public string ProjectId { get; set; } = "";
     public string WorkingDirectory { get; set; } = "";
     public string WorkerModel { get; set; } = "";
+    public string WorkerThinking { get; set; } = "";
+    /// <summary> 管理器内部编队调度写入的运行 ID </summary>
+    [System.Text.Json.Serialization.JsonInclude]
+    public string FormationRunId { get; internal set; } = "";
     public string CursorCliPath { get; set; } = "";
     public string DshServerUrl { get; set; } = "";
     public int AntigravityStepOffset { get; set; }
@@ -39,6 +45,7 @@ public sealed class RelayTask
     public string Outcome { get; set; } = "";
     public string Result { get; set; } = "";
     public bool ReturnNotificationQueued { get; set; }
+    public bool WorkerOffline { get; set; }
     public List<string> ArtifactList { get; set; } = new();
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
@@ -116,6 +123,7 @@ public static class RelayLimits
     public const int MaxEventCount = 48;
     public const int MaxEventLength = 2000;
     public const string McpName = "mm_codex_mgr";
+    internal static IReadOnlyList<string> CodexThinkingList { get; } = new[] { "none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra" };
     public const string DispatchWaitInstruction = "优先处理已到达且当前可核对的回传 继续推进其他已授权且依赖已满足的工作 准备等待前用 agent_inbox 或 CLI inbox 核对一次 当前无可推进事项且仍在等回传时才结束本轮等待事件 不轮询";
     public static string Root => Path.Combine(ManagerPaths.Root, "relay");
     public static string PipeName => "MmCodexMgr-Relay-" + Environment.UserName;

@@ -46,20 +46,15 @@ internal static class RelayTests
         Form.Show();
         Application.DoEvents();
         var Toggle = Descendants(Form).OfType<Button>().Single(Item => Item.Name == AppTheme.ToggleButtonName && Item.Visible);
-        var Grid = Descendants(Form).OfType<DataGridView>().Single();
-        Require(Grid.Columns.Count == 5 && Grid.Columns[1].HeaderText == "协调者：会话名" && Grid.Columns[2].HeaderText == "执行者：会话名" && Grid.Columns[3].HeaderText == "执行状态", "board exposes exactly the requested five columns");
-        Require(Grid.Rows.Cast<DataGridViewRow>().All(Item => Item.Cells[1].Value?.ToString() == "主实例：高级模型 · 格式探查" && Item.Cells[2].Value?.ToString() == "执行实例：快速模型 · 批量解包"), "board displays instance identity before the session title");
-        Require(Grid.RowCount == 5 && Grid.Rows.Cast<DataGridViewRow>().Select(Item => Item.Cells[3].Value?.ToString()).ToHashSet().SetEquals(new[] { "未开始", "执行者正在执行", "协调者正在执行", "已阻塞", "已结束" }), "preview demonstrates the five workflow states");
-        Require(Grid.Rows.Cast<DataGridViewRow>().All(Item => Item.Cells[4].Value?.ToString() == (Item.Cells[3].Value?.ToString() == "已结束" ? "删除" : "中断任务")), "finished rows expose deletion and unfinished rows keep interruption");
-        var BoardButton = Descendants(Form).OfType<Button>().Single(Item => Item.Text == "任务看板");
-        Require(BoardButton.Parent!.ClientRectangle.Contains(BoardButton.Bounds), "single board action fits in footer");
-        Require(BoardButton.ContextMenuStrip is null, "board cleanup runs directly without selecting a menu action");
+        var Home = Descendants(Form).OfType<FormationPage>().Single();
+        Require(Home.Visible && !Descendants(Form).OfType<DataGridView>().Any() && !Descendants(Form).OfType<Button>().Any(Item => Item.Text == "任务看板"), "relay board view is retired and the legacy entry opens the formation home");
+        Require(Store.Count() == PreviewList.Length, "relay ledger keeps every task without a board view");
         Toggle.PerformClick();
         Application.DoEvents();
-        Require(Settings.DarkMode != DarkMode && Grid.BackgroundColor == (Settings.DarkMode ? ThemePalette.Dark.Surface : ThemePalette.Light.Surface), "theme toggle updates settings and existing task table together");
+        Require(Settings.DarkMode != DarkMode && Home.BackColor == (Settings.DarkMode ? ThemePalette.Dark.Background : ThemePalette.Light.Background), "theme toggle updates settings and the existing home page together");
         Toggle.PerformClick();
         Application.DoEvents();
-        Require(Settings.DarkMode == DarkMode && ReferenceEquals(Grid, Descendants(Form).OfType<DataGridView>().Single()), "switching appearance preserves the task table instance");
+        Require(Settings.DarkMode == DarkMode && ReferenceEquals(Home, Descendants(Form).OfType<FormationPage>().Single()), "switching appearance preserves the page instance");
         using var Image = new Bitmap(Form.Width, Form.Height);
         Form.DrawToBitmap(Image, new Rectangle(0, 0, Image.Width, Image.Height));
         Image.Save(FilePath);
@@ -127,7 +122,8 @@ internal static class RelayTests
             Bridge.RaiseExit("worker");
             await ExitSignal.Task.WaitAsync(TimeSpan.FromSeconds(5));
             Require(Store.Get(Interrupted.Id).State == eRelayState.Interrupted && Bridge.SentList.Last().Prompt.Contains("执行实例已经退出"), "process exit wakes main through an event without polling");
-            await RejectAsync(() => Coordinator.ReportAsync("worker", "worker-thread", Interrupted.Id, "completed", "迟到结果", new()), "interrupted task rejects late results");
+            await Coordinator.ReportAsync("worker", "worker-thread", Interrupted.Id, "completed", "迟到结果", new());
+            Require(Store.Get(Interrupted.Id).State == eRelayState.Returned, "offline interruption accepts a valid late result from its original worker");
         }
 
         var RestartItem = new RelayTask { RequestKey = "restart", Title = "重启恢复", Channel = Channel, State = eRelayState.Returning, Result = "已落盘" };
@@ -257,25 +253,16 @@ internal static class RelayTests
             Store.Save(Item);
             if (Index == 0) LastTaskId = Item.Id;
         }
-        var Settings = new ManagerSettings { InstanceList = new() { Channel.MainInstance, Channel.WorkerInstance }, SelectedId = Channel.MainInstance.Id, DarkMode = DarkMode };
-        using var Form = new MainForm(Settings, true, Store, Coordinator);
-        Form.ShowRelayPage();
-        Form.Show();
-        Application.DoEvents();
-        var Grid = Descendants(Form).OfType<DataGridView>().Single();
-        Descendants(Form).OfType<Button>().Single(Item => Item.Text == "下一页").PerformClick();
-        Require(Grid.RowCount == 1, "history pagination reaches the final single-row page");
+        Require(Store.TreePage(null, RelayLimits.PageSize).Count == 1, "history pagination reaches the final single-row page");
         Coordinator.DeleteHistoryAsync(LastTaskId).GetAwaiter().GetResult();
-        Require(Grid.RowCount == RelayLimits.PageSize && Descendants(Form).OfType<Label>().Any(Item => Item.Text == "第 1 页"), "deleting the final row returns to the last populated page");
+        Require(Store.Count() == RelayLimits.PageSize && Store.TreePage(null, RelayLimits.PageSize).Count == 0, "deleting the final row leaves only the first page populated");
         Coordinator.ClearHistoryAsync().GetAwaiter().GetResult();
-        Require(Grid.RowCount == 0 && Descendants(Form).OfType<Label>().Any(Item => Item.Text == "第 1 页"), "clearing history leaves a stable empty first page");
+        Require(Store.Count() == 0, "clearing history removes every finished record");
         for (int Index = 0; Index <= RelayLimits.PageSize; Index++)
             Store.Save(new RelayTask { RequestKey = "blocked-page-" + Index, Title = "已阻塞-" + Index, State = eRelayState.TimedOut });
-        Form.Hide(); Form.Show(); Application.DoEvents();
-        Descendants(Form).OfType<Button>().Single(Item => Item.Text == "下一页").PerformClick();
-        Require(Grid.RowCount == 1, "blocked history reaches the final page");
+        Require(Store.TreePage(null, RelayLimits.PageSize).Count == 1, "blocked history reaches the final page");
         Coordinator.ClearBlockedHistoryAsync().GetAwaiter().GetResult();
-        Require(Grid.RowCount == 0 && Descendants(Form).OfType<Label>().Any(Item => Item.Text == "第 1 页"), "clearing blocked history refreshes the grid and returns to the empty first page");
+        Require(Store.Count() == 0, "clearing blocked history removes every blocked record");
     }
 
     private static async Task VerifyMcpAsync()

@@ -4,6 +4,7 @@ public static class AgentDisplay
 {
     public static string Instance(ManagerSettings Settings, string InstanceId, string RecordedName)
     {
+        if (InstanceId == ClaudeRelayRunner.InstanceId) return "Claude Code";
         if (InstanceId == CursorRelayRunner.InstanceId) return "Cursor";
         if (InstanceId.Equals("dsh", StringComparison.OrdinalIgnoreCase)) return "DSH";
         return Settings.InstanceList.FirstOrDefault(Item => Item.Id == InstanceId)?.Name ?? RecordedName;

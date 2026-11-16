@@ -12,6 +12,10 @@ public interface IAgentCatalog
     AgentSession Session(InstanceProfile Instance, string Id);
     Task RequireIdleAsync(InstanceProfile Instance, string ThreadId, CancellationToken Cancellation);
     Task<RelayThread> CreateAsync(InstanceProfile Instance, AgentProject? Project, string Title, string Prompt, CancellationToken Cancellation);
+    Task<RelayThread> CreateAsync(InstanceProfile Instance, AgentProject? Project, string Title, string Prompt, string Model, string Thinking, CancellationToken Cancellation)
+        => Model.Length == 0 && Thinking.Length == 0
+            ? CreateAsync(Instance, Project, Title, Prompt, Cancellation)
+            : throw new NotSupportedException("当前会话目录不支持指定 Codex 模型或推理档位");
 }
 
 public sealed class AgentCatalog : IAgentCatalog
@@ -26,6 +30,18 @@ public sealed class AgentCatalog : IAgentCatalog
         await Desktop.EnsureAvailableAsync(Instance, Cancellation);
         string Caller = LatestThread(Instance);
         var Data = await Desktop.CallAsync(Instance, Caller, "list_projects", new { }, Cancellation);
+        return ReadProjects(Data);
+    }
+
+    internal static async Task<IReadOnlyList<AgentProject>> ProjectsOnRunningDesktopAsync(InstanceProfile Instance, CancellationToken Cancellation)
+    {
+        string Caller = LatestThread(Instance);
+        var Data = await DesktopRelayBridge.CallLifecycleAsync(Instance, Caller, "list_projects", new { }, Cancellation);
+        return ReadProjects(Data);
+    }
+
+    private static List<AgentProject> ReadProjects(JsonElement Data)
+    {
         return Data.GetProperty("projects").EnumerateArray()
             .Where(Item => Item.GetProperty("projectKind").GetString() == "local" && Item.GetProperty("hostId").GetString() == "local")
             .Select(Item => new AgentProject(Item.GetProperty("projectId").GetString()!, Item.GetProperty("label").GetString()!, Item.GetProperty("path").GetString()!, Item.GetProperty("isGitRepository").GetBoolean())).ToList();
@@ -85,11 +101,17 @@ public sealed class AgentCatalog : IAgentCatalog
         if (Status != "idle") throw new InvalidOperationException("目标会话尚未空闲 当前状态 " + Status + " 请结束当前任务后再启动联调");
     }
 
-    public async Task<RelayThread> CreateAsync(InstanceProfile Instance, AgentProject? Project, string Title, string Prompt, CancellationToken Cancellation)
+    public Task<RelayThread> CreateAsync(InstanceProfile Instance, AgentProject? Project, string Title, string Prompt, CancellationToken Cancellation)
+        => CreateAsync(Instance, Project, Title, Prompt, "", "", Cancellation);
+
+    public async Task<RelayThread> CreateAsync(InstanceProfile Instance, AgentProject? Project, string Title, string Prompt, string Model, string Thinking, CancellationToken Cancellation)
     {
         await Desktop.EnsureAvailableAsync(Instance, Cancellation);
         object Target = Project is null ? new { type = "projectless" } : new { type = "project", projectId = Project.Id, environment = new { type = "local" } };
-        var Data = await Desktop.CallAsync(Instance, LatestThread(Instance), "create_thread", new { title = Title, prompt = Prompt, target = Target }, Cancellation);
+        var Arguments = new Dictionary<string, object> { ["title"] = Title, ["prompt"] = Prompt, ["target"] = Target };
+        if (Model.Length != 0) Arguments["model"] = Model;
+        if (Thinking.Length != 0) Arguments["thinking"] = Thinking;
+        var Data = await Desktop.CallAsync(Instance, LatestThread(Instance), "create_thread", Arguments, Cancellation);
         if (!Data.TryGetProperty("threadId", out var Id)) throw new IOException("桌面未返回就绪会话 ID 请人工核对创建结果 不得重复创建 " + Data.GetRawText());
         return new(Id.GetString()!, Title, "active");
     }

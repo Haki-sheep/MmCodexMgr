@@ -32,7 +32,11 @@ public sealed partial class DesktopRelayBridge
         try
         {
             var Running = await Task.Run(() => InstanceService.Find(Instance, InstanceService.ListRunning()), Startup.Token);
-            if (Running is null) await Task.Run(() => InstanceService.Launch(Instance), Startup.Token);
+            if (Running is null) await Task.Run(() =>
+            {
+                Startup.Token.ThrowIfCancellationRequested();
+                InstanceService.Launch(Instance);
+            }, Startup.Token);
             while (true)
             {
                 try
@@ -53,8 +57,4 @@ public sealed partial class DesktopRelayBridge
         finally { LaunchGate.Release(); }
     }
 
-    private sealed class DesktopUnavailableException : IOException
-    {
-        public DesktopUnavailableException(string Message) : base(Message) { }
-    }
 }

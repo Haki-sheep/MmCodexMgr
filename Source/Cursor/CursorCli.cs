@@ -72,7 +72,7 @@ public sealed class CursorCli : ICursorCli
         Cancellation.ThrowIfCancellationRequested();
         using var Process = new Process { StartInfo = StartInfo(CliPath, Cwd, ArgumentList) };
         Process.Start();
-        using var Job = CursorProcessJob.Attach(Process);
+        using var Job = RelayProcessJob.Attach(Process, "Cursor");
         using var Registration = Cancellation.Register(() => { try { if (!Process.HasExited) Process.Kill(true); } catch (InvalidOperationException) { } });
         var Output = new StringBuilder();
         var Error = new StringBuilder();

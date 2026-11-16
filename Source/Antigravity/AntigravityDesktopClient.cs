@@ -73,7 +73,7 @@ public sealed class AntigravityDesktopClient : IDisposable
 
     public void Dispose() => Http.Dispose();
 
-    private async Task<JsonElement> CallAsync(string Method, object Arguments, CancellationToken Cancellation, bool Stream = false)
+    internal async Task<JsonElement> CallAsync(string Method, object Arguments, CancellationToken Cancellation, bool Stream = false)
     {
         using var Timeout = CancellationTokenSource.CreateLinkedTokenSource(Cancellation);
         Timeout.CancelAfter(TimeSpan.FromSeconds(15));

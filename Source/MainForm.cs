@@ -1,230 +1,78 @@
-using System.Diagnostics;
-
 namespace CodexInstanceManager;
 
 public sealed class MainForm : Form
 {
+    public const string AppTitle = "Mm AgentWork Mgr";
     private readonly ManagerSettings Settings;
-    private readonly ListBox InstanceList = new();
-    private readonly TextBox NameInput = new();
-    private readonly TextBox BadgeInput = new();
-    private readonly TextBox HomeInput = new();
-    private readonly TextBox DataInput = new();
-    private readonly PictureBox IconPreview = new();
-    private readonly Label StatusLabel = new();
-    private readonly Label CcLabel = new();
-    private readonly Button ColorButton = new StudioButton();
-    private readonly Button SyncButton = new StudioButton();
-    private readonly Button ConversationButton = new StudioButton();
-    private readonly Button ProjectButton = new StudioButton();
+    private readonly bool PreviewOnly;
+    private readonly AppTheme Theme;
+    private readonly ThemeTabControl MainTabs = new() { Dock = DockStyle.Fill };
+    private readonly NavigationPage FormationTab = new("编队", char.ConvertFromUtf32(0xE716));
+    private readonly NavigationPage AgentTab = new("Agent 管理", char.ConvertFromUtf32(0xE770));
+    private readonly NavigationPage LibraryTab = new("Rule + Skill", char.ConvertFromUtf32(0xE8F1));
+    /// <summary> 管理器自身的全局设置入口 </summary>
+    private readonly NavigationPage SettingsTab = new("设置", char.ConvertFromUtf32(0xE713));
+    /// <summary> 实例与外部执行端的统一管理页 </summary>
+    private readonly AgentPage Agents;
+    /// <summary> 编队首页 </summary>
+    private readonly FormationPage Formations;
+    /// <summary> 应用与托盘共用图标 由窗体释放 </summary>
+    private readonly Icon AppIcon;
     private readonly NotifyIcon TrayIcon = new();
     private readonly BrandingService Branding = new();
+    private readonly AgentTaskbarService AgentTaskbar = new();
+    private readonly AgentTaskbarProfiles TaskbarProfiles = new();
     private readonly System.Windows.Forms.Timer RefreshDelay = new() { Interval = 150 };
     private readonly InstanceActivityMonitor ActivityMonitor = new();
-    private readonly ThemeTabControl MainTabs = new() { Dock = DockStyle.Fill };
-    private readonly NavigationPage RelayTab = new("任务看板");
-    private readonly NavigationPage CollaborationTab = new("跨 Agent 协作");
-    private readonly NavigationPage LibraryTab = new("规则与技能库");
-    /// <summary> 管理器自身的全局设置入口 </summary>
-    private readonly NavigationPage SettingsTab = new("设置");
-    private readonly Button ThemeButton = new StudioButton();
-    private readonly AppTheme Theme;
-    private readonly bool PreviewOnly;
-    private readonly RelayStore? TaskStore;
-    private readonly RelayCoordinator? TaskCoordinator;
+    private readonly SemaphoreSlim RefreshGate = new(1, 1);
     private List<RunningInstance> RunningList = new();
-    private bool Polling;
     private bool RefreshAgain;
     private bool AllowExit;
-    private bool CleaningConversations;
-    private string CurrentColor = "#6470EE";
-    private string CurrentIcon = "";
-    private static readonly Color AccentColor = Color.FromArgb(79, 86, 219);
-    public InstanceProfile? Selected => InstanceList.SelectedItem as InstanceProfile;
+    private AgentIconSettings AgentIcons;
 
     #region Layout
-    public MainForm(ManagerSettings Settings, bool PreviewOnly = false, RelayStore? TaskStore = null, RelayCoordinator? TaskCoordinator = null)
+    public MainForm(ManagerSettings Settings, bool PreviewOnly = false, RelayStore? TaskStore = null, RelayCoordinator? TaskCoordinator = null, FormationService? Formation = null, FormationStore? FormationData = null)
     {
         SuspendLayout();
         this.Settings = Settings;
         this.PreviewOnly = PreviewOnly;
+        AgentIcons = PreviewOnly ? new() : AgentIconSettings.Load();
         Theme = new AppTheme(Settings.DarkMode);
         MainTabs.Theme = Theme;
-        this.TaskStore = TaskStore;
-        this.TaskCoordinator = TaskCoordinator;
         AutoScaleDimensions = new SizeF(96, 96);
         AutoScaleMode = AutoScaleMode.Dpi;
-        Text = "Codex 实例管理器";
-        Font = new Font("Microsoft YaHei UI", 10);
-        BackColor = Color.FromArgb(245, 247, 251);
-        ClientSize = new Size(1080, 860);
+        Text = AppTitle;
+        Font = StudioFonts.Body;
+        ClientSize = new Size(1240, 860);
         MinimumSize = new Size(980, 700);
         StartPosition = FormStartPosition.CenterScreen;
-        using var BadgeImage = BrandingService.DrawBadge(new InstanceProfile { Badge = "C", ColorHex = "#4F56DB" }, 64);
-        IntPtr IconHandle = BadgeImage.GetHicon();
-        Icon = (Icon)Icon.FromHandle(IconHandle).Clone();
-        NativeDestroyIcon(IconHandle);
+        AppIcon = AppArtwork.CreateIcon();
+        Icon = AppIcon;
 
-        var Root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 3, Padding = new Padding(24) };
-        Root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 220));
-        Root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        Root.RowStyles.Add(new RowStyle(SizeType.Absolute, 76));
-        Root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        Root.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
-        var InstancesTab = new NavigationPage("实例管理") { BackColor = BackColor };
-        InstancesTab.Controls.Add(Root);
-        MainTabs.TabPages.Add(RelayTab);
-        MainTabs.TabPages.Add(InstancesTab);
-        MainTabs.TabPages.Add(CollaborationTab);
+        MainTabs.TabPages.Add(FormationTab);
+        MainTabs.TabPages.Add(AgentTab);
         MainTabs.TabPages.Add(LibraryTab);
         MainTabs.TabPages.Add(SettingsTab);
-        MainTabs.SelectedTab = InstancesTab;
-        MainTabs.SelectedIndexChanged += (_, _) => { if (MainTabs.SelectedTab == RelayTab) BuildRelayPage(); else if (MainTabs.SelectedTab == CollaborationTab) BuildCollaborationPage(); else if (MainTabs.SelectedTab == LibraryTab) BuildLibraryPage(); else if (MainTabs.SelectedTab == SettingsTab) BuildSettingsPage(); };
+        Formations = new FormationPage(Settings, Formation, FormationData, Theme, PreviewOnly);
+        FormationTab.Controls.Add(Formations);
+        Agents = new AgentPage(Settings, Theme, PreviewOnly, TaskCoordinator);
+        AgentTab.Controls.Add(Agents);
+        MainTabs.SelectedTab = FormationTab;
+        MainTabs.SelectedIndexChanged += (_, _) => SafeAction(() =>
+        {
+            if (MainTabs.SelectedTab == LibraryTab) BuildLibraryPage();
+            else if (MainTabs.SelectedTab == SettingsTab) BuildSettingsPage();
+        });
+        MainTabs.ThemeToggleRequested += (_, _) => SafeAction(ToggleTheme);
         Controls.Add(MainTabs);
-        StyleButton(ThemeButton, false);
-        ThemeButton.Name = AppTheme.ToggleButtonName;
-        ThemeButton.Click += (_, _) => SafeAction(ToggleTheme);
         HandleCreated += (_, _) => Theme.ApplyTitleBar(this);
 
-        var Header = new Panel { Dock = DockStyle.Fill };
-        Header.Controls.Add(ThemeButton);
-        Header.Layout += (_, _) => PositionThemeButton();
-        Header.Controls.Add(new Label { Text = "工作空间", Font = new Font(Font.FontFamily, 22, FontStyle.Bold), AutoSize = true, Location = new Point(0, 0) });
-        Header.Controls.Add(new Label { Text = "管理实例与工具  /  为每项工作保持独立环境", ForeColor = Color.DimGray, AutoSize = true, Location = new Point(3, 43) });
-        Root.Controls.Add(Header, 0, 0);
-        Root.SetColumnSpan(Header, 2);
-
-        var Left = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 3, ColumnCount = 1, Margin = new Padding(0, 0, 18, 0) };
-        Left.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
-        Left.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        Left.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
-        Left.Controls.Add(MakeButton("＋ 新建实例", (_, _) => AddInstance(), true), 0, 0);
-        InstanceList.Dock = DockStyle.Fill;
-        InstanceList.BorderStyle = BorderStyle.None;
-        InstanceList.BackColor = Color.White;
-        InstanceList.DrawMode = DrawMode.OwnerDrawFixed;
-        InstanceList.ItemHeight = 76;
-        InstanceList.DrawItem += DrawInstance;
-        InstanceList.SelectedIndexChanged += (_, _) => LoadSelected();
-        Left.Controls.Add(InstanceList, 0, 1);
-        Left.Controls.Add(MakeButton("从列表移除", (_, _) => RemoveInstance()), 0, 2);
-        Root.Controls.Add(Left, 0, 1);
-
-        var RightScroll = new WheelScrollPanel { Dock = DockStyle.Fill, AutoScroll = true };
-        var Right = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, ColumnCount = 1, RowCount = 5 };
-        Right.RowStyles.Add(new RowStyle(SizeType.Absolute, 280));
-        Right.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        Right.RowStyles.Add(new RowStyle(SizeType.Absolute, 138));
-        Right.RowStyles.Add(new RowStyle(SizeType.Absolute, 144));
-        Right.RowStyles.Add(new RowStyle(SizeType.Absolute, 148));
-        RightScroll.Controls.Add(Right);
-        Root.Controls.Add(RightScroll, 1, 1);
-
-        var ProfileCard = MakeCard("实例设置", 8);
-        var Fields = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 5, Padding = new Padding(0, 8, 0, 0) };
-        Fields.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 94));
-        Fields.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        for (int Index = 0; Index < 5; Index++) Fields.RowStyles.Add(new RowStyle(SizeType.Absolute, Index == 3 ? 62 : 36));
-        AddField(Fields, "实例名称", NameInput, 0);
-        AddField(Fields, "配置目录", HomeInput, 1);
-        AddField(Fields, "界面目录", DataInput, 2);
-        HomeInput.ReadOnly = true;
-        DataInput.ReadOnly = true;
-        var IconRow = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false };
-        IconPreview.Size = new Size(50, 50);
-        IconPreview.SizeMode = PictureBoxSizeMode.Zoom;
-        BadgeInput.Width = 42;
-        BadgeInput.MaxLength = 2;
-        BadgeInput.Margin = new Padding(10, 10, 5, 0);
-        ColorButton.Text = "颜色";
-        ColorButton.Tag = eThemeRole.Preserve;
-        ColorButton.Size = new Size(64, 34);
-        ColorButton.Margin = new Padding(4, 8, 3, 0);
-        ColorButton.Click += (_, _) => ChooseColor();
-        IconRow.Controls.AddRange(new Control[] { IconPreview, BadgeInput, ColorButton, MakeButton("选择 ICO", (_, _) => ChooseIcon()), MakeButton("恢复默认", (_, _) => { CurrentIcon = ""; UpdatePreview(); }) });
-        Fields.Controls.Add(new Label { Text = "实例图标", AutoSize = true, Margin = new Padding(0, 16, 0, 0) }, 0, 3);
-        Fields.Controls.Add(IconRow, 1, 3);
-        var Actions = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false };
-        Actions.Controls.Add(MakeButton("保存设置", (_, _) => SafeAction(SaveSelected), true));
-        Actions.Controls.Add(MakeButton("打开配置目录", (_, _) => SafeAction(() => OpenFolder(Selected!.HomePath))));
-        Actions.Controls.Add(MakeButton("编辑 config.toml", (_, _) => SafeAction(EditConfig)));
-        Fields.Controls.Add(Actions, 1, 4);
-        ProfileCard.Controls.Add(Fields);
-        Right.Controls.Add(ProfileCard, 0, 0);
-
-        var LaunchCard = MakeCard("启动与识别", 8);
-        LaunchCard.AutoSize = true;
-        LaunchCard.AutoSizeMode = AutoSizeMode.GrowAndShrink;
-        var LaunchBody = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, FlowDirection = FlowDirection.TopDown, WrapContents = false };
-        var LaunchActions = new FlowLayoutPanel { AutoSize = true, WrapContents = false };
-        LaunchActions.Controls.Add(MakeButton("▶ 启动 / 显示", async (_, _) => await LaunchSelectedAsync(), true));
-        LaunchActions.Controls.Add(MakeButton("生成桌面快捷方式", (_, _) => SafeAction(() => { SaveSelected(); string PathValue = InstanceService.CreateShortcut(Selected!); SetStatus("已生成 " + PathValue); })));
-        LaunchActions.Controls.Add(MakeButton("保留项目清空会话", async (_, _) => await ClearConversationsAsync(false)));
-        LaunchBody.Controls.Add(LaunchActions);
-        var RunningActions = new FlowLayoutPanel { AutoSize = true, WrapContents = false };
-        RunningActions.Controls.Add(MakeButton("显示全部运行实例", async (_, _) => await ShowAllRunningAsync()));
-        RunningActions.Controls.Add(MakeButton("结束所选实例", async (_, _) => await StopSelectedAsync()));
-        RunningActions.Controls.Add(MakeButton("清空所有项目和会话", async (_, _) => await ClearConversationsAsync(true)));
-        LaunchBody.Controls.Add(RunningActions);
-        var LaunchHint = new Label { AutoSize = true, ForeColor = Color.DimGray, Text = "显示后可从任务栏切换实例  ·  结束进程需确认所选名称与进程 ID" };
-        LaunchBody.SizeChanged += (_, _) => LaunchHint.MaximumSize = new Size(LaunchBody.ClientSize.Width - LaunchHint.Margin.Horizontal, 0);
-        LaunchBody.Controls.Add(LaunchHint);
-        LaunchCard.Controls.Add(LaunchBody);
-        Right.Controls.Add(LaunchCard, 0, 1);
-
-        var CcCard = MakeCard("CC Switch", 8);
-        var CcBody = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3 };
-        CcBody.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
-        CcBody.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
-        CcBody.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        CcLabel.Dock = DockStyle.Fill;
-        CcLabel.AutoEllipsis = true;
-        CcBody.Controls.Add(CcLabel);
-        CcBody.Controls.Add(new Label { Text = "将重启 CC Switch 并备份设置  ·  切换后在 CC Switch 里选择供应商", ForeColor = Color.DimGray, AutoSize = true });
-        CcBody.Controls.Add(MakeButton("让 CC Switch 管理此实例", async (_, _) => await SwitchCcAsync(), true));
-        CcCard.Controls.Add(CcBody);
-        Right.Controls.Add(CcCard, 0, 4);
-
-        var SyncCard = MakeCard("同步 Skills / MCP", 8);
-        var SyncBody = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false };
-        SyncBody.Controls.Add(new Label { Text = "以主实例为源镜像 Skills 自动去重并移除目标多余项", AutoSize = true });
-        SyncBody.Controls.Add(new Label { Text = "不导入对话、项目、置顶和排序  ·  保留目标账号与模型", ForeColor = Color.DimGray, AutoSize = true });
-        SyncButton.Text = "选择配置内容并预览";
-        StyleButton(SyncButton, true);
-        SyncButton.Click += (_, _) => SafeAction(() => { SaveSelected(); if (Selected is not null) using (var Dialog = new SyncDialog(Settings.InstanceList, Selected, Settings.Library.ExcludedNameList)) ShowThemedDialog(Dialog); });
-        SyncBody.Controls.Add(SyncButton);
-        SyncCard.Controls.Add(SyncBody);
-        Right.Controls.Add(SyncCard, 0, 3);
-
-        var ConversationCard = MakeCard("同步工程 / 导入对话", 8);
-        var ConversationBody = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false };
-        ConversationBody.Controls.Add(new Label { Text = "工程可单独同步，也可导入历史对话与项目", AutoSize = true });
-        ConversationBody.Controls.Add(new Label { Text = "目标已有对话保留  ·  导入前备份  ·  请先退出目标实例", ForeColor = Color.DimGray, AutoSize = true });
-        ConversationButton.Text = "选择来源并预览对话";
-        StyleButton(ConversationButton, true);
-        ConversationButton.Click += (_, _) => SafeAction(() => { SaveSelected(); if (Selected is not null) using (var Dialog = new ConversationImportDialog(Settings.InstanceList, Selected)) ShowThemedDialog(Dialog); });
-        var ImportActions = new FlowLayoutPanel { AutoSize = true, WrapContents = false };
-        ProjectButton.Text = "一键同步工程";
-        StyleButton(ProjectButton, true);
-        ProjectButton.Click += (_, _) => SafeAction(() => { SaveSelected(); if (Selected is not null) using (var Dialog = new ProjectSyncDialog(Settings.InstanceList, Selected)) ShowThemedDialog(Dialog); });
-        ImportActions.Controls.Add(ProjectButton);
-        ImportActions.Controls.Add(ConversationButton);
-        ConversationBody.Controls.Add(ImportActions);
-        ConversationCard.Controls.Add(ConversationBody);
-        Right.Controls.Add(ConversationCard, 0, 2);
-
-        StatusLabel.Dock = DockStyle.Fill;
-        StatusLabel.AutoEllipsis = true;
-        StatusLabel.ForeColor = Color.DimGray;
-        StatusLabel.TextAlign = ContentAlignment.BottomLeft;
-        Root.Controls.Add(StatusLabel, 0, 2);
-        Root.SetColumnSpan(StatusLabel, 2);
         var TrayMenu = new ContextMenuStrip();
-        TrayMenu.Items.Add("显示管理器", null, (_, _) => ShowManager());
+        TrayMenu.Items.Add("显示 " + AppTitle, null, (_, _) => ShowManager());
         TrayMenu.Items.Add("刷新实例状态", null, async (_, _) => await RefreshRunningAsync());
-        TrayMenu.Items.Add("退出管理器", null, (_, _) => { AllowExit = true; Close(); });
-        TrayIcon.Icon = Icon;
-        TrayIcon.Text = "Codex 实例管理器";
+        TrayMenu.Items.Add("退出", null, (_, _) => { AllowExit = true; Close(); });
+        TrayIcon.Icon = AppIcon;
+        TrayIcon.Text = AppTitle;
         TrayIcon.ContextMenuStrip = TrayMenu;
         TrayIcon.Visible = !PreviewOnly;
         TrayIcon.DoubleClick += (_, _) => ShowManager();
@@ -233,110 +81,88 @@ public sealed class MainForm : Form
         Activated += (_, _) => { if (!PreviewOnly) QueueInstanceRefresh(); };
         FormClosing += (_, Event) =>
         {
-            if (CleaningConversations) { Event.Cancel = true; return; }
-            if (!AllowExit && Event.CloseReason == CloseReason.UserClosing) { Event.Cancel = true; Hide(); }
+            if (Agents.IsBusy) { Event.Cancel = true; return; }
+            if (!AllowExit && Event.CloseReason == CloseReason.UserClosing) { Event.Cancel = true; Hide(); return; }
+            if (!PreviewOnly && !Event.Cancel) TaskCoordinator?.BeginShutdown();
         };
-        FormClosed += (_, _) => { RefreshDelay.Stop(); RefreshDelay.Dispose(); ActivityMonitor.Changed -= QueueInstanceRefresh; ActivityMonitor.Dispose(); Branding.Dispose(); TrayIcon.Dispose(); IconPreview.Image?.Dispose(); };
         if (!PreviewOnly) Shown += async (_, _) => { SafeAction(ActivityMonitor.Enable); await RefreshRunningAsync(); };
-        RefreshInstances();
-        RefreshCcLabel();
-        AutoScaleDimensions = new SizeF(96, 96);
         ResumeLayout(false);
         PerformAutoScale();
         PerformLayout();
         ApplyTheme();
-        PositionThemeButton();
     }
 
-    private static Panel MakeCard(string Title, int BottomMargin)
-    {
-        var Card = new StudioCard { Dock = DockStyle.Fill, BackColor = Color.White, Padding = new Padding(18, 42, 18, 12), Margin = new Padding(0, 0, 0, BottomMargin) };
-        Card.Controls.Add(new Label { Text = Title, Font = new Font("Microsoft YaHei UI", 11, FontStyle.Bold), AutoSize = true, Location = new Point(18, 12) });
-        return Card;
-    }
-    private void BuildRelayPage()
-    {
-        if (RelayTab.Controls.Count != 0) return;
-        if (TaskStore is null || TaskCoordinator is null) throw new InvalidOperationException("任务看板服务尚未连接");
-        var Page = new RelayPage(Settings, TaskStore, TaskCoordinator, Theme, () => SafeAction(ToggleTheme));
-        RelayTab.Controls.Add(Page);
-        Theme.Apply(Page);
-    }
-    private void BuildCollaborationPage()
-    {
-        if (CollaborationTab.Controls.Count != 0) return;
-        if (TaskCoordinator is null) throw new InvalidOperationException("协作服务尚未连接");
-        var Page = new CollaborationPage(Settings, TaskCoordinator, Theme, () => SafeAction(ToggleTheme), ShowRelayPage);
-        CollaborationTab.Controls.Add(Page);
-        Theme.Apply(Page);
-    }
     private void BuildLibraryPage()
     {
         if (LibraryTab.Controls.Count != 0) return;
         var Page = new LibraryPage(Settings, Theme, PreviewOnly);
-        LibraryTab.Controls.Add(Page);
         Theme.Apply(Page);
+        LibraryTab.Controls.Add(Page);
     }
+
     private void BuildSettingsPage()
     {
         if (SettingsTab.Controls.Count != 0) return;
-        var Page = new ManagerSettingsPage(PreviewOnly);
-        SettingsTab.Controls.Add(Page);
+        var Page = new ManagerSettingsPage(PreviewOnly, null, Dark => SafeAction(() => SetDarkMode(Dark)), () => Settings.DarkMode, ApplyAgentIconsAsync);
         Theme.Apply(Page);
+        SettingsTab.Controls.Add(Page);
     }
+
+    public void ShowFormationPage() => MainTabs.SelectedTab = FormationTab;
+
+    public void ShowAgentPage() => MainTabs.SelectedTab = AgentTab;
+
     public void ShowLibraryPage()
     {
         BuildLibraryPage();
         MainTabs.SelectedTab = LibraryTab;
     }
+
+    public void ShowSettingsPage()
+    {
+        BuildSettingsPage();
+        MainTabs.SelectedTab = SettingsTab;
+    }
+
+    private Task ApplyAgentIconsAsync(AgentIconSettings Configuration)
+    {
+        if (PreviewOnly) throw new InvalidOperationException("预览模式不能修改 Agent 图标");
+        return RefreshRunningAsync(Configuration.Copy());
+    }
+
+    /// <summary>
+    /// 旧 Cursor 入口兼容 定位到 Agent 管理中的 Cursor 卡片
+    /// </summary>
     public void ShowHarnessPage()
     {
-        ShowCollaborationPage();
-        CollaborationTab.Controls.OfType<CollaborationPage>().Single().ShowCursor();
+        ShowAgentPage();
+        Agents.ShowAgent(CursorRelayRunner.InstanceId);
     }
-    public void ShowCollaborationPage()
-    {
-        BuildCollaborationPage();
-        MainTabs.SelectedTab = CollaborationTab;
-    }
-    public void ShowRelayPage()
-    {
-        BuildRelayPage();
-        MainTabs.SelectedTab = RelayTab;
-    }
-    private static void AddField(TableLayoutPanel Table, string Name, TextBox Input, int Row)
-    {
-        Table.Controls.Add(new Label { Text = Name, AutoSize = true, Margin = new Padding(0, 7, 0, 0) }, 0, Row);
-        Input.Dock = DockStyle.Fill;
-        Table.Controls.Add(Input, 1, Row);
-    }
+
+    /// <summary>
+    /// 旧跨 Agent 协作入口兼容 已合并到 Agent 管理
+    /// </summary>
+    public void ShowCollaborationPage() => ShowAgentPage();
+
+    /// <summary>
+    /// 旧任务看板入口兼容 看板视图已移除 转到编队首页
+    /// </summary>
+    public void ShowRelayPage() => ShowFormationPage();
+
     public static Button MakeButton(string Text, EventHandler Handler, bool Primary = false)
     {
-        var Button = new StudioButton { Text = Text };
-        StyleButton(Button, Primary);
+        var Button = new StudioButton { Text = Text, Kind = Primary ? eButtonKind.Primary : eButtonKind.Secondary };
         Button.Click += Handler;
         return Button;
-    }
-    private static void StyleButton(Button Button, bool Primary)
-    {
-        Button.AutoSize = true;
-        Button.AutoSizeMode = AutoSizeMode.GrowAndShrink;
-        Button.Padding = new Padding(8, 3, 8, 3);
-        Button.FlatStyle = FlatStyle.Flat;
-        Button.FlatAppearance.BorderSize = Primary ? 0 : 1;
-        Button.FlatAppearance.BorderColor = Color.FromArgb(219, 222, 233);
-        Button.BackColor = Primary ? AccentColor : Color.White;
-        if (Primary) Button.Tag = eThemeRole.Primary;
-        Button.ForeColor = Primary ? Color.White : Color.FromArgb(53, 59, 77);
-        Button.Cursor = Cursors.Hand;
-        Button.Margin = new Padding(0, 2, 8, 2);
     }
     #endregion
 
     #region Appearance
-    private void ToggleTheme()
+    private void ToggleTheme() => SetDarkMode(!Settings.DarkMode);
+
+    private void SetDarkMode(bool Dark)
     {
-        Settings.DarkMode = !Settings.DarkMode;
+        Settings.DarkMode = Dark;
         if (!PreviewOnly) SettingsStore.Save(Settings);
         ApplyTheme();
     }
@@ -344,284 +170,104 @@ public sealed class MainForm : Form
     private void ApplyTheme()
     {
         Theme.SetDark(Settings.DarkMode);
-        ThemeButton.Text = Settings.DarkMode ? "☀ 日间" : "☾ 夜间";
         Theme.Apply(this);
-        PositionThemeButton();
-    }
-
-    private void PositionThemeButton()
-    {
-        if (ThemeButton.Parent is Control Parent) ThemeButton.Location = new Point(Parent.ClientSize.Width - ThemeButton.Width, 0);
-    }
-
-    private DialogResult ShowThemedDialog(Form Dialog)
-    {
-        Theme.Apply(Dialog);
-        Dialog.HandleCreated += (_, _) => Theme.ApplyTitleBar(Dialog);
-        return Dialog.ShowDialog(this);
-    }
-    #endregion
-
-    #region Profiles
-    private void RefreshInstances()
-    {
-        string Id = Selected?.Id ?? Settings.SelectedId;
-        InstanceList.Items.Clear();
-        foreach (var Profile in Settings.InstanceList) InstanceList.Items.Add(Profile);
-        InstanceList.SelectedItem = Settings.InstanceList.FirstOrDefault(Profile => Profile.Id == Id) ?? Settings.InstanceList.First();
-    }
-    private void LoadSelected()
-    {
-        if (Selected is null) return;
-        NameInput.Text = Selected.Name;
-        BadgeInput.Text = Selected.Badge;
-        HomeInput.Text = Selected.HomePath;
-        DataInput.Text = Selected.IsPrimary ? "使用 Codex 默认界面目录" : Selected.DataPath;
-        CurrentColor = Selected.ColorHex;
-        CurrentIcon = Selected.IconPath;
-        Settings.SelectedId = Selected.Id;
-        SyncButton.Enabled = !Selected.IsPrimary;
-        ProjectButton.Enabled = !Selected.IsPrimary;
-        ConversationButton.Enabled = !Selected.IsPrimary;
-        UpdatePreview();
-    }
-    private void SaveSelected()
-    {
-        if (Selected is null) return;
-        string Name = NameInput.Text.Trim();
-        string Badge = BadgeInput.Text.Trim();
-        if (Name.Length == 0 || Badge.Length == 0) throw new InvalidOperationException("实例名称和图标文字不能为空");
-        Selected.Name = Name;
-        Selected.Badge = Badge;
-        Selected.ColorHex = CurrentColor;
-        Selected.IconPath = CurrentIcon;
-        SettingsStore.Save(Settings);
-        UpdatePreview();
-        InstanceList.Invalidate();
-        SetStatus("已保存 " + Selected.Name);
-    }
-    private void AddInstance()
-    {
-        var Profile = new InstanceProfile { Name = "新实例 " + (Settings.InstanceList.Count + 1), Badge = (Settings.InstanceList.Count + 1).ToString() };
-        string Root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OpenAI", "Codex-Instances", Profile.Id);
-        Profile.HomePath = Path.Combine(Root, "codex-home");
-        Profile.DataPath = Path.Combine(Root, "desktop-data");
-        Settings.InstanceList.Add(Profile);
-        Settings.SelectedId = Profile.Id;
-        SettingsStore.Save(Settings);
-        InstanceList.SelectedItem = null;
-        RefreshInstances();
-        NameInput.Focus();
-        NameInput.SelectAll();
-    }
-    private void RemoveInstance()
-    {
-        if (Selected is null || Selected.IsPrimary) { SetStatus("主实例保留在列表中"); return; }
-        if (MessageBox.Show(this, "仅从管理器列表移除该实例\n配置目录和会话文件会保留", "移除 " + Selected.Name, MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK) return;
-        Settings.InstanceList.Remove(Selected);
-        Settings.SelectedId = "primary";
-        SettingsStore.Save(Settings);
-        RefreshInstances();
-    }
-    private void ChooseColor()
-    {
-        using var Dialog = new ColorDialog { Color = ColorTranslator.FromHtml(CurrentColor), FullOpen = true };
-        if (Dialog.ShowDialog(this) != DialogResult.OK) return;
-        CurrentColor = ColorTranslator.ToHtml(Dialog.Color);
-        CurrentIcon = "";
-        UpdatePreview();
-    }
-    private void ChooseIcon()
-    {
-        using var Dialog = new OpenFileDialog { Filter = "图标或图片 (*.ico;*.png;*.jpg;*.jpeg)|*.ico;*.png;*.jpg;*.jpeg", Title = "选择实例图标" };
-        if (Dialog.ShowDialog(this) != DialogResult.OK) return;
-        SafeAction(() =>
-        {
-            string DirectoryPath = Path.Combine(ManagerPaths.Root, "icons");
-            Directory.CreateDirectory(DirectoryPath);
-            string Target = Path.Combine(DirectoryPath, Selected!.Id + "-custom.ico");
-            if (Path.GetExtension(Dialog.FileName).Equals(".ico", StringComparison.OrdinalIgnoreCase))
-            {
-                using var Validation = new Icon(Dialog.FileName);
-                if (!ManagerPaths.Same(Dialog.FileName, Target)) File.Copy(Dialog.FileName, Target, true);
-            }
-            else
-            {
-                using var Source = Image.FromFile(Dialog.FileName);
-                using var Bitmap = new Bitmap(64, 64);
-                using var Canvas = Graphics.FromImage(Bitmap);
-                Canvas.Clear(Color.Transparent);
-                Canvas.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
-                float Ratio = Math.Min(64f / Source.Width, 64f / Source.Height);
-                float Width = Source.Width * Ratio;
-                float Height = Source.Height * Ratio;
-                Canvas.DrawImage(Source, (64 - Width) / 2, (64 - Height) / 2, Width, Height);
-                BrandingService.SaveIcon(Bitmap, Target);
-            }
-            CurrentIcon = Target;
-            UpdatePreview();
-        });
-    }
-    private void UpdatePreview()
-    {
-        IconPreview.Image?.Dispose();
-        if (CurrentIcon.Length > 0 && File.Exists(CurrentIcon)) { using var CustomIcon = new Icon(CurrentIcon, new Size(64, 64)); IconPreview.Image = CustomIcon.ToBitmap(); }
-        else IconPreview.Image = BrandingService.DrawBadge(new InstanceProfile { Badge = BadgeInput.Text.Length == 0 ? "C" : BadgeInput.Text, ColorHex = CurrentColor }, 64);
-        ColorButton.BackColor = ColorTranslator.FromHtml(CurrentColor);
-        ColorButton.ForeColor = Color.White;
-    }
-    private void DrawInstance(object? Sender, DrawItemEventArgs Event)
-    {
-        if (Event.Index < 0) return;
-        var Profile = (InstanceProfile)InstanceList.Items[Event.Index];
-        bool IsSelected = (Event.State & DrawItemState.Selected) != 0;
-        using var Background = new SolidBrush(IsSelected ? Theme.Palette.Selection : Theme.Palette.Surface);
-        Event.Graphics.FillRectangle(Background, Event.Bounds);
-        using var Badge = BrandingService.DrawBadge(Profile, 44);
-        Event.Graphics.DrawImage(Badge, Event.Bounds.Left + 12, Event.Bounds.Top + 17, 44, 44);
-        var TitleBounds = new Rectangle(Event.Bounds.Left + 65, Event.Bounds.Top + 18, Event.Bounds.Width - 70, 27);
-        TextRenderer.DrawText(Event.Graphics, Profile.Name, Font, TitleBounds, Theme.Palette.Text, TextFormatFlags.EndEllipsis);
-        var Running = InstanceService.Find(Profile, RunningList);
-        string State = Running is null ? "○ 未启动" : Running.Window == IntPtr.Zero ? "● 后台运行 无主窗口" : InstanceWindowService.IsVisible(Running.Window) ? "● 窗口已显示" : "● 运行中 窗口隐藏";
-        TextRenderer.DrawText(Event.Graphics, State, Font, new Point(Event.Bounds.Left + 65, Event.Bounds.Top + 45), Running is not null ? Theme.Palette.Success : Theme.Palette.Muted);
     }
     #endregion
 
     #region Actions
     public async Task HandleCommandAsync(string Command)
     {
+        if (Command is "apply-icons" or "restore-icons")
+        {
+            var Configuration = AgentIconSettings.Load();
+            Configuration.Enabled = Command == "apply-icons";
+            await ApplyAgentIconsAsync(Configuration);
+            return;
+        }
         if (Command == "show") { ShowManager(); return; }
-        if (Command == "relay") { ShowRelayPage(); ShowManager(); return; }
+        if (Command == "relay") { ShowFormationPage(); ShowManager(); return; }
         if (Command == "harness") { ShowHarnessPage(); ShowManager(); return; }
-        if (Command == "collaboration") { ShowCollaborationPage(); ShowManager(); return; }
+        if (Command == "collaboration") { ShowAgentPage(); ShowManager(); return; }
         if (Command == "library") { ShowLibraryPage(); ShowManager(); return; }
         var Profile = Settings.InstanceList.FirstOrDefault(Item => Item.Id == Command) ?? throw new InvalidOperationException("找不到指定实例 " + Command);
-        InstanceList.SelectedItem = Profile;
-        await LaunchSelectedAsync();
-    }
-    private async Task LaunchSelectedAsync()
-    {
-        await SafeAsync(async () =>
+        ShowAgentPage();
+        try { await Agents.LaunchAsync(Profile); }
+        catch (Exception Error)
         {
-            SaveSelected();
-            var Profile = Selected!;
-            int ProcessId = await Task.Run(() => InstanceService.Launch(Profile));
-            SetStatus($"{Profile.Name} 已启动 / 显示  ·  进程 {ProcessId}");
-            await RefreshRunningAsync();
-        });
-    }
-    /// <summary>
-    /// 恢复全部已运行实例的主窗口 不启动未运行实例
-    /// </summary>
-    private async Task ShowAllRunningAsync()
-    {
-        await SafeAsync(async () =>
-        {
-            SaveSelected();
-            var ProfileList = Settings.InstanceList.ToList();
-            int Displayed = await Task.Run(() =>
-            {
-                var CurrentList = InstanceService.ListRunning();
-                var ErrorList = new List<Exception>();
-                int Count = 0;
-                foreach (var Profile in ProfileList)
-                {
-                    var Running = InstanceService.Find(Profile, CurrentList);
-                    if (Running is null) continue;
-                    try { InstanceWindowService.ShowMainWindow(Running.ProcessId, Running.Window); Count++; }
-                    catch (Exception Error) { ErrorList.Add(new InvalidOperationException(Profile.Name + " " + Error.Message, Error)); }
-                }
-                if (ErrorList.Count > 0) throw new AggregateException($"已显示 {Count} 个实例\n" + string.Join("\n", ErrorList.Select(Error => Error.Message)), ErrorList);
-                return Count;
-            });
-            SetStatus($"已显示 {Displayed} 个运行实例 可从任务栏切换");
-            await RefreshRunningAsync();
-        });
-    }
-    /// <summary>
-    /// 确认所选名称与进程后结束实例 确认期间进程变化则拒绝执行
-    /// </summary>
-    private async Task StopSelectedAsync()
-    {
-        await SafeAsync(async () =>
-        {
-            var Profile = Selected!;
-            var CurrentList = await Task.Run(InstanceService.ListRunning);
-            var Running = InstanceService.Find(Profile, CurrentList);
-            if (Running is null) { SetStatus(Profile.Name + " 未运行"); await RefreshRunningAsync(); return; }
-            if (MessageBox.Show(this, $"结束 {Profile.Name}\n进程 ID {Running.ProcessId}\n\n将结束此实例及其子进程 正在执行的任务会中断", "结束所选实例", MessageBoxButtons.OKCancel, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.OK) return;
-            await InstanceService.StopAsync(Profile, Running.ProcessId);
-            SetStatus(Profile.Name + " 已结束");
-            await RefreshRunningAsync();
-        });
-    }
-    private async Task ClearConversationsAsync(bool RemoveProjects)
-    {
-        if (CleaningConversations) return;
-        var Profile = Selected!;
-        string ActionName = RemoveProjects ? "清空所有项目和会话" : "保留项目清空会话";
-        string Scope = RemoveProjects ? "清空此实例的全部本地会话（含归档）及项目登记" : "清空此实例的全部本地会话（含归档），保留项目登记与排序";
-        if (MessageBox.Show(this, $"所选实例：{Profile.Name}\n配置目录：{Profile.HomePath}\n\n{Scope}\n磁盘工程、账号、模型、Skills 和 MCP 配置保留\n\n请先退出所选 Codex 实例\n清理前会自动备份，失败时回滚\n\n确认继续？", ActionName, MessageBoxButtons.OKCancel, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.OK) return;
-        CleaningConversations = true;
-        Enabled = false;
-        UseWaitCursor = true;
-        try
-        {
-            await SafeAsync(async () =>
-            {
-                var Progress = new Progress<string>(SetStatus);
-                string Backup = await Task.Run(() => ConversationCleanupService.Apply(Profile, RemoveProjects, ManagerPaths.BackupRoot, Progress));
-                SetStatus(Profile.Name + " 已完成清理");
-                MessageBox.Show(this, ActionName + "已完成\n\n备份目录\n" + Backup, "清理完成", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            });
+            Program.LogError(Error);
+            Agents.SetStatus(Error.Message);
+            MessageBox.Show(this, Error.Message, "操作未完成", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
-        finally
-        {
-            UseWaitCursor = false;
-            Enabled = true;
-            CleaningConversations = false;
-        }
+        await RefreshRunningAsync();
     }
 
-    private async Task SwitchCcAsync()
-    {
-        if (Selected is null) return;
-        if (MessageBox.Show(this, "将关闭并重新打开 CC Switch\n如果它仍驻留托盘 将结束该进程以应用设置\n使用其本地代理的请求可能中断\n\n新的 Codex 配置目录\n" + Selected.HomePath, "切换 CC Switch 目标", MessageBoxButtons.OKCancel, MessageBoxIcon.Information) != DialogResult.OK) return;
-        await SafeAsync(async () => { await InstanceService.SwitchCcAsync(Selected); RefreshCcLabel(); SetStatus("CC Switch 已指向 " + Selected.Name + "  请在 CC Switch 中选择供应商"); });
-    }
-    private void RefreshCcLabel() => SafeAction(() => CcLabel.Text = "当前目录  " + InstanceService.ReadCcTarget());
-    private void EditConfig()
-    {
-        if (Selected is null) return;
-        Directory.CreateDirectory(Selected.HomePath);
-        string FilePath = Path.Combine(Selected.HomePath, "config.toml");
-        if (!File.Exists(FilePath)) File.WriteAllText(FilePath, "");
-        var Info = new ProcessStartInfo("notepad.exe") { UseShellExecute = false };
-        Info.ArgumentList.Add(FilePath);
-        Process.Start(Info);
-    }
-    private static void OpenFolder(string PathValue) { Directory.CreateDirectory(PathValue); Process.Start(new ProcessStartInfo("explorer.exe") { Arguments = "\"" + PathValue + "\"", UseShellExecute = true }); }
     private void ShowManager() { Show(); WindowState = FormWindowState.Normal; Activate(); }
-    private void SetStatus(string Value) => StatusLabel.Text = Value;
-    private async Task RefreshRunningAsync()
+
+    private async Task RefreshRunningAsync(AgentIconSettings? Configuration = null)
     {
-        if (Polling) { RefreshAgain = true; return; }
-        Polling = true;
+        if (Configuration is not null) await RefreshGate.WaitAsync();
+        else if (!RefreshGate.Wait(0)) { RefreshAgain = true; return; }
         try
         {
-            RunningList = await Task.Run(InstanceService.ListRunning);
+            var Snapshot = await Task.Run(() => (Codex: InstanceService.ListRunning(), External: AgentDesktopBranding.ListRunning()));
+            RunningList = Snapshot.Codex;
             if (IsDisposed || Disposing) return;
-            if (!PreviewOnly && !IsDisposed) ActivityMonitor.Track(RunningList);
-            foreach (var Profile in Settings.InstanceList)
+            Agents.UpdateRunning(RunningList);
+            if (PreviewOnly) return;
+            ActivityMonitor.Track(RunningList.Concat(Snapshot.External.SelectMany(Item => Item.WindowList.Count == 0
+                ? new[] { new RunningInstance(Item.ProcessId, "", IntPtr.Zero) }
+                : Item.WindowList.Select(Window => new RunningInstance(Item.ProcessId, "", Window)))).ToList());
+            if (Configuration is not null)
+            {
+                AgentIconShortcuts.RestoreLegacy();
+                Configuration.Save();
+                AgentIcons = Configuration;
+            }
+            if (!AgentIcons.Enabled && Configuration is null) return;
+
+            var TrayTargetList = new List<AgentTrayTarget>();
+            var WindowTargetList = new List<AgentIconTarget>();
+            var IconProfileList = await TaskbarProfiles.ResolvedAsync(Settings.InstanceList, RunningList, Configuration is not null);
+            if (IsDisposed || Disposing) return;
+            foreach (var Profile in IconProfileList)
             {
                 var Running = InstanceService.Find(Profile, RunningList);
-                if (Running is not null) Branding.Apply(Profile, Running.Window);
+                if (Running is null) continue;
+                try
+                {
+                    using var Process = System.Diagnostics.Process.GetProcessById(Running.ProcessId);
+                    long StartedAt = Process.StartTime.ToUniversalTime().Ticks;
+                    TrayTargetList.Add(new("codex", Profile, Running.ProcessId, StartedAt));
+                    if (Running.Window != IntPtr.Zero) WindowTargetList.Add(new("codex", Profile, Running.ProcessId, StartedAt, Running.Window));
+                }
+                catch (ArgumentException) { }
             }
-            if (Visible && WindowState != FormWindowState.Minimized) InstanceList.Invalidate();
+            foreach (var Desktop in Snapshot.External)
+            {
+                TrayTargetList.Add(new(Desktop.Provider, Desktop.Profile, Desktop.ProcessId, Desktop.StartedAt));
+                foreach (var Window in Desktop.WindowList)
+                    WindowTargetList.Add(new(Desktop.Provider, Desktop.Profile, Desktop.ProcessId, Desktop.StartedAt, Window));
+            }
+            if (AgentIcons.Enabled)
+            {
+                var BrandedList = WindowTargetList.Select(Target => Target with { Profile = AgentIcons.Branded(Target.Profile, Target.Provider) }).ToList();
+                foreach (var Target in BrandedList) Branding.Apply(Target.Profile, Target.Window, Target.Provider, Target.ProcessId, Target.StartedAt);
+                await AgentTaskbar.UpdateAsync(BrandedList.Where(Target => InstanceWindowService.IsVisible(Target.Window)).ToList());
+                if (IsDisposed || Disposing) return;
+            }
+            else
+            {
+                await AgentTaskbar.UpdateAsync(Array.Empty<AgentIconTarget>());
+                if (IsDisposed || Disposing) return;
+                Branding.RestoreNative(WindowTargetList.Select(Target => Target.Window));
+                AgentTrayOriginal.RestoreLegacyFiles();
+            }
+            await Task.Run(() => AgentTrayBranding.Apply(AgentIcons, TrayTargetList));
         }
-        catch (Exception Error) { SetStatus("读取实例状态失败 " + Error.Message); Program.LogError(Error); }
-        finally { Polling = false; if (RefreshAgain) { RefreshAgain = false; QueueInstanceRefresh(); } }
+        catch (Exception Error) when (Configuration is null) { Agents.SetStatus("刷新实例状态失败 " + Error.Message); Program.LogError(Error); }
+        finally { RefreshGate.Release(); if (RefreshAgain) { RefreshAgain = false; QueueInstanceRefresh(); } }
     }
+
     private void QueueInstanceRefresh()
     {
         if (PreviewOnly || IsDisposed || !IsHandleCreated) return;
@@ -634,17 +280,31 @@ public sealed class MainForm : Form
         RefreshDelay.Stop();
         RefreshDelay.Start();
     }
+
     private void SafeAction(Action Action)
     {
         try { Action(); }
-        catch (Exception Error) { ShowError(Error); }
+        catch (Exception Error)
+        {
+            Program.LogError(Error);
+            MessageBox.Show(this, Error.Message, "操作未完成", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
     }
-    private async Task SafeAsync(Func<Task> Action)
+
+    protected override void Dispose(bool Disposing)
     {
-        try { await Action(); }
-        catch (Exception Error) { ShowError(Error); }
+        if (Disposing)
+        {
+            RefreshDelay.Stop();
+            RefreshDelay.Dispose();
+            ActivityMonitor.Changed -= QueueInstanceRefresh;
+            ActivityMonitor.Dispose();
+            AgentTaskbar.Dispose();
+            Branding.Dispose();
+            TrayIcon.Dispose();
+        }
+        base.Dispose(Disposing);
+        if (Disposing) AppIcon.Dispose();
     }
-    private void ShowError(Exception Error) { Program.LogError(Error); SetStatus(Error.Message); MessageBox.Show(this, Error.Message, "操作未完成", MessageBoxButtons.OK, MessageBoxIcon.Error); }
-    [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint = "DestroyIcon")] private static extern bool NativeDestroyIcon(IntPtr Icon);
     #endregion
 }

@@ -15,12 +15,13 @@ public interface IRelayActivityProbe
 public sealed class RelayActivityProbe : IRelayActivityProbe
 {
     private readonly CursorRelayRunner? Cursor;
+    private readonly ClaudeRelayRunner? Claude;
     /// <summary> DSH 连接覆盖配置 </summary>
     private readonly DshSettings Dsh;
     private Task<List<RunningInstance>>? Running;
     private readonly Dictionary<string, Task<RelayActivity>> CacheDict = new();
 
-    public RelayActivityProbe(CursorRelayRunner? Cursor, DshSettings? Dsh = null) { this.Cursor = Cursor; this.Dsh = Dsh ?? new(); }
+    public RelayActivityProbe(CursorRelayRunner? Cursor, DshSettings? Dsh = null, ClaudeRelayRunner? Claude = null) { this.Cursor = Cursor; this.Dsh = Dsh ?? new(); this.Claude = Claude; }
 
     public Task<RelayActivity> ReadAsync(InstanceProfile Instance, string ThreadId, CancellationToken Cancellation)
     {
@@ -54,6 +55,7 @@ public sealed class RelayActivityProbe : IRelayActivityProbe
             catch (Exception Error) when (!Cancellation.IsCancellationRequested) { return new(eRelayActivity.Unknown, "DSH 活动状态未确认 " + Error.Message); }
         }
         if (Instance.Id == CursorRelayRunner.InstanceId) return Cursor is null ? new(eRelayActivity.Unknown, "Cursor 执行端未连接") : new(Cursor.IsRunning(ThreadId) ? eRelayActivity.Active : eRelayActivity.Idle, "Cursor 执行进程");
+        if (Instance.Id == ClaudeRelayRunner.InstanceId) return Claude is null ? new(eRelayActivity.Unknown, "Claude Code 执行端未连接") : new(Claude.IsRunning(ThreadId) ? eRelayActivity.Active : eRelayActivity.Idle, "Claude Code 执行进程");
         Running ??= Task.Run(InstanceService.ListRunning, Cancellation);
         if (InstanceService.Find(Instance, await Running) is null) return new(eRelayActivity.Idle, "Codex 实例未运行");
         try
@@ -78,11 +80,11 @@ public sealed class RelayTaskValidator
     private readonly RelayStore Store;
     private readonly IRelayActivityProbe Probe;
 
-    public RelayTaskValidator(ManagerSettings Settings, RelayStore Store, CursorRelayRunner? Cursor, IRelayActivityProbe? Probe = null)
+    public RelayTaskValidator(ManagerSettings Settings, RelayStore Store, CursorRelayRunner? Cursor, IRelayActivityProbe? Probe = null, ClaudeRelayRunner? Claude = null)
     {
         this.Settings = Settings;
         this.Store = Store;
-        this.Probe = Probe ?? new RelayActivityProbe(Cursor, Settings.Dsh);
+        this.Probe = Probe ?? new RelayActivityProbe(Cursor, Settings.Dsh, Claude);
     }
 
     public async Task<RelayValidity> CheckAsync(RelayTask Item)
@@ -103,7 +105,7 @@ public sealed class RelayTaskValidator
         string Unknown = "";
         foreach (var Endpoint in EndpointList.DistinctBy(Value => (Value.Instance.Id, Value.Thread)))
         {
-            var Profile = Endpoint.Instance.Id == AntigravityRelayRunner.InstanceId || Endpoint.Instance.Id == DshRelayRunner.InstanceId ? Endpoint.Instance : Endpoint.Instance.Id == CursorRelayRunner.InstanceId ? CursorRelayRunner.Profile : Settings.InstanceList.SingleOrDefault(Value => Value.Id == Endpoint.Instance.Id);
+            var Profile = Endpoint.Instance.Id == AntigravityRelayRunner.InstanceId || Endpoint.Instance.Id is DshRelayRunner.InstanceId or ClaudeRelayRunner.InstanceId ? Endpoint.Instance : Endpoint.Instance.Id == CursorRelayRunner.InstanceId ? CursorRelayRunner.Profile : Settings.InstanceList.SingleOrDefault(Value => Value.Id == Endpoint.Instance.Id);
             if (Profile is null) continue;
             var Activity = await Probe.ReadAsync(Profile, Endpoint.Thread, CancellationToken.None);
             if (Activity.State == eRelayActivity.Active) return new(false, "主会话或下级仍有活动执行");
@@ -115,11 +117,11 @@ public sealed class RelayTaskValidator
 
 public sealed partial class RelayStore
 {
-    public List<string> AllIds()
+    public List<string> AllIds(bool StandaloneOnly = false)
     {
         using var Database = Open();
         using var Command = Database.CreateCommand();
-        Command.CommandText = "SELECT id FROM relay_tasks ORDER BY updated_at,id";
+        Command.CommandText = "SELECT id FROM relay_tasks" + (StandaloneOnly ? " WHERE " + StandaloneTaskPredicate : "") + " ORDER BY updated_at,id";
         using var Reader = Command.ExecuteReader();
         var ResultList = new List<string>();
         while (Reader.Read()) ResultList.Add(Reader.GetString(0));
@@ -136,7 +138,7 @@ public sealed partial class RelayCoordinator
         {
             var InvalidList = new List<RelayInvalidTask>();
             var UncheckedList = new List<RelayInvalidTask>();
-            var IdList = Store.AllIds();
+            var IdList = Store.AllIds(StandaloneOnly: true);
             foreach (string Id in IdList)
             {
                 var Item = Store.Get(Id);
@@ -159,7 +161,7 @@ public sealed partial class RelayCoordinator
             foreach (string Id in IdList.Distinct())
             {
                 var Candidate = Store.FindTask(Id);
-                if (Candidate is not null && (await Check(Candidate)).Invalid) ConfirmedList.Add(Id);
+                if (Candidate is { Channel.FormationRunId.Length: 0 } && (await Check(Candidate)).Invalid) ConfirmedList.Add(Id);
             }
             foreach (string Id in ConfirmedList)
             {
@@ -167,8 +169,7 @@ public sealed partial class RelayCoordinator
                 if (Item.State is not (eRelayState.Accepted or eRelayState.Cancelled))
                 {
                     StopDeadline(Id);
-                    Cursor?.Stop(Id);
-                    Dsh?.Stop(Id);
+                    StopWorker(Id);
                     CancelDescendants(Id);
                     Change(Item, eRelayState.Cancelled, "已核实主子 Agent 均无活动执行 用户确认清理记录 后续回报不再接收");
                 }

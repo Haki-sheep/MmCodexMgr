@@ -8,7 +8,7 @@ public sealed record AgentCliInvocation(string Command, Dictionary<string, strin
 public static class AgentCli
 {
     public const string Help = """
-        MmCodexMgr CLI
+        Mm AgentWork Mgr CLI (mmcodex)
         instances
         projects --instance <实例编号|ID|名称>
         sessions --instance <实例> [--project <项目ID|名称|绝对路径>] [--session <对话ID|完整名称>] [--offset 0]
@@ -27,10 +27,13 @@ public static class AgentCli
           必需 request_id instance title instructions acceptance workspace
           project 可选 省略时查找实例内所有会话 新建时创建无项目会话
           instance=cursor 使用 Cursor CLI 新建必须提供 cwd 绝对目录 不使用 project
+          instance=claude 使用 Claude Code CLI 和当前 Claude Desktop 网关 新建提供 cwd 可用 model 指定模型 worker_limits 全零 自动回传
           instance=dsh 使用正在运行的 DSH 桌面服务 project 选择工作区 省略时新建于默认工作区
           instance=antigravity 使用运行中的 Antigravity App 新建可选 cwd 复用沿用原工作区 worker_limits 全零 自动回传
           DSH 沿用桌面模型 worker_limits 必须全零 管理器自动读取并回传结果 不需要操作窗口
           Cursor 可选 model cursor_cli_path 已有会话不能更换目录 CLI 或模型
+          Codex 新建与复用可选 model 空值沿用会话或实例配置 模型由目标 Codex 校验
+          Codex 可选 thinking=none|minimal|low|medium|high|xhigh|max|ultra 其他执行端不接受 thinking
           Cursor 只执行当前任务 worker_limits 必须为零 默认全部为零
           目标 session 或 create_title 二选一
           已授权自动协作时可用 create_title 自动新建任务所需会话 无需逐次确认
@@ -83,6 +86,7 @@ public static class AgentCli
           先阅读预览再执行 应用前重新核对指纹 变更先备份 非主目标实例需退出
         library-git-pull  快进拉取配置的源库仓库 有未提交改动则停止
         library-git-publish  收录所选维护源库与规则源 仅提交 Library 目录并推送
+        formation <action>  管理编队 执行 formation help 查看用法
         mcp --instance <实例ID>
         调用方默认取 CODEX_HOME 与 CODEX_THREAD_ID
         在 Codex 外使用时显式提供 --caller-instance <实例> --caller-thread <会话ID>
@@ -92,6 +96,7 @@ public static class AgentCli
     #region Execution
     public static async Task<int> RunAsync(string[] ArgumentList, Stream Input, Stream Output, TextWriter Error, string ExecutablePath, CancellationToken Cancellation, string? PipeName = null, Func<ManagerSettings>? LoadSettings = null, string? OutboxRoot = null)
     {
+        if (FormationCli.IsCommand(ArgumentList)) return await FormationCli.RunAsync(ArgumentList, Output, Error, Cancellation, PipeName, LoadSettings);
         using var Writer = new StreamWriter(Output, new UTF8Encoding(false), 4096, true) { AutoFlush = true };
         try
         {
@@ -152,7 +157,7 @@ public static class AgentCli
                 if (Report.InstanceId is DshRelayRunner.InstanceId or AntigravityRelayRunner.InstanceId) { await Writer.WriteLineAsync(JsonSerializer.Serialize(Report)); return Report.Healthy ? 0 : 1; }
                 try
                 {
-                    await RelayHost.RequestAsync(new(Report.InstanceId == CursorRelayRunner.InstanceId ? Settings.SelectedId : Report.InstanceId, "", "agent_ping", JsonSerializer.SerializeToElement(new { })), Cancellation, PipeName);
+                    await RelayHost.RequestAsync(new(Report.InstanceId is CursorRelayRunner.InstanceId or ClaudeRelayRunner.InstanceId ? Settings.SelectedId : Report.InstanceId, "", "agent_ping", JsonSerializer.SerializeToElement(new { })), Cancellation, PipeName);
                     Report.CheckList.Add(new("管理器服务", true, "已连接"));
                 }
                 catch (Exception Failure) when (Failure is IOException or TimeoutException or OperationCanceledException)
@@ -249,7 +254,7 @@ public static class AgentCli
             string[] PropertyList = Command switch
             {
                 "dsh-send" => new[] { "session_id", "request_id", "message" },
-                "start" => new[] { "request_id", "instance", "project", "session", "create_title", "title", "instructions", "acceptance", "session_max", "subagent_max", "cross_agent_max", "worker_limits", "timeout_minutes", "tree_session_max", "max_depth", "workspace", "cwd", "model", "cursor_cli_path" },
+                "start" => new[] { "request_id", "instance", "project", "session", "create_title", "title", "instructions", "acceptance", "session_max", "subagent_max", "cross_agent_max", "worker_limits", "timeout_minutes", "tree_session_max", "max_depth", "workspace", "cwd", "model", "thinking", "cursor_cli_path" },
                 "progress" => new[] { "task_id", "stage", "message" },
                 _ => new[] { "task_id", "outcome", "summary", "artifacts" }
             };

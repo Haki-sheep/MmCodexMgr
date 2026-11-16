@@ -5,6 +5,7 @@ namespace CodexInstanceManager;
 
 public sealed partial class RelayStore
 {
+    private const string StandaloneTaskPredicate = "COALESCE(json_extract(data,'$.Channel.FormationRunId'),'')=''";
     private static readonly string BlockingPredicate = "state IN (" + string.Join(",", new[] { eRelayState.Sending, eRelayState.Running, eRelayState.Returning, eRelayState.DispatchUncertain, eRelayState.ReturnUncertain, eRelayState.Recovering }.Select(State => (int)State)) + ")";
     private readonly string Root;
     public RelayStore(string Root)
@@ -44,15 +45,15 @@ public sealed partial class RelayStore
     public void DeleteFinished(string Id)
     {
         using var Database = Open();
-        int DeletedCount = ConversationDatabase.Execute(Database, "DELETE FROM relay_tasks WHERE id=$id AND state IN ($accepted,$cancelled)",
+        int DeletedCount = ConversationDatabase.Execute(Database, "DELETE FROM relay_tasks WHERE id=$id AND state IN ($accepted,$cancelled) AND " + StandaloneTaskPredicate,
             ("$id", Id), ("$accepted", (int)eRelayState.Accepted), ("$cancelled", (int)eRelayState.Cancelled));
-        if (DeletedCount == 0) throw new InvalidOperationException("任务不存在或尚未结束 无法删除记录 " + Id);
+        if (DeletedCount == 0) throw new InvalidOperationException("任务不存在 尚未结束 或属于编队 无法删除记录 " + Id);
     }
 
     public int ClearFinished()
     {
         using var Database = Open();
-        return ConversationDatabase.Execute(Database, "DELETE FROM relay_tasks WHERE state IN ($accepted,$cancelled)",
+        return ConversationDatabase.Execute(Database, "DELETE FROM relay_tasks WHERE state IN ($accepted,$cancelled) AND " + StandaloneTaskPredicate,
             ("$accepted", (int)eRelayState.Accepted), ("$cancelled", (int)eRelayState.Cancelled));
     }
 
@@ -60,7 +61,7 @@ public sealed partial class RelayStore
     {
         using var Database = Open();
         using var Command = Database.CreateCommand();
-        Command.CommandText = "SELECT id,state,COALESCE(json_extract(data,'$.Outcome'),''),COALESCE(json_extract(data,'$.ProgressStage'),'') FROM relay_tasks";
+        Command.CommandText = "SELECT id,state,COALESCE(json_extract(data,'$.Outcome'),''),COALESCE(json_extract(data,'$.ProgressStage'),'') FROM relay_tasks WHERE " + StandaloneTaskPredicate;
         using var Reader = Command.ExecuteReader();
         var IdList = new List<string>();
         while (Reader.Read())
@@ -92,6 +93,7 @@ public sealed partial class RelayStore
               AND json_extract(data,'$.Channel.MainInstance.Id')=$instance
               AND json_extract(data,'$.Channel.MainThreadId')=$thread
               AND json_extract(data,'$.Outcome')<>''
+              AND COALESCE(json_extract(data,'$.Channel.FormationRunId'),'')=''
               AND id>$after
             ORDER BY id LIMIT $limit
             """;

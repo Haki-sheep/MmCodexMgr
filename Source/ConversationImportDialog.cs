@@ -3,7 +3,7 @@ namespace CodexInstanceManager;
 public sealed class ConversationImportDialog : Form
 {
     private readonly ThemeComboBox SourceInput = new() { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
-    private readonly TextBox PreviewText = new() { Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Both, WordWrap = false, Dock = DockStyle.Fill, BackColor = Color.White };
+    private readonly TextBox PreviewText = new() { Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Both, WordWrap = false, Dock = DockStyle.Fill, Font = StudioFonts.Mono };
     private readonly Label Summary = new() { Dock = DockStyle.Fill, AutoEllipsis = true, TextAlign = ContentAlignment.MiddleLeft };
     private readonly Button PreviewButton;
     private readonly Button ApplyButton;
@@ -21,7 +21,7 @@ public sealed class ConversationImportDialog : Form
         ClientSize = new Size(820, 590);
         MinimumSize = new Size(760, 540);
         StartPosition = FormStartPosition.CenterParent;
-        var Root = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(20), ColumnCount = 1, RowCount = 6 };
+        var Root = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(22, 18, 22, 16), ColumnCount = 1, RowCount = 6 };
         Root.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
         Root.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
         Root.RowStyles.Add(new RowStyle(SizeType.AutoSize));

@@ -4,7 +4,7 @@ public sealed partial class AgentManagementService
 {
     private CursorRelayRunner RequireCursor() => Coordinator.Cursor ?? throw new InvalidOperationException("当前管理器未启用 Cursor 执行端 请更新并重启管理器");
 
-    private async Task<object> StartCursorAsync(ManagerSettings Settings, InstanceProfile Caller, string ThreadId, System.Text.Json.JsonElement Arguments, RelayTask? Existing, RelayWorkspace? Workspace, string Key, CancellationToken Cancellation)
+    private async Task<object> StartCursorAsync(ManagerSettings Settings, InstanceProfile Caller, string ThreadId, System.Text.Json.JsonElement Arguments, RelayTask? Existing, RelayWorkspace? Workspace, string Key, string FormationRunId, CancellationToken Cancellation)
     {
         var Cursor = RequireCursor();
         if (OptionalText(Arguments, "project") is not null) throw new InvalidOperationException("Cursor 联调请使用 cwd 绝对路径 不传入 Codex project");
@@ -12,7 +12,7 @@ public sealed partial class AgentManagementService
         string? Selector = OptionalText(Arguments, "session");
         if ((CreateTitle is null) == (Selector is null)) throw new InvalidOperationException("session 与 create_title 必须且只能提供一个");
         if (CreateTitle?.Length > 120) throw new InvalidOperationException("create_title 最多 120 字符");
-        CursorSession? Session = null;
+        RelayCliSession? Session = null;
         if (Selector is not null) Session = Unique(Cursor.List(Selector, 0), "Cursor 会话", Item => Item.Id, Item => Item.Title);
         string Cwd = OptionalText(Arguments, "cwd") ?? Session?.Cwd ?? (Settings.Cursor.WorkingDirectory.Length == 0 ? null : Settings.Cursor.WorkingDirectory) ?? throw new InvalidOperationException("新建 Cursor 会话必须提供 cwd 绝对路径");
         if (!Path.IsPathFullyQualified(Cwd) || !Directory.Exists(Cwd)) throw new DirectoryNotFoundException("Cursor cwd 必须是存在的绝对目录 " + Cwd);
@@ -28,6 +28,7 @@ public sealed partial class AgentManagementService
         var Main = Catalog.Session(Caller, ThreadId);
         var Route = new RelayChannel
         {
+            FormationRunId = FormationRunId,
             MainInstance = Caller, MainThreadId = ThreadId, MainTitle = Main.Title,
             WorkerInstance = CursorRelayRunner.Profile, WorkerThreadId = Session?.Id ?? "", WorkerTitle = Session?.Title ?? CreateTitle!,
             CreateTitle = CreateTitle ?? "", WorkingDirectory = Cwd, WorkerModel = Model, CursorCliPath = Cli,

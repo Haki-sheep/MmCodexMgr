@@ -13,7 +13,7 @@ public sealed class ThemeComboBox : ComboBox
     protected override void OnFontChanged(EventArgs Event)
     {
         base.OnFontChanged(Event);
-        ItemHeight = Font.Height + LogicalToDeviceUnits(4);
+        ItemHeight = Font.Height + LogicalToDeviceUnits(10);
     }
 
     protected override void OnDrawItem(DrawItemEventArgs Event)
@@ -23,6 +23,7 @@ public sealed class ThemeComboBox : ComboBox
         using var Background = new SolidBrush(Selected ? Colors.Selection : Colors.Input);
         Event.Graphics.FillRectangle(Background, Event.Bounds);
         string? Value = Event.Index >= 0 ? GetItemText(Items[Event.Index]) : Text;
-        TextRenderer.DrawText(Event.Graphics, Value, Font, Event.Bounds, Enabled ? Colors.Text : Colors.Muted, TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+        var TextBounds = new Rectangle(Event.Bounds.Left + LogicalToDeviceUnits(6), Event.Bounds.Top, Math.Max(0, Event.Bounds.Width - LogicalToDeviceUnits(8)), Event.Bounds.Height);
+        TextRenderer.DrawText(Event.Graphics, Value, Font, TextBounds, Enabled ? Colors.Text : Colors.Muted, TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
     }
 }

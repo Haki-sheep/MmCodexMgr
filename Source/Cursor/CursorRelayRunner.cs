@@ -7,7 +7,7 @@ namespace CodexInstanceManager;
 public sealed class CursorRelayRunner : IDisposable
 {
     public const string InstanceId = "cursor";
-    private readonly CursorSessionStore Sessions;
+    private readonly RelayCliSessionStore Sessions;
     private readonly ICursorCli Cli;
     private readonly string OutboxRoot;
     private readonly Action<Exception> LogError;
@@ -34,8 +34,8 @@ public sealed class CursorRelayRunner : IDisposable
     }
 
     public static InstanceProfile Profile => new() { Id = InstanceId, Name = "Cursor CLI", HomePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".cursor") };
-    public List<CursorSession> List(string? Selector, int Offset) => Sessions.List(Selector, Offset);
-    public CursorSession Session(string Id) => Sessions.Get(Id);
+    public List<RelayCliSession> List(string? Selector, int Offset) => Sessions.List(Selector, Offset);
+    public RelayCliSession Session(string Id) => Sessions.Get(Id);
     public bool IsRunning(string SessionId) => RunningDict.Values.Any(Entry => Entry.Session == SessionId);
 
     public void OpenSessionLog(string SessionId)
@@ -122,7 +122,7 @@ public sealed class CursorRelayRunner : IDisposable
     #endregion
 
     #region Execution
-    public void Launch(RelayTask Item, Func<string, string, Task> Progress, Func<CursorReport, Task> Report, CancellationToken Cancellation)
+    public void Launch(RelayTask Item, Func<string, string, Task> Progress, Func<RelayWorkerReport, Task> Report, CancellationToken Cancellation)
     {
         var Lifetime = CancellationTokenSource.CreateLinkedTokenSource(Cancellation);
         if (!RunningDict.TryAdd(Item.Id, (Item.Channel.WorkerThreadId, Lifetime))) { Lifetime.Dispose(); throw new InvalidOperationException("Cursor 任务已经启动 " + Item.Id); }
@@ -143,15 +143,15 @@ public sealed class CursorRelayRunner : IDisposable
         }
     }
 
-    private async Task RunAsync(RelayTask Item, Func<string, string, Task> Progress, Func<CursorReport, Task> Report, CancellationTokenSource Lifetime, CursorExecutionLog Trace)
+    private async Task RunAsync(RelayTask Item, Func<string, string, Task> Progress, Func<RelayWorkerReport, Task> Report, CancellationTokenSource Lifetime, CursorExecutionLog Trace)
     {
         try { using (Trace) await ExecuteAsync(Item, Progress, Report, Lifetime, Trace); }
         finally { Release(Item.Id, Lifetime); }
     }
 
-    private async Task ExecuteAsync(RelayTask Item, Func<string, string, Task> Progress, Func<CursorReport, Task> Report, CancellationTokenSource Lifetime, CursorExecutionLog Trace)
+    private async Task ExecuteAsync(RelayTask Item, Func<string, string, Task> Progress, Func<RelayWorkerReport, Task> Report, CancellationTokenSource Lifetime, CursorExecutionLog Trace)
     {
-        CursorReport Result;
+        RelayWorkerReport Result;
         try
         {
             Lifetime.Token.ThrowIfCancellationRequested();
@@ -163,7 +163,7 @@ public sealed class CursorRelayRunner : IDisposable
             else if (Item.Workspace.Access == "write") ArgumentList.Add("--force");
             else throw new InvalidOperationException("Cursor 任务必须声明 read_only 或 write");
             if (Item.Channel.WorkerModel.Length != 0) ArgumentList.AddRange(new[] { "--model", Item.Channel.WorkerModel });
-            ArgumentList.Add(BuildPrompt(Item));
+            ArgumentList.Add(RelayWorkerReport.BuildPrompt(Item, "Cursor"));
             var Execution = await Cli.RunAsync(Item.Channel.CursorCliPath, Item.Channel.WorkingDirectory, ArgumentList, async Line =>
             {
                 if (string.IsNullOrWhiteSpace(Line)) return;
@@ -222,7 +222,7 @@ public sealed class CursorRelayRunner : IDisposable
         }
     }
 
-    public static CursorReport ParseResult(string Line, string SessionId, string? FinalAssistant = null)
+    public static RelayWorkerReport ParseResult(string Line, string SessionId, string? FinalAssistant = null)
     {
         using var Outer = JsonDocument.Parse(Line);
         var Data = Outer.RootElement;
@@ -230,15 +230,7 @@ public sealed class CursorRelayRunner : IDisposable
         // 终端结果会聚合多段回复 结构化回报取最后一条完整消息
         string Aggregate = Data.GetProperty("result").GetString()!;
         if (FinalAssistant is not null && !Aggregate.TrimEnd().EndsWith(FinalAssistant.TrimEnd(), StringComparison.Ordinal)) throw new InvalidDataException("Cursor 最终消息与终端结果不一致");
-        using var Inner = JsonDocument.Parse(FinalAssistant ?? Aggregate);
-        var Payload = Inner.RootElement;
-        string Outcome = Payload.GetProperty("outcome").GetString()!;
-        string Summary = Payload.GetProperty("summary").GetString()!;
-        var ArtifactList = Payload.GetProperty("artifacts").EnumerateArray().Select(Value => Value.GetString()!).ToList();
-        if (Outcome is not ("completed" or "needs_decision" or "failed") || string.IsNullOrWhiteSpace(Summary) || Summary.Length > RelayLimits.MaxTextLength || ArtifactList.Count > 20 || ArtifactList.Any(Value => string.IsNullOrWhiteSpace(Value) || Value.Length > 1024 || !Path.IsPathFullyQualified(Value))) throw new InvalidDataException("Cursor 结果不符合 outcome summary artifacts 契约");
-        return new(Outcome, Summary, ArtifactList);
+        return RelayWorkerReport.Parse(FinalAssistant ?? Aggregate, "Cursor");
     }
-
-    public static string BuildPrompt(RelayTask Item) => $"[MmCodexMgr Cursor 联调任务]\n任务 ID {Item.Id}\n任务 {Item.Title}\n\n目的与执行要求\n{Item.Instructions}\n\n验收规范\n{Item.Acceptance}\n\n工作目录 {Item.Channel.WorkingDirectory}\n工作区 {Item.Workspace.Access}\n允许写入的绝对路径\n{string.Join("\n", Item.Workspace.WritePathList)}\n遵守工程规则 不得扩大写入范围 只读任务禁止修改文件\n本执行端直接完成范围内工作 不创建子 Agent 或其他联调会话 不调用 mmcodex report progress 或 accept 不使用任何 Codex 会话身份\n如果是恢复会话 先检查已有历史和产物 从未完成处继续 不重复已完成的操作\n最终回答必须仅为合法 JSON 不加 Markdown 围栏 格式 {{\"outcome\":\"completed|needs_decision|failed\",\"summary\":\"实际修改 检查结果与未解决项\",\"artifacts\":[\"已生成产物的绝对路径\"]}}\n不得伪造检查通过 无法继续时回报 needs_decision 或 failed 产物没有则使用空数组 管理器负责保存并回传结果 Codex 主会话负责最终验收";
     #endregion
 }

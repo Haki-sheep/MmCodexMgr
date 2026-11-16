@@ -1,142 +1,64 @@
 namespace CodexInstanceManager;
 
+/// <summary>
+/// Cursor CLI 连接配置 会话由编队或 Codex 主会话调度 本页不列出会话
+/// </summary>
 public sealed class HarnessPage : UserControl
 {
     private readonly ManagerSettings Settings;
     private readonly CursorRelayRunner? CursorRunner;
-    private readonly AppTheme Theme;
+    private readonly bool PreviewOnly;
     private readonly TextBox CliInput = new() { PlaceholderText = "留空自动查找 cursor-agent" };
     private readonly TextBox DirectoryInput = new() { PlaceholderText = "新建联调会话的默认工作目录" };
-    private readonly TextBox ModelInput = new() { PlaceholderText = "留空沿用 Cursor 默认模型" };
-    private readonly CheckBox AutoOpenLog = new() { Text = "任务开始时自动弹出日志窗口", AutoSize = true };
-    private readonly Label Status = new() { AutoSize = true, Dock = DockStyle.Fill, Tag = eThemeRole.Muted };
-    private readonly DataGridView SessionGrid = new();
-    private readonly Label PageLabel = new() { AutoSize = true, Margin = new Padding(8, 10, 8, 0) };
+    private readonly TextBox ModelInput = new() { PlaceholderText = "留空沿用 Cursor 默认模型 可手输任意模型 ID" };
+    private readonly CheckBox AutoOpenLog = new() { Text = "任务开始时自动弹出日志窗口", AutoSize = true, Margin = new Padding(0, 8, 0, 6) };
+    private readonly StudioWrapLabel Status = new() { Tag = eThemeRole.Muted, Font = StudioFonts.Caption, Margin = new Padding(0, 10, 0, 0) };
     private readonly CancellationTokenSource Lifetime = new();
-    private List<CursorSession> SessionList = new();
-    private int Offset;
     private bool Busy;
 
     #region Layout
-    public HarnessPage(ManagerSettings Settings, CursorRelayRunner? Cursor, AppTheme Theme, Action ToggleTheme, bool Embedded = false)
+    public HarnessPage(ManagerSettings Settings, CursorRelayRunner? Cursor, bool PreviewOnly = false)
     {
         SuspendLayout();
         this.Settings = Settings;
         CursorRunner = Cursor;
-        this.Theme = Theme;
+        this.PreviewOnly = PreviewOnly;
         AutoScaleDimensions = new SizeF(96, 96);
         AutoScaleMode = AutoScaleMode.Dpi;
+        Font = StudioFonts.Body;
         Dock = DockStyle.Fill;
-        Padding = Embedded ? new Padding(0, 8, 0, 0) : new Padding(24, 16, 24, 16);
         Tag = eThemeRole.Background;
-        var Root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = Embedded ? 3 : 4 };
-        if (!Embedded) Root.RowStyles.Add(new(SizeType.AutoSize));
-        Root.RowStyles.Add(new(SizeType.AutoSize));
-        Root.RowStyles.Add(new(SizeType.Percent, 100));
-        Root.RowStyles.Add(new(SizeType.AutoSize));
-        var Header = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 2, Margin = Padding.Empty };
-        Header.ColumnStyles.Add(new(SizeType.Percent, 100));
-        Header.ColumnStyles.Add(new(SizeType.AutoSize));
-        Header.Controls.Add(new Label { Text = "Cursor", Font = new Font(Font.FontFamily, 17, FontStyle.Bold), AutoSize = true });
-        var ThemeButton = MainForm.MakeButton(Theme.IsDark ? "☀ 日间" : "☾ 夜间", (_, _) => ToggleTheme());
-        ThemeButton.Name = AppTheme.ToggleButtonName;
-        Header.Controls.Add(ThemeButton);
-        if (!Embedded) Root.Controls.Add(Header);
-        else Header.Dispose();
-        var Card = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1, Padding = new Padding(16), Tag = eThemeRole.Surface };
-        Card.RowCount = 2;
-        Card.RowStyles.Add(new(SizeType.AutoSize));
-        var DetailsRow = new RowStyle(SizeType.Absolute, 0);
-        Card.RowStyles.Add(DetailsRow);
-        var CardHeader = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 2 };
-        CardHeader.ColumnStyles.Add(new(SizeType.Percent, 100));
-        CardHeader.ColumnStyles.Add(new(SizeType.AutoSize));
-        CardHeader.Controls.Add(new Label { Text = "Cursor CLI · 独立执行与结果回传", Font = new Font(Font.FontFamily, 12, FontStyle.Bold), AutoSize = true, Margin = new Padding(0, 8, 0, 0) });
-        var DetailsScroll = new WheelScrollPanel { Dock = DockStyle.Fill, AutoScroll = true, Visible = false };
-        var Details = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1 };
-        DetailsScroll.Controls.Add(Details);
-        bool SettingsExpanded = false;
-        void RefreshDetailsHeight()
-        {
-            float Height = SettingsExpanded ? Math.Max(0, Math.Min(260 * DeviceDpi / 96f, Root.ClientSize.Height - 320 * DeviceDpi / 96f)) : 0;
-            if (DetailsRow.Height != Height) DetailsRow.Height = Height;
-        }
-        Root.SizeChanged += (_, _) => RefreshDetailsHeight();
-        var ExpandButton = MainForm.MakeButton("连接设置", (Sender, _) =>
-        {
-            SettingsExpanded = !SettingsExpanded;
-            DetailsScroll.Visible = SettingsExpanded;
-            RefreshDetailsHeight();
-            ((Button)Sender!).Text = SettingsExpanded ? "收起设置" : "连接设置";
-        });
-        CardHeader.Controls.Add(ExpandButton);
-        Card.Controls.Add(CardHeader);
-        Card.Controls.Add(DetailsScroll);
-        var Fields = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 3 };
-        Fields.ColumnStyles.Add(new(SizeType.Absolute, 110));
-        Fields.ColumnStyles.Add(new(SizeType.Percent, 100));
-        Fields.ColumnStyles.Add(new(SizeType.AutoSize));
+        var Scroll = new WheelScrollPanel { Dock = DockStyle.Fill, AutoScroll = true };
+        var Column = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, ColumnCount = 1, Padding = new Padding(0, 0, 6, 0) };
+        Column.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        var Card = StudioCard.Create("Cursor CLI", "独立执行与结果回传  ·  在编队或 Codex 主会话中指定 Cursor 执行任务即可联调  ·  已有会话保留其工作目录和模型", out var Body);
+        var Fields = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, ColumnCount = 3, Margin = Padding.Empty };
+        Fields.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 92));
+        Fields.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        Fields.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         AddField(Fields, "CLI 路径", CliInput, 0);
         Fields.Controls.Add(MainForm.MakeButton("选择文件", (_, _) => SelectCli()), 2, 0);
         AddField(Fields, "工作目录", DirectoryInput, 1);
         Fields.Controls.Add(MainForm.MakeButton("选择目录", (_, _) => SelectDirectory()), 2, 1);
         AddField(Fields, "默认模型", ModelInput, 2);
-        Fields.Controls.Add(new Label { Text = "执行跟踪", AutoSize = true, Margin = new Padding(0, 7, 0, 8) }, 0, 3);
+        Fields.Controls.Add(new Label { Text = "执行跟踪", AutoSize = true, Tag = eThemeRole.Muted, Margin = new Padding(0, 10, 8, 0) }, 0, 3);
         Fields.Controls.Add(AutoOpenLog, 1, 3);
-        Details.Controls.Add(Fields);
-        var Actions = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, WrapContents = true, Margin = new Padding(0, 10, 0, 0) };
+        Body.Controls.Add(Fields);
+        var Actions = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = true, Margin = new Padding(0, 8, 0, 0) };
         Actions.Controls.Add(MainForm.MakeButton("保存设置", (_, _) => Run(Save), true));
         Actions.Controls.Add(MainForm.MakeButton("检查连接", async (_, _) => await RunAsync(CheckAsync)));
         Actions.Controls.Add(MainForm.MakeButton("登录账号", (_, _) => Run(() => OpenTerminal(true))));
         Actions.Controls.Add(MainForm.MakeButton("启动 Cursor CLI", (_, _) => Run(() => OpenTerminal(false))));
         Actions.Controls.Add(MainForm.MakeButton("打开日志目录", (_, _) => Run(() => (CursorRunner ?? throw new InvalidOperationException("Cursor 执行端未启用")).Logs.OpenDirectory())));
-        Details.Controls.Add(Actions);
-        Details.Controls.Add(new Label { Text = "在 Codex 中指定让 Cursor 执行任务即可联调 已有会话保留其工作目录和模型", AutoSize = true, Tag = eThemeRole.Muted, Margin = new Padding(0, 10, 0, 0) });
-        Root.Controls.Add(Card);
-        var SessionCard = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3, Padding = new Padding(16), Margin = new Padding(0, 12, 0, 12), Tag = eThemeRole.Surface };
-        SessionCard.RowStyles.Add(new(SizeType.AutoSize));
-        SessionCard.RowStyles.Add(new(SizeType.Percent, 100));
-        SessionCard.RowStyles.Add(new(SizeType.AutoSize));
-        SessionCard.Controls.Add(new Label { Text = "Cursor 会话", Font = new Font(Font.FontFamily, 11, FontStyle.Bold), AutoSize = true });
-        SessionGrid.Dock = DockStyle.Fill;
-        SessionGrid.ReadOnly = true;
-        SessionGrid.AllowUserToAddRows = false;
-        SessionGrid.AllowUserToDeleteRows = false;
-        SessionGrid.AllowUserToResizeRows = false;
-        SessionGrid.RowHeadersVisible = false;
-        SessionGrid.MultiSelect = false;
-        SessionGrid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-        SessionGrid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
-        SessionGrid.BorderStyle = BorderStyle.None;
-        SessionGrid.RowTemplate.Height = 36;
-        SessionGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "会话名称", FillWeight = 27, MinimumWidth = 120 });
-        SessionGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "工作目录", FillWeight = 45, MinimumWidth = 180 });
-        SessionGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "来源", FillWeight = 12, MinimumWidth = 65 });
-        SessionGrid.Columns.Add(new DataGridViewButtonColumn { HeaderText = "执行日志", FillWeight = 12, MinimumWidth = 85, FlatStyle = FlatStyle.Flat });
-        SessionGrid.Columns.Add(new DataGridViewButtonColumn { HeaderText = "会话", FillWeight = 10, MinimumWidth = 70, FlatStyle = FlatStyle.Flat });
-        SessionGrid.CellContentClick += async (_, Event) =>
-        {
-            if (Event.RowIndex < 0) return;
-            if (Event.ColumnIndex == 3) Run(() => CursorRunner!.OpenSessionLog(SessionList[Event.RowIndex].Id));
-            else if (Event.ColumnIndex == 4) await RunAsync(() => CursorRunner!.OpenAsync(SessionList[Event.RowIndex].Id, Lifetime.Token));
-        };
-        SessionGrid.CellToolTipTextNeeded += (_, Event) => { if (Event.RowIndex >= 0 && Event.RowIndex < SessionList.Count) Event.ToolTipText = SessionList[Event.RowIndex].Id + "\n" + SessionList[Event.RowIndex].Cwd; };
-        SessionCard.Controls.Add(SessionGrid);
-        var Pages = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, WrapContents = false };
-        Pages.Controls.Add(MainForm.MakeButton("刷新会话", (_, _) => Run(RefreshSessions)));
-        Pages.Controls.Add(MainForm.MakeButton("上一页", (_, _) => Run(() => { Offset = Math.Max(0, Offset - RelayLimits.PageSize); RefreshSessions(); })));
-        Pages.Controls.Add(PageLabel);
-        Pages.Controls.Add(MainForm.MakeButton("下一页", (_, _) => Run(() => { if (SessionList.Count == RelayLimits.PageSize) { Offset += RelayLimits.PageSize; RefreshSessions(); } })));
-        SessionCard.Controls.Add(Pages);
-        Root.Controls.Add(SessionCard);
-        Root.Controls.Add(Status);
-        Controls.Add(Root);
+        Body.Controls.Add(Actions);
+        Body.Controls.Add(Status);
+        Column.Controls.Add(Card);
+        Scroll.Controls.Add(Column);
+        Controls.Add(Scroll);
         CliInput.Text = Settings.Cursor.CliPath;
         DirectoryInput.Text = Settings.Cursor.WorkingDirectory;
         ModelInput.Text = Settings.Cursor.Model;
         AutoOpenLog.Checked = Settings.Cursor.ShowExecutionWindow;
-        VisibleChanged += (_, _) => { if (Visible) Run(RefreshSessions); };
-        RefreshSessions();
         Status.Text = CursorRunner is null ? "当前管理器未启用 Cursor 执行端" : "Cursor 执行端已启用 · 请检查连接确认 CLI 与账号状态";
         ResumeLayout(false);
         PerformAutoScale();
@@ -145,15 +67,15 @@ public sealed class HarnessPage : UserControl
 
     private static void AddField(TableLayoutPanel Fields, string Label, TextBox Input, int Row)
     {
-        Fields.Controls.Add(new Label { Text = Label, AutoSize = true, Margin = new Padding(0, 7, 0, 8) }, 0, Row);
+        Fields.Controls.Add(new Label { Text = Label, AutoSize = true, Tag = eThemeRole.Muted, Margin = new Padding(0, 10, 8, 0) }, 0, Row);
         Input.Dock = DockStyle.Fill;
-        Input.Margin = new Padding(0, 4, 10, 8);
+        Input.Margin = new Padding(0, 5, 10, 7);
         Fields.Controls.Add(Input, 1, Row);
     }
 
     protected override void Dispose(bool Disposing)
     {
-        if (Disposing) Lifetime.Cancel();
+        if (Disposing) { Lifetime.Cancel(); Lifetime.Dispose(); }
         base.Dispose(Disposing);
     }
     #endregion
@@ -161,6 +83,7 @@ public sealed class HarnessPage : UserControl
     #region Actions
     private void Save()
     {
+        if (PreviewOnly) throw new InvalidOperationException("预览模式不保存 Cursor 配置");
         string CliPath = CliInput.Text.Trim();
         string Cwd = DirectoryInput.Text.Trim();
         if (CliPath.Length != 0) CursorCli.ResolvePath(CliPath);
@@ -193,21 +116,13 @@ public sealed class HarnessPage : UserControl
     private void SelectCli()
     {
         using var Dialog = new OpenFileDialog { Filter = "Cursor CLI|cursor-agent.cmd;cursor-agent.ps1;cursor-agent.exe|所有文件|*.*", Title = "选择 Cursor CLI" };
-        if (Dialog.ShowDialog(this) == DialogResult.OK) CliInput.Text = Dialog.FileName;
+        if (Dialog.ShowDialog(FindForm()) == DialogResult.OK) CliInput.Text = Dialog.FileName;
     }
 
     private void SelectDirectory()
     {
         using var Dialog = new FolderBrowserDialog { Description = "选择 Cursor 默认工作目录", UseDescriptionForTitle = true };
-        if (Dialog.ShowDialog(this) == DialogResult.OK) DirectoryInput.Text = Dialog.SelectedPath;
-    }
-
-    private void RefreshSessions()
-    {
-        SessionList = CursorRunner?.List(null, Offset) ?? new();
-        SessionGrid.Rows.Clear();
-        foreach (var Item in SessionList) SessionGrid.Rows.Add(Item.Title, Item.Cwd, "Cursor", "查看日志", CursorRunner!.IsRunning(Item.Id) ? "执行中" : "打开");
-        PageLabel.Text = "第 " + (Offset / RelayLimits.PageSize + 1) + " 页";
+        if (Dialog.ShowDialog(FindForm()) == DialogResult.OK) DirectoryInput.Text = Dialog.SelectedPath;
     }
 
     private void Run(Action Action)

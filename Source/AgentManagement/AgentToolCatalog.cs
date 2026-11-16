@@ -4,16 +4,16 @@ public static class AgentToolCatalog
 {
     public static object[] Tools() => new object[]
     {
-        Tool("agent_instances", "列出 Codex 实例及执行端 Cursor 固定 ID 为 cursor DeepSeek Harness 桌面固定 ID 为 dsh Antigravity App ID 为 antigravity", new { }, Array.Empty<string>()),
+        Tool("agent_instances", "列出 Codex 实例及执行端 Cursor ID 为 cursor DeepSeek Harness ID 为 dsh Claude Code ID 为 claude Antigravity App ID 为 antigravity", new { }, Array.Empty<string>()),
         Tool("dsh_create", "通过 DSH 桌面后台创建可见会话 默认工作区省略 project 或填 default request_id 重试保持不变 不操作窗口", new { request_id = Text(128), title = Text(120), project = Text() }, new[] { "request_id", "title" }),
         Tool("dsh_rename", "重命名指定 DSH 桌面会话 不发送消息", new { session_id = Text(128), title = Text(120) }, new[] { "session_id", "title" }),
         Tool("dsh_send", "向指定 DSH 桌面会话发送消息 返回受理状态 request_id 重试保持不变 不代表完成 联调任务优先使用 agent_start 自动回传", new { session_id = Text(128), request_id = Text(128), message = Text(RelayLimits.MaxTextLength) }, new[] { "session_id", "request_id", "message" }),
         Tool("dsh_reply", "按原 request_id 读取 DSH 回复 轮次完成才 completed=true 不启动模型 仅单次查询 不循环轮询", new { session_id = Text(128), request_id = Text(128) }, new[] { "session_id", "request_id" }),
         Tool("agent_projects", "读取指定实例的本地项目目录 不会启动模型", new { instance = Text() }, new[] { "instance" }),
         Tool("agent_sessions", "在指定实例中按会话完整名称或 ID 查找 project 可选 省略时包含无项目会话 会话按页读取 重名时需使用 ID", new { instance = Text(), project = Text(), session = Text(), offset = Number(0) }, new[] { "instance" }),
-        Tool("agent_start", "instance=antigravity 使用本机 Antigravity App 新建可选 cwd 复用沿用原工作区 worker_limits 全零 自动回传 按用户指定或已授权自动协作选择的执行端启动联调 instance=dsh 使用桌面后台 project 选工作区 省略时新建到默认工作区 沿用桌面模型 worker_limits 必须全零 默认全零 管理器自动读取并回传结果 无需操作窗口 instance=cursor 使用 Cursor CLI 新建必须提供 cwd 不传 project 可选 model cursor_cli_path Cursor worker_limits 必须全零 默认全零 双方会话不要求关联项目 project 可选 省略时包含无项目会话 session 与 create_title 二选一 用户要求新建或已授权自动协作时可用 create_title 自动创建任务所需会话 无需逐次确认 Codex 目标实例未运行时自动启动并等待桥接就绪 不指定项目时创建无项目会话 任务边界和验收必须明确 request_id 重试保持不变 " + RelayLimits.DispatchWaitInstruction, new
+        Tool("agent_start", "instance=antigravity 使用本机 Antigravity App 新建可选 cwd 复用沿用原工作区 worker_limits 全零 自动回传 按用户指定或已授权自动协作选择执行端 instance=claude 使用 Claude Code CLI 和当前 Claude Desktop 网关 新建提供 cwd 可选 model 默认 Opus 5.5 instance=dsh 使用桌面后台 project 选工作区 省略时新建到默认工作区 沿用桌面模型 instance=cursor 使用 Cursor CLI 新建必须提供 cwd 可选 model cursor_cli_path Claude DSH Cursor 的 worker_limits 必须全零 默认全零 管理器自动回传结果 session 与 create_title 二选一 Codex 目标实例未运行时自动启动并等待桥接就绪 不指定项目时创建无项目会话 Codex 新建与复用可选 model thinking 空模型沿用现有设置 其他执行端不接受 thinking 任务边界和验收必须明确 request_id 重试保持不变 " + RelayLimits.DispatchWaitInstruction, new
         {
-            cwd = Text(), model = Text(), cursor_cli_path = Text(),
+            cwd = Text(), model = new { type = "string", maxLength = 1024 }, thinking = new { type = "string", @enum = RelayLimits.CodexThinkingList }, cursor_cli_path = Text(),
             request_id = Text(128), instance = Text(), project = Text(), session = Text(), create_title = Text(120), title = Text(120), instructions = Text(RelayLimits.MaxTextLength), acceptance = Text(RelayLimits.MaxTextLength),
             subagent_max = new { type = "integer", minimum = 0, @default = RelayLimits.DefaultSubagentMax, description = "主会话 独立子执行者与联调会话默认各可用 3 个原生子代理 下级继承上级预算 重试保留原值 显式 0 禁用 额度不要求凑满 每个子代理必须有实际任务 原生子代理禁止递归创建或转派 仍受宿主上限约束" }, session_max = Number(0), cross_agent_max = Number(0), timeout_minutes = new { type = "integer", minimum = 0, maximum = 1440, description = "等待回报的分钟数 默认 60 设为 0 表示无限等待" },
             tree_session_max = Number(1), max_depth = new { type = "integer", minimum = 1, maximum = RelayLimits.MaxTreeDepth },
@@ -30,7 +30,7 @@ public static class AgentToolCatalog
         Tool("relay_progress", "执行方开始工作或完成重要阶段时主动上报进度 started progress blocked 不唤醒主会话 不能替代最终 relay_report 无需定时心跳", new { task_id = Text(128), stage = new { type = "string", @enum = new[] { "started", "progress", "blocked" } }, message = Text(RelayLimits.MaxEventLength) }, new[] { "task_id", "stage", "message" }),
         Tool("agent_retry_return", "仅在用户已核对原主会话未收到回传后重发已保存的结果 不自动调用 此操作可能重复唤醒主会话", new { task_id = Text(128), confirmed = new { type = "boolean" } }, new[] { "task_id", "confirmed" }),
         Tool("agent_reconcile", "仅在用户已核对执行任务确实开始后 恢复投递待核对记录并绑定准确执行会话 不重复创建或发送任务", new { task_id = Text(128), session_id = Text(128), confirmed = new { type = "boolean" } }, new[] { "task_id", "session_id", "confirmed" }),
-        Tool("agent_doctor", "只读检查实例运行 桥接能力 CLI MCP 和 Skill 安装路径 instance=cursor 检查 Cursor CLI 与认证 instance=dsh 检查桌面后台认证和工作区 不启动模型", new { instance = Text() }, Array.Empty<string>())
+        Tool("agent_doctor", "只读检查实例运行 桥接能力 CLI MCP 和 Skill 安装路径 instance=cursor 检查 Cursor CLI 与认证 instance=dsh 检查桌面后台认证和工作区 instance=claude 检查 CLI 路径和当前桌面网关 不启动模型", new { instance = Text() }, Array.Empty<string>())
     };
 
     private static object Number(int Minimum) => new { type = "integer", minimum = Minimum };

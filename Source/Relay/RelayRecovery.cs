@@ -5,6 +5,12 @@ public sealed partial class RelayCoordinator
     public async Task OpenSessionAsync(InstanceProfile Instance, string ThreadId, CancellationToken Cancellation)
     {
         if (Instance.Id == AntigravityRelayRunner.InstanceId) throw new InvalidOperationException("请在 Antigravity App 按标题打开会话");
+        if (Instance.Id == ClaudeRelayRunner.InstanceId)
+        {
+            Cancellation.ThrowIfCancellationRequested();
+            (Claude ?? throw new InvalidOperationException("当前管理器未启用 Claude Code 执行端")).Open(ThreadId);
+            return;
+        }
         if (Instance.Id == CursorRelayRunner.InstanceId)
         {
             await (Cursor ?? throw new InvalidOperationException("当前管理器未启用 Cursor 执行端")).OpenAsync(ThreadId, Cancellation);
@@ -35,7 +41,7 @@ public sealed partial class RelayCoordinator
             new RelayPolicy(Store).Apply(Item, Parent, Item.TreeBudget, Item.Workspace, true);
             StopDeadline(Item.Id);
             Item.DeadlineAt = Item.Channel.TimeoutMinutes == 0 ? null : DateTimeOffset.UtcNow.AddMinutes(Item.Channel.TimeoutMinutes);
-            await ResumeCoreAsync(Item, false);
+            await ResumeCoreAsync(Item);
             return Store.Get(TaskId);
         }
         finally { Gate.Release(); }
@@ -49,8 +55,21 @@ public sealed partial class RelayCoordinator
         return Parent;
     }
 
-    private async Task ResumeCoreAsync(RelayTask Item, bool Automatic)
+    private async Task ResumeCoreAsync(RelayTask Item)
     {
+        if (Item.Channel.WorkerInstance.Id == ClaudeRelayRunner.InstanceId)
+        {
+            if (Item.Outcome.Length != 0 || Item.Channel.WorkerThreadId.Length == 0) throw new InvalidOperationException("Claude Code 续跑需要未回报的原会话");
+            (Claude ?? throw new InvalidOperationException("当前管理器未启用 Claude Code 执行端")).Prepare(Item);
+            Item.RecoveryCount++;
+            Item.ProgressStage = "";
+            Item.ProgressMessage = "等待 Claude Code 原会话续跑";
+            Item.ProgressAt = null;
+            Change(Item, eRelayState.Running, "正在续跑 Claude Code 原会话");
+            ArmDeadline(Item);
+            LaunchClaude(Item, true);
+            return;
+        }
         if (Item.Channel.WorkerInstance.Id == AntigravityRelayRunner.InstanceId)
         {
             if (Antigravity is null || Item.Outcome.Length != 0 || Item.Channel.WorkerThreadId.Length == 0)
@@ -80,7 +99,7 @@ public sealed partial class RelayCoordinator
         if (Item.Outcome.Length != 0) throw new InvalidOperationException("任务已有执行结果 禁止重新执行");
         RequireRecoverableParent(Item);
         Item.RecoveryCount++;
-        Change(Item, eRelayState.Recovering, Automatic ? "执行实例退出 自动启动实例并打开原执行会话 每个任务自动尝试一次" : "收到续跑请求 正在恢复原执行会话");
+        Change(Item, eRelayState.Recovering, "收到续跑请求 正在恢复原执行会话");
         using var Timeout = CancellationTokenSource.CreateLinkedTokenSource(Lifetime.Token);
         Timeout.CancelAfter(TimeSpan.FromSeconds(RelayLimits.RequestTimeoutSeconds));
         try
@@ -91,7 +110,7 @@ public sealed partial class RelayCoordinator
                 var ChildList = Store.UnfinishedChildIds(Item.Id);
                 string Prompt = $"[MmCodexMgr 原任务恢复]\n任务 ID 和执行会话保持不变 本消息继续用户已授权的原任务\n先核对会话历史 已生成产物和仍在运行的脚本 从尚未完成的位置继续 不要重复已完成操作\n未结束下级任务 ID {string.Join(" ", ChildList)}\n已有下级仍由原任务追踪 不得重新创建或重复派发 对应写入范围仍由下级独占 先验收下级再整合\n\n{BuildWorkerPrompt(Item)}";
                 Change(Item, eRelayState.DispatchUncertain, "正在向原执行会话投递续跑消息 若管理器中途退出必须核对送达情况");
-                await Bridge.SendAsync(Item.Channel.WorkerInstance, Item.Channel.WorkerThreadId, Prompt, "", Timeout.Token);
+                await Bridge.SendToRunningAsync(Item.Channel.WorkerInstance, Item.Channel.WorkerThreadId, Prompt, Item.Channel.WorkerModel, Item.Channel.WorkerThinking, Timeout.Token);
                 Item.ProgressStage = "";
                 Item.ProgressMessage = "已投递续跑消息 等待执行方确认开始";
                 Item.ProgressAt = null;
@@ -122,17 +141,4 @@ public sealed partial class RelayCoordinator
         LaunchCursor(Item);
     }
 
-    private async Task NotifyRecoveryFailureAsync(RelayTask Item, string Reason)
-    {
-        try
-        {
-            await Bridge.SendAsync(Item.Channel.MainInstance, Item.Channel.MainThreadId, $"[MmCodexMgr 联调恢复受阻]\n任务 ID {Item.Id}\n任务 {Item.Title}\n{Reason}\n状态 {RelayLimits.StateText(Item.State)}\n原任务与下级记录均保留 尚未确认完成 不要重新创建或重复派发\n实例退出后可使用 agent_resume 或 CLI resume --task-id {Item.Id} 恢复原会话 投递不明时先核对目标会话再使用 reconcile", "", Lifetime.Token);
-            Change(Item, Item.State, "异常通知已提交到原主会话");
-        }
-        catch (Exception Error)
-        {
-            Program.LogError(Error);
-            Change(Item, Item.State, "恢复异常通知未确认 " + Error.Message);
-        }
-    }
 }

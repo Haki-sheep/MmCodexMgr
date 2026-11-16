@@ -23,11 +23,26 @@ internal static class InstancePageUiTests
         using var Form = new MainForm(Settings, true) { Size = Size };
         Form.Show();
         Form.Activate();
+        Form.ShowAgentPage();
         Application.DoEvents();
-        var Hint = Descendants(Form).OfType<Label>().Single(Label => Label.Text.StartsWith("显示后可", StringComparison.Ordinal));
+        var Agents = Descendants(Form).OfType<AgentPage>().Single();
+        Require(Agents.Selected == Profile && Agents.Visible, "agent management opens on the selected Codex instance card");
+        Require(!Descendants(Agents).OfType<DataGridView>().Any(), "instance detail does not list sessions");
+        var Hint =Descendants(Form).OfType<Label>().Single(Label => Label.Text.StartsWith("显示后可", StringComparison.Ordinal));
         var Body = Hint.Parent!;
         var Card = Body.Parent!;
-        var Scroll = (ScrollableControl)Card.Parent!.Parent!;
+        var CodexDetails = Card.Parent!;
+        var Scroll = (ScrollableControl)CodexDetails.Parent!;
+        Require(CodexDetails.Width <= Scroll.ClientSize.Width, "instance detail fits the scroll viewport width");
+        Require(Scroll.Parent!.Parent!.ClientRectangle.Contains(Scroll.Parent.Bounds), "detail host fits the agent body");
+        var AgentBody = Scroll.Parent.Parent;
+        Require(AgentBody.Parent!.ClientRectangle.Contains(AgentBody.Bounds), "agent body fits the page content width");
+        foreach (string ActionName in new[] { "＋ 新建实例", "显示全部运行实例", "健康检查" })
+        {
+            var HeaderAction = Descendants(Agents).OfType<Button>().Single(Button => Button.Text == ActionName);
+            var Bounds = Agents.RectangleToClient(HeaderAction.RectangleToScreen(HeaderAction.ClientRectangle));
+            Require(Agents.ClientRectangle.Contains(Bounds), "agent header action is visible: " + ActionName);
+        }
         Console.WriteLine($"instance UI dark={DarkMode} size={Size} dpi={Form.DeviceDpi} hint={Hint.Bounds} body={Body.ClientRectangle} card={Card.ClientRectangle}");
         Require(Body.ClientRectangle.Contains(Hint.Bounds), "launch hint fits inside its content area");
         Require(Card.ClientRectangle.Contains(Body.Bounds), "launch content fits inside its card");
@@ -39,6 +54,8 @@ internal static class InstancePageUiTests
         Require(ProjectButton.Parent.Parent!.ClientRectangle.Contains(ProjectButton.Parent.Bounds), "project actions fit inside the import card content");
         Require(ProjectButton.Parent.Parent.Parent!.ClientRectangle.Contains(ProjectButton.Parent.Parent.Bounds), "import card content is fully visible");
         Require(ProjectButton.Enabled, "secondary instance exposes project synchronization");
+        foreach (string ActionName in new[] { "保存设置", "打开配置目录", "编辑 config.toml", "同步 Skills / MCP", "导入历史对话", "让 CC Switch 管理此实例", "生成桌面快捷方式", "结束所选实例", "保留项目清空会话", "清空所有项目和会话" })
+            Require(Descendants(CodexDetails).OfType<Button>().Count(Button => Button.Text == ActionName) == 1, "instance detail keeps action " + ActionName);
 
         var FocusTarget = Descendants(Form).OfType<ListBox>().Single();
         FocusTarget.Focus();
