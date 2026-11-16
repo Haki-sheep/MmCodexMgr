@@ -10,7 +10,7 @@ public static class LibraryCli
     /// <summary>
     /// 执行源库命令 应用前核对已保存计划 不依赖联调会话身份
     /// </summary>
-    public static async Task<object> ExecuteAsync(AgentCliInvocation Call, ManagerSettings Settings)
+    public static object Execute(AgentCliInvocation Call, ManagerSettings Settings, Func<ManagerSettings, string, string, LibrarySyncResult>? SyncAll = null)
     {
         var Options = Call.OptionDict;
         string Required(string Name) => Options.GetValueOrDefault(Name) ?? throw new InvalidOperationException("缺少 --" + Name);
@@ -28,8 +28,9 @@ public static class LibraryCli
             case "library-config":
                 if (Options.TryGetValue("repository", out string? Repository))
                 {
-                    await LibraryGit.RunAsync(Repository, "rev-parse", "--show-toplevel");
-                    Settings.Library.RepositoryPath = ManagerPaths.Normalize(Repository);
+                    string DirectoryPath = ManagerPaths.Normalize(Repository);
+                    if (!Directory.Exists(DirectoryPath)) throw new DirectoryNotFoundException("CLI 定位目录不存在 " + DirectoryPath);
+                    Settings.Library.RepositoryPath = DirectoryPath;
                 }
                 if (Options.TryGetValue("skill-source", out string? SkillSource)) { SkillMirror.Scan(SkillSource); Settings.Library.SkillSource = ManagerPaths.Normalize(SkillSource); }
                 if (Options.TryGetValue("rule-source", out string? RuleSource)) { if (!File.Exists(RuleSource)) throw new FileNotFoundException("规则源不存在", RuleSource); Settings.Library.RuleSource = ManagerPaths.Normalize(RuleSource); }
@@ -42,7 +43,9 @@ public static class LibraryCli
                 return SkillDistribution.Scan();
             case "library-preview-agent-skills":
             {
-                var Target = SkillDistribution.Scan().SingleOrDefault(Item => Item.Agent == Required("agent")) ?? throw new InvalidOperationException("--agent 必须为 cursor dsh 或 shared");
+                string Agent = Required("agent");
+                var TargetList = SkillDistribution.Scan();
+                var Target = TargetList.SingleOrDefault(Item => Item.Agent == Agent) ?? throw new InvalidOperationException("未知 Skill 目标 " + Agent + " 可用目标 " + string.Join(" ", TargetList.Select(Item => Item.Agent)));
                 var Plan = SkillDistribution.Preview(SourceSkills(), Target, Settings.Library.ExcludedNameList);
                 Save(Required("plan-file"), new("distribution", null, null, Distribution: Plan));
                 return new { plan_file = Required("plan-file"), Plan.HasChanges, source = Plan.SourceRoot, destination = Plan.Target.PathValue, packages = Plan.PackageList.Select(Item => Item.Name), replaced = Plan.ReplacedList, behavior = "覆盖源中技能及其旧别名 原内容先备份 保留第三方技能与 .system 不修改 Rule MCP 或账号" };
@@ -118,8 +121,10 @@ public static class LibraryCli
                 }
                 throw new InvalidDataException("预览计划类型无效");
             }
-            case "library-git-pull": return new { result = await LibraryGit.PullAsync(Settings.Library.RepositoryPath) };
-            case "library-git-publish": return new { result = await LibraryGit.PublishAsync(Settings) };
+            case "library-sync-all":
+                string Source = Options.GetValueOrDefault("source", "primary");
+                string Scope = Options.GetValueOrDefault("scope", "all");
+                return SyncAll is null ? LibrarySyncAll.Sync(Settings, Source, Scope) : SyncAll(Settings, Source, Scope);
             default: throw new InvalidOperationException("未知源库命令 " + Call.Command);
         }
     }

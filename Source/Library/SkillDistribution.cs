@@ -17,12 +17,14 @@ public static class SkillDistribution
         string Agents = string.IsNullOrWhiteSpace(AgentsSetting) ? Path.Combine(Home, ".agents") : AgentsSetting;
         if (!Path.IsPathFullyQualified(Dsh) || !Path.IsPathFullyQualified(Agents)) throw new IOException("DSH Skill 根目录必须是绝对路径");
         string Gemini = Path.Combine(Home, ".gemini");
+        string Claude = Path.Combine(Home, ".claude");
         return new()
         {
             new("cursor", Path.Combine(Cursor, "skills"), Directory.Exists(Cursor)),
             new("dsh", Path.Combine(Dsh, "skills"), Directory.Exists(Dsh)),
             new("shared", Path.Combine(Agents, "skills"), Directory.Exists(Home)),
-            new("antigravity", Path.Combine(Gemini, "config", "skills"), Directory.Exists(Gemini))
+            new("antigravity", Path.Combine(Gemini, "config", "skills"), Directory.Exists(Gemini)),
+            new("claude", Path.Combine(Claude, "skills"), Directory.Exists(Claude))
         };
     }
 
@@ -30,13 +32,17 @@ public static class SkillDistribution
     /// 预览当前源集合的覆盖及旧别名清理 不移除目标第三方技能
     /// </summary>
     public static SkillDistributionPlan Preview(string SourceRoot, SkillTarget Target, IReadOnlyCollection<string>? ExcludedNameList = null)
+        => Preview(SourceRoot, Target, ExcludedNameList, RequirePortableNames: true, PreserveLinks: false);
+
+    internal static SkillDistributionPlan Preview(string SourceRoot, SkillTarget Target, IReadOnlyCollection<string>? ExcludedNameList, bool RequirePortableNames, bool PreserveLinks)
     {
         if (!Target.Available) throw new IOException("未发现目标配置目录 " + Target.Agent);
         GlobalRules.EnsureWritablePath(Target.PathValue);
         var Mirror = SkillMirror.Preview(SourceRoot, Target.PathValue, ExcludedNameList: ExcludedNameList);
         if (ManagerPaths.Same(Mirror.SourceRoot, Mirror.DestinationRoot)) throw new IOException("分发源不能与目标相同");
-        foreach (var Package in Mirror.PackageList)
-            if (SkillNames.Portable(Package.Name) != Package.Name) throw new InvalidDataException("目标要求小写连字符 Skill 标识 请先规范源包 " + Package.Name);
+        if (RequirePortableNames)
+            foreach (var Package in Mirror.PackageList)
+                if (SkillNames.Portable(Package.Name) != Package.Name) throw new InvalidDataException("目标要求小写连字符 Skill 标识 请先规范源包 " + Package.Name);
         var NameHashList = Mirror.PackageList.Select(Item => Item.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var ReplacedList = new List<string>();
         foreach (string Entry in SkillMirror.Entries(Mirror.DestinationRoot))
@@ -53,6 +59,8 @@ public static class SkillDistribution
         }
         var PackageList = Mirror.PackageList.Select(Item => new SkillDistributionPackage(Item.Name, Item.DirectoryPath, SkillMirror.TreeHash(Item.DirectoryPath))).ToList();
         bool Changed = !ReplacedList.Order(StringComparer.Ordinal).SequenceEqual(PackageList.Select(Item => Item.Name).Order(StringComparer.Ordinal)) || PackageList.Any(Item => SkillMirror.TreeHash(Path.Combine(Mirror.DestinationRoot, Item.Name)) != Item.Hash);
+        if (Changed && PreserveLinks)
+            foreach (string Name in ReplacedList) RejectLink(Path.Combine(Mirror.DestinationRoot, Name));
         return new(Target with { PathValue = Mirror.DestinationRoot }, Mirror.SourceRoot, Mirror.SourceHash, Mirror.DestinationHash, PackageList, ReplacedList, Changed);
     }
     #endregion
@@ -61,7 +69,9 @@ public static class SkillDistribution
     /// <summary>
     /// 核对源和目标后快照分发 覆盖项先备份 失败时回滚
     /// </summary>
-    public static void Apply(SkillDistributionPlan Plan, string BackupPath)
+    public static void Apply(SkillDistributionPlan Plan, string BackupPath) => Apply(Plan, BackupPath, PreserveLinks: false);
+
+    internal static void Apply(SkillDistributionPlan Plan, string BackupPath, bool PreserveLinks)
     {
         if (!Plan.HasChanges) return;
         if (ManagerPaths.Same(BackupPath, Plan.SourceRoot) || ManagerPaths.IsUnder(BackupPath, Plan.SourceRoot) || ManagerPaths.Same(BackupPath, Plan.Target.PathValue) || ManagerPaths.IsUnder(BackupPath, Plan.Target.PathValue)) throw new IOException("分发备份不能位于源或目标目录内");
@@ -84,7 +94,12 @@ public static class SkillDistribution
             RequireCurrent(Plan);
             Directory.CreateDirectory(Plan.Target.PathValue);
             Directory.CreateDirectory(BackupPath);
-            foreach (string Name in Plan.ReplacedList) Transaction.BackupEntry(Path.Combine(Plan.Target.PathValue, Name));
+            foreach (string Name in Plan.ReplacedList)
+            {
+                string Entry = Path.Combine(Plan.Target.PathValue, Name);
+                if (PreserveLinks) RejectLink(Entry);
+                Transaction.BackupEntry(Entry);
+            }
             foreach (var Package in Plan.PackageList)
             {
                 string Destination = Path.Combine(Plan.Target.PathValue, Package.Name);
@@ -107,6 +122,14 @@ public static class SkillDistribution
     private static void RequireCurrent(SkillDistributionPlan Plan)
     {
         if (SkillMirror.TreeHash(Plan.SourceRoot, true) != Plan.SourceHash || SkillMirror.TreeHash(Plan.Target.PathValue, true) != Plan.DestinationHash) throw new IOException("预览后 Skill 已变化 请重新预览");
+    }
+
+    private static void RejectLink(string Entry)
+    {
+        var Attributes = File.GetAttributes(Entry);
+        if ((Attributes & FileAttributes.ReparsePoint) != 0) throw new IOException("Skill 同步会覆盖链接 " + Entry);
+        if ((Attributes & FileAttributes.Directory) != 0)
+            foreach (string Child in Directory.EnumerateFileSystemEntries(Entry)) RejectLink(Child);
     }
 
     private static void Cleanup(string Staging)

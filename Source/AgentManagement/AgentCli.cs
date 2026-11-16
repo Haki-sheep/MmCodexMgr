@@ -69,23 +69,24 @@ public static class AgentCli
         compat-install --instance <实例>  安装 OpenCode Go 联调输入适配 保留模型与密钥 重新加载目标实例后生效
         compat-remove --instance <实例>  恢复原服务商地址 保留其余配置 重新加载目标实例后生效
         library-skills [--source primary|library]  列出主实例或维护源库的 Skill
-        library-config [--repository <仓库根>] [--skill-source <技能源目录>] [--rule-source <规则MD>] [--excluded <name逗号列表|none>]
+        library-config [--repository <CLI定位目录>] [--skill-source <技能源目录>] [--rule-source <规则MD>] [--excluded <name逗号列表|none>]
           无参数查看本机配置 默认不排除任何 Skill 不限制技能名称或数量
         library-scan-rules  扫描各 Agent 的全局规则位置 无需启动管理器
         library-scan-skills  扫描各 Agent 的 Skill 目录
-        library-preview-agent-skills --agent <cursor|dsh|shared|antigravity> [--source primary|library] --plan-file <绝对路径>
+        library-preview-agent-skills --agent <cursor|dsh|shared|claude|antigravity> [--source primary|library] --plan-file <绝对路径>
           预览向其他 Agent 分发相同技能包 要求小写连字符标识 原内容先备份 保留第三方技能
           shared 对应 ~/.agents/skills 由 Cursor 与 DSH 共同发现 DSH_HOME 与 DSH_AGENTS_HOME 可覆盖默认目录
         library-preview-skills --instance <目标实例> [--source primary|library] --plan-file <绝对路径>
           source 默认 primary 使用 library 可将维护源库完整安装到主实例
         library-preview-import --skill <包含SKILL.md的目录> --plan-file <绝对路径>
-          导入任意 Skill 到已配置维护源库 保留其他包 不自动安装或推送
+          导入任意 Skill 到已配置维护源库 保留其他包
         library-preview-rules --agents <codex,Cursor,Claude Code等扫描名称> [--source <规则源MD>] --plan-file <绝对路径>
           codex 表示所有已注册 Codex 实例 预览返回原文与新内容
         library-apply --plan-file <预览JSON绝对路径>
           先阅读预览再执行 应用前重新核对指纹 变更先备份 非主目标实例需退出
-        library-git-pull  快进拉取配置的源库仓库 有未提交改动则停止
-        library-git-publish  收录所选维护源库与规则源 仅提交 Library 目录并推送
+        library-sync-all [--source primary|library] [--scope codex|all]
+          同步已配置规则与所选技能 默认 primary 和 all 含已注册 Codex 及已安装的受支持 Agent
+          写入前预检所有目标 先备份同名技能和规则 保留目标独有技能 结果与备份路径写 stdout 任一失败退出 1
         formation <action>  管理编队 执行 formation help 查看用法
         mcp --instance <实例ID>
         调用方默认取 CODEX_HOME 与 CODEX_THREAD_ID
@@ -94,7 +95,7 @@ public static class AgentCli
         """;
 
     #region Execution
-    public static async Task<int> RunAsync(string[] ArgumentList, Stream Input, Stream Output, TextWriter Error, string ExecutablePath, CancellationToken Cancellation, string? PipeName = null, Func<ManagerSettings>? LoadSettings = null, string? OutboxRoot = null)
+    public static async Task<int> RunAsync(string[] ArgumentList, Stream Input, Stream Output, TextWriter Error, string ExecutablePath, CancellationToken Cancellation, string? PipeName = null, Func<ManagerSettings>? LoadSettings = null, string? OutboxRoot = null, Func<ManagerSettings, string, string, LibrarySyncResult>? SyncLibrary = null)
     {
         if (FormationCli.IsCommand(ArgumentList)) return await FormationCli.RunAsync(ArgumentList, Output, Error, Cancellation, PipeName, LoadSettings);
         using var Writer = new StreamWriter(Output, new UTF8Encoding(false), 4096, true) { AutoFlush = true };
@@ -120,8 +121,9 @@ public static class AgentCli
             }
             if (Call.Command.StartsWith("library-", StringComparison.Ordinal))
             {
-                await Writer.WriteLineAsync(JsonSerializer.Serialize(await LibraryCli.ExecuteAsync(Call, Settings)));
-                return 0;
+                var LibraryResult = LibraryCli.Execute(Call, Settings, SyncLibrary);
+                await Writer.WriteLineAsync(JsonSerializer.Serialize(LibraryResult));
+                return LibraryResult is LibrarySyncResult { Succeeded: false } ? 1 : 0;
             }
             if (Call.Command is "compat-install" or "compat-remove")
             {
@@ -230,7 +232,8 @@ public static class AgentCli
             "library-preview-agent-skills" => new[] { "agent", "source", "plan-file" },
             "library-config" => new[] { "repository", "skill-source", "rule-source", "excluded" },
             "library-preview-import" => new[] { "skill", "plan-file" },
-            "library-scan-rules" or "library-scan-skills" or "library-git-pull" or "library-git-publish" => Array.Empty<string>(),
+            "library-scan-rules" or "library-scan-skills" => Array.Empty<string>(),
+            "library-sync-all" => new[] { "source", "scope" },
             "library-preview-skills" => new[] { "instance", "source", "plan-file" },
             "library-preview-rules" => new[] { "agents", "source", "plan-file" },
             "library-apply" => new[] { "plan-file" },

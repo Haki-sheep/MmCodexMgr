@@ -18,6 +18,6 @@ while ($Directory) {
 $Command = Get-Command mmcodex.exe -CommandType Application -ErrorAction SilentlyContinue
 if ($Command) { $CandidateList.Add($Command.Source) }
 $CliPath = $CandidateList | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
-if (-not $CliPath) { throw '找不到 mmcodex.exe 请在管理器规则与技能库页选择仓库 或在 CLI 目录运行 install 更新当前实例路径' }
+if (-not $CliPath) { throw '找不到 mmcodex.exe 请使用 CLI 绝对路径 设定当前 Skill 的 cli_path 或将 CLI 所在目录加入 PATH' }
 & $CliPath @args
 exit $LASTEXITCODE

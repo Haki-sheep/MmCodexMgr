@@ -15,6 +15,7 @@ internal static class LibraryTests
             VerifyDistribution(Root);
             VerifyRules(Root);
             VerifyRollback(Root);
+            VerifySyncAll(Root);
             VerifyCliAsync(Root).GetAwaiter().GetResult();
             Console.WriteLine($"PASS library {Count} assertions");
             return 0;
@@ -86,7 +87,14 @@ internal static class LibraryTests
         Package(Target, ".system", "builtin", "protected");
         File.WriteAllText(Path.Combine(Target, "MmCodingFucker.md"), "flat legacy");
         var Targets = SkillDistribution.Scan(Home);
-        Require(Targets.Select(Item => Item.Agent).SequenceEqual(new[] { "cursor", "dsh", "shared", "antigravity" }), "skill targets include Cursor DSH and the common root");
+        Require(Targets.Select(Item => Item.Agent).SequenceEqual(new[] { "cursor", "dsh", "shared", "antigravity", "claude" }), "skill targets include Claude and the existing destinations");
+        Require(!Targets.Single(Item => Item.Agent == "claude").Available, "missing Claude configuration is explicit");
+        string ClaudeRoot = Path.Combine(Home, ".claude");
+        Directory.CreateDirectory(ClaudeRoot);
+        var Claude = SkillDistribution.Scan(Home).Single(Item => Item.Agent == "claude");
+        Require(Claude.Available && Claude.PathValue == Path.Combine(ClaudeRoot, "skills"), "Claude targets its personal skill directory");
+        SkillDistribution.Apply(SkillDistribution.Preview(Source, Claude), Path.Combine(Root, "claude-distribution-backup"));
+        Require(File.ReadAllText(Path.Combine(Claude.PathValue, "mm-coding-fucker", "data.txt")) == "new payload", "Claude receives the complete skill package");
         Require(Targets.Single(Item => Item.Agent == "cursor").Available && !Targets.Single(Item => Item.Agent == "dsh").Available, "missing DSH installation is explicit");
         var Cursor = Targets.Single(Item => Item.Agent == "cursor");
         var Plan = SkillDistribution.Preview(Source, Cursor);
@@ -155,6 +163,80 @@ internal static class LibraryTests
         Require(File.ReadAllText(Path.Combine(Target, "config.toml")) == "model='preserve'\n", "config rolls back when skill stage fails");
     }
 
+    #region Batch Sync
+    private static void VerifySyncAll(string Root)
+    {
+        string UserRoot = Path.Combine(Root, "all-user");
+        string Primary = Path.Combine(UserRoot, "primary");
+        string Secondary = Path.Combine(UserRoot, "secondary");
+        string Data = Path.Combine(UserRoot, "secondary-data");
+        string Backup = Path.Combine(Root, "all-backup");
+        string Rule = Path.Combine(Primary, "AGENTS.md");
+        string SecondaryRule = Path.Combine(Secondary, "AGENTS.override.md");
+        string SkillSource = Path.Combine(Primary, "skills");
+        string SecondarySkills = Path.Combine(Secondary, "skills");
+        Package(SkillSource, "mm-more-more-fucker", "mm-more-more-fucker", "new");
+        Package(SecondarySkills, "moremore-work", "moremore-work", "old");
+        Package(SecondarySkills, "private", "private", "private");
+        Package(SecondarySkills, ".system", "built-in", "system");
+        File.WriteAllText(Rule, "batch rule");
+        File.WriteAllText(SecondaryRule, "old override");
+        File.WriteAllText(Path.Combine(Secondary, "AGENTS.md"), "inactive rule");
+        File.WriteAllText(Path.Combine(Secondary, "auth.json"), "auth");
+        foreach (string DirectoryName in new[] { ".cursor", ".dsh", ".claude", ".gemini", ".agents", ".config/opencode" })
+            Directory.CreateDirectory(Path.Combine(UserRoot, DirectoryName));
+        string SharedRule = Path.Combine(UserRoot, ".agents", "AGENTS.md");
+        string OpenCodeRule = Path.Combine(UserRoot, ".config", "opencode", "AGENTS.md");
+        File.WriteAllText(SharedRule, "old shared rule");
+        File.WriteAllText(OpenCodeRule, "keep OpenCode rule");
+        var Settings = new ManagerSettings
+        {
+            InstanceList = new()
+            {
+                new() { IsPrimary = true, Name = "Primary", HomePath = Primary },
+                new() { Name = "Secondary", HomePath = Secondary, DataPath = Data },
+                new() { Name = "Shared home", HomePath = Secondary, DataPath = Data }
+            },
+            Library = new() { RuleSource = Rule, SkillSource = SkillSource }
+        };
+        List<RunningInstance> Running() => new() { new(42, "ChatGPT.exe --user-data-dir=\"" + Data + "\"", IntPtr.Zero) };
+        var Preflight = LibrarySyncAll.Sync(Settings, UserRoot: UserRoot, BackupRoot: Backup, ListRunning: Running);
+        Require(!Preflight.Succeeded && Preflight.TargetList.Any(Item => Item.Status == "failed" && Item.Detail!.Contains("Secondary")), "live secondary blocks the batch preflight");
+        Require(!Directory.Exists(Backup) && File.ReadAllText(SecondaryRule) == "old override" && !Directory.Exists(Path.Combine(UserRoot, ".claude", "skills")), "failed preflight writes no product files or backups");
+        var Result = LibrarySyncAll.Sync(Settings, UserRoot: UserRoot, BackupRoot: Backup, ListRunning: () => new());
+        Require(Result.Succeeded && Result.TargetList.Count(Item => Item.Status == "source") == 2, "the source rule and skills paths are skipped explicitly");
+        Require(Result.TargetList.Count(Item => Item.Status == "duplicate") == 2, "duplicate Codex roots write each destination only once");
+        Require(File.ReadAllText(SecondaryRule) == "batch rule" && File.ReadAllText(Path.Combine(Secondary, "AGENTS.md")) == "inactive rule", "batch updates only the effective Codex rule");
+        Require(File.ReadAllText(Path.Combine(Secondary, "auth.json")) == "auth", "batch leaves account data untouched");
+        Require(File.ReadAllText(Path.Combine(SecondarySkills, "mm-more-more-fucker", "data.txt")) == "new" && File.ReadAllText(Path.Combine(SecondarySkills, "private", "data.txt")) == "private" && File.ReadAllText(Path.Combine(SecondarySkills, ".system", "data.txt")) == "system", "batch preserves unrelated skills and .system");
+        var SkillResult = Result.TargetList.Single(Item => Item.PathValue == SecondarySkills && Item.Status == "applied");
+        Require(File.ReadAllText(Path.Combine(SkillResult.BackupPath!, "moremore-work", "data.txt")) == "old", "batch reports the original skill backup");
+        var RuleResult = Result.TargetList.Single(Item => Item.PathValue == SecondaryRule && Item.Status == "applied");
+        Require(File.ReadAllText(Path.Combine(RuleResult.BackupPath!, "0.md")) == "old override", "batch reports the original rule backup");
+        Require(File.ReadAllText(Path.Combine(UserRoot, ".claude", "CLAUDE.md")) == "batch rule" && File.ReadAllText(Path.Combine(UserRoot, ".gemini", "GEMINI.md")) == "batch rule" && File.ReadAllText(Path.Combine(UserRoot, ".dsh", "AGENTS.md")) == "batch rule", "managed agents receive rules in their expected locations");
+        Require(File.ReadAllText(Path.Combine(UserRoot, ".cursor", "rules", "AI-global-rules.mdc")).Contains("alwaysApply: true") && File.ReadAllText(SharedRule) == "batch rule", "Cursor format and existing shared rule are supported");
+        Require(File.ReadAllText(OpenCodeRule) == "keep OpenCode rule", "batch leaves unmanaged agents untouched");
+        var Repeat = LibrarySyncAll.Sync(Settings, UserRoot: UserRoot, BackupRoot: Backup, ListRunning: Running);
+        Require(Repeat.Succeeded && Repeat.TargetList.All(Item => Item.Status != "applied"), "idempotent batch does not require closing an unchanged Codex profile");
+
+        string LibraryRoot = Path.Combine(Root, "all-library");
+        Package(LibraryRoot, "Local.Tool", "Local.Tool", "Codex-compatible name");
+        Settings.Library.SkillSource = LibraryRoot;
+        var CodexOnly = LibrarySyncAll.Sync(Settings, Source: "library", Scope: "codex", UserRoot: UserRoot, BackupRoot: Backup, ListRunning: () => new());
+        Require(CodexOnly.Succeeded && File.Exists(Path.Combine(SecondarySkills, "Local.Tool", "SKILL.md")) && !File.Exists(Path.Combine(UserRoot, ".claude", "skills", "Local.Tool", "SKILL.md")), "Codex scope preserves Codex naming and skips external agents");
+
+        string UpdatedRule = Path.Combine(Root, "all-updated-rule.md");
+        File.WriteAllText(UpdatedRule, "updated rule");
+        Settings.Library.RuleSource = UpdatedRule;
+        int RunningCheck = 0;
+        var Partial = LibrarySyncAll.Sync(Settings, Source: "library", Scope: "codex", UserRoot: UserRoot, BackupRoot: Backup, ListRunning: () => ++RunningCheck == 1 ? new() : Running());
+        Require(!Partial.Succeeded && Partial.TargetList.Any(Item => Item.PathValue == Rule && Item.Status == "applied" && Item.BackupPath is not null) && Partial.TargetList.Any(Item => Item.PathValue == SecondaryRule && Item.Status == "failed"), "a process starting during a batch leaves a truthful partial result");
+        Require(File.ReadAllText(Rule) == "updated rule" && File.ReadAllText(SecondaryRule) == "batch rule", "the execution-time process guard prevents updating the active destination");
+        Settings.Library.RuleSource = Path.Combine(Root, "missing-rule.md");
+        Reject<FileNotFoundException>(() => LibrarySyncAll.Sync(Settings, UserRoot: UserRoot, BackupRoot: Backup, ListRunning: () => new()), "batch fails if its rule source is missing");
+    }
+    #endregion
+
     private static void Package(string Root, string Folder, string Name, string Data)
     {
         string PathValue = Path.Combine(Root, Folder);
@@ -174,7 +256,8 @@ internal static class LibraryTests
         {
             using var Output = new MemoryStream();
             using var Error = new StringWriter();
-            int Exit = await AgentCli.RunAsync(ArgumentList, Stream.Null, Output, Error, Environment.ProcessPath!, CancellationToken.None, LoadSettings: () => Settings);
+            int Exit = await AgentCli.RunAsync(ArgumentList, Stream.Null, Output, Error, Environment.ProcessPath!, CancellationToken.None, LoadSettings: () => Settings,
+                SyncLibrary: (Config, Source, Scope) => LibrarySyncAll.Sync(Config, Source, Scope, UserRoot: Root, BackupRoot: Path.Combine(Root, "cli-batch-backups"), ListRunning: () => new()));
             return (Exit, System.Text.Encoding.UTF8.GetString(Output.ToArray()), Error.ToString());
         }
         var Listed = await Call("library-skills");
@@ -210,6 +293,13 @@ internal static class LibraryTests
         File.WriteAllText(DistributionFile, System.Text.Json.JsonSerializer.Serialize(DistributionPlan));
         Rejected = await Call("library-apply", "--plan-file", DistributionFile);
         Require(Rejected.Exit == 1 && !Directory.Exists(InvalidTarget.PathValue), "CLI rejects altered distribution destination before creating files");
+        var Batch = await Call("library-sync-all", "--scope", "codex");
+        Require(Batch.Exit == 0 && Batch.Output.Contains("\"Succeeded\":true") && File.ReadAllText(Path.Combine(Home, "AGENTS.md")) == "CLI 唯一来源", "CLI performs batch sync in the fixture without manager or thread identity");
+        File.Delete(Path.Combine(Home, "AGENTS.md"));
+        Directory.CreateDirectory(Path.Combine(Home, "AGENTS.md"));
+        Batch = await Call("library-sync-all", "--scope", "codex");
+        Require(Batch.Exit == 1 && Batch.Output.Contains("\"Succeeded\":false") && Batch.Output.Contains("\"Status\":\"failed\""), "CLI reports a target preflight failure with structured output and exit 1");
+        Require((await Call("library-git-pull")).Exit == 1 && (await Call("library-git-publish")).Exit == 1, "Git sync commands are removed");
     }
     private static void Reject(Action Action, string Message)
         => Reject<IOException>(Action, Message);

@@ -246,25 +246,29 @@ Codex 实例通过本机 Responses 适配器接入服务商时 若 `mmcodex-resp
 
 手动 `resume` 重新计算截止时间。自动恢复或在线实例接回原任务监控时保留原截止时间。重复请求使用原任务记录。投递不明时先核对目标再使用 `reconcile`。已撤销、超时、已完成的任务不能续跑。
 
-## 管理器规则与技能库
+## 管理器 Rule + Skill
 
 管理器的“设置”页提供开机自启开关 默认关闭 开启后通过当前用户的 Windows 启动项登记完整程序路径 登录 Windows 时使用 `--background` 在托盘后台运行 已运行时不会重复启动或弹出窗口 关闭仅移除本管理器的启动项 不影响其他软件 移动管理器目录后需重新开启以更新登记路径
 
-管理器的规则与技能库页支持查看 Skill 的 name 与 description 打开源文件 扫描全局 Rule 并先预览再同步 Rule 以配置的唯一源 MD 为准 不合并各软件里的旧版本 WorkBuddy 等未核实文件接口的软件使用复制源规则后在软件设置导入
+“Rule + Skill”页显示 Skill 源目录与规则源文件所在目录，可打开对应目录，并查看 Skill 名称、描述及规则目标。全局 Rule 以配置的唯一源 Markdown 为准。WorkBuddy 等仅提供手动导入的工具使用“复制源规则”。
 
-实例页的 Skills 同步固定以主实例为源 按 SKILL.md 的 name 去重并完整镜像 目标多余自定义 Skill 移入备份 .system 保留 账号 模型 对话与项目保留 因此更新本 Skill 后先安装到主实例再同步其他实例
+“Rule + Skill”的一键同步对应 `mmcodex library-sync-all [--source primary|library] [--scope codex|all]`。默认 `primary` 从主实例取 Skill，`library` 从本机配置的维护库取 Skill，规则始终从已配置的 Markdown 文件读取。默认 `all` 包括已登记 Codex、已安装的 Cursor、DSH、Claude Code、Antigravity，以及符合发现条件的现有共享目录。`codex` 只处理已登记 Codex 实例。
 
-Git 源库位于所选仓库的 Library 目录 可导入库外任意包含 SKILL.md 的技能包 不限制名称与数量 排除项仅保存在本机 新用户默认不排除任何 Skill 发布以所选维护源库为准 保留尚未安装到本机的包 其他电脑拉取后可采用 Git 库 再预览安装整库和同步规则 本 Skill 的维护源码仍在 mm-more-more-fucker Library 中为可分发集合快照
+写入前预检全部目标。需要更新的次级 Codex 实例先退出。覆盖同名 Skill、对应旧别名及有效规则前保存备份，目标独有 Skill 和 `.system` 保留。Codex 有 `AGENTS.override.md` 时使用该文件。源路径与重复目标各自跳过。
+
+CLI JSON 的 `TargetList` 按 Skill 或 Rule 记录目标路径、`Status`、备份路径与原因。状态包括 `applied`、`unchanged`、`source`、`duplicate`、`unavailable`、`failed`、`blocked`。预检失败时整批未写入。执行途中失败时查看此前的 `applied` 和备份，剩余待写项标为 `blocked`。目标失败退出码为 1，源路径或参数错误也会退出 1。即使退出码为 0 也要查看 `unavailable` 项。
+
+本地技能库仍可选择源目录、导入任意包含 `SKILL.md` 的包并设置本机排除项。Git 拉取及发布由仓库开发流程处理。实例页原有配置同步使用主实例 Skills 完整镜像，目标多余自定义包移入备份，该行为适用于原配置同步入口。
 
 自维护 Skill 统一使用 `mm-xxx-fucker` 小写连字符命名 目录名 YAML name 标题和显示名一致 更名同时更新安装器 健康检查与交叉引用 资金历史状态与工具输出协议不随 Skill 改名迁移
 
-跨工具分发可在“规则与技能库”选择主实例或维护源库，再从当前版本显示的目标中选择并预览。支持 shared 时目标为 `~/.agents/skills`，Cursor 和 DSH 均可发现。支持 Claude 时目标为 `~/.claude/skills`，供 Claude Code 终端和 Desktop 本地 Code 会话使用。原同名技能和对应旧别名先备份，目标第三方技能与 `.system` 保留。工具能力以目标环境实际可用项为准。
+跨工具分发可在“Rule + Skill”选择主实例或维护源库，再从当前版本显示的目标中选择并预览。支持 shared 时目标为 `~/.agents/skills`，Cursor 和 DSH 均可发现。支持 Claude 时目标为 `~/.claude/skills`，供 Claude Code 终端和 Desktop 本地 Code 会话使用。原同名技能和对应旧别名先备份，目标第三方技能与 `.system` 保留。工具能力以目标环境实际可用项为准。
 
 CLI 用 `library-scan-skills` 查看本机目标。按实际返回的目标运行 `library-preview-agent-skills --agent <目标> --source primary|library --plan-file <绝对路径>`，核对后运行 `library-apply --plan-file <同一文件>`。DSH 目标目录支持 DSH_HOME 与 DSH_AGENTS_HOME。完整参数以当前 CLI `help` 为准。
 
-CLI 的 library-skills 与 library-scan-rules 无需启动管理器 library-preview-skills 与 library-preview-rules 将预览保存到指定的新 JSON 文件 核对后使用 library-apply --plan-file 应用 预览后文件变化或计划被修改时拒绝执行 完整参数以 mmcodex help 为准 发布与拉取不会自动安装 Skill 或覆盖全局 Rule
+CLI 的 `library-skills` 与 `library-scan-rules` 无需启动管理器。`library-preview-skills` 与 `library-preview-rules` 将单项预览保存到指定的新 JSON 文件，核对后使用 `library-apply --plan-file` 应用。预览后文件变化或计划被修改时会拒绝执行。
 
-分发包不预填某台电脑的 CLI 路径 scripts/mmcodex.ps1 优先使用有效的本机配置 否则从管理器选择的仓库 包所在仓库或 PATH 定位 CLI 新设备可直接在规则与技能库页选择仓库 并采用 Git 库
+分发包的 CLI 位置信息由每台电脑配置。`scripts/mmcodex.ps1` 依次查找本机 Skill 的 `cli_path`、历史 CLI 定位配置、脚本的上级目录和 PATH。找不到时使用 `mmcodex.exe` 的实际绝对路径，或更新本机定位。
 
 ## 联调记录清理
 

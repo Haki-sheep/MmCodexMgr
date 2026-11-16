@@ -31,7 +31,7 @@ public static class GlobalRules
         Add("DeepSeek Harness", DshRoot, "AGENTS.md", "md", "Harness 全局规则");
         string SharedRoot = UserRoot is null ? Environment.GetEnvironmentVariable("DSH_AGENTS_HOME") ?? Path.Combine(Home, ".agents") : Path.Combine(Home, ".agents");
         if (File.Exists(Path.Combine(SharedRoot, "AGENTS.md"))) Add("共享 Agents", SharedRoot, "AGENTS.md", "md", "DeepSeek 同时读取的共享全局规则");
-        Add("Claude Code", Path.Combine(Home, ".claude"), "CLAUDE.md", "md", "用户全局记忆");
+        Add("Claude Code", Path.Combine(Home, ".claude"), "CLAUDE.md", "md", "Claude Code 终端与 Desktop 本地 Code 会话的用户全局规则");
         string GeminiRoot = Path.Combine(Home, ".gemini");
         Add("Antigravity / Gemini", GeminiRoot, File.Exists(Path.Combine(GeminiRoot, "AGENTS.md")) ? "AGENTS.md" : "GEMINI.md", "md", "用户全局规则");
         foreach (string Relative in new[] { "GEMINI.md", "config/AGENTS.md", "config/GEMINI.md" })
