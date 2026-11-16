@@ -22,27 +22,25 @@ internal sealed class FormationRoleSelector : TableLayoutPanel, IThemedControl
     private readonly StudioChip CountLabel;
     /// <summary> 同角色的 Codex 席位共用一个档位 </summary>
     private readonly ThemeComboBox EffortInput;
-    /// <summary> 标注该档位是否适用于所选执行端 </summary>
-    private readonly Label EffortLabel;
     /// <summary> 头像显示模型及跟随状态 </summary>
     private readonly ToolTip Tips = new() { InitialDelay = 350, ReshowDelay = 100 };
     /// <summary> 角色行分隔线颜色 </summary>
     private Color DividerColor = ThemePalette.Light.Border;
 
     /// <summary> 每个真实会话的原生子代理上限 </summary>
-    private readonly ThemeComboBox? BudgetInput;
+    private readonly ThemeComboBox BudgetInput;
     public eFormationRole Role { get; }
     public int Capacity => SeatList.Length;
     public IEnumerable<FormationSeatSelection> Selections => SeatList.OfType<FormationSeatSelection>();
     public string Effort => ((EffortOption)EffortInput.SelectedItem!).Value;
-    public int SubagentMax => BudgetInput?.SelectedItem is int Value ? Value : 0;
+    public int SubagentMax => (int)BudgetInput.SelectedItem!;
     public event Action<int>? SeatClicked;
     public event Action? ConfigurationChanged;
 
     public FormationRoleSelector(eFormationRole Role)
     {
         this.Role = Role;
-        int capacity = Role == eFormationRole.Executor ? 4 : 1;
+        int capacity = Role == eFormationRole.Executor ? 4 : Role is eFormationRole.Reviewer or eFormationRole.Outsider ? 2 : 1;
         SeatList = new FormationSeatSelection?[capacity];
         ButtonList = new FormationAvatarButton[capacity];
         Name = $"FormationRole{Role}";
@@ -88,14 +86,14 @@ internal sealed class FormationRoleSelector : TableLayoutPanel, IThemedControl
         EffortField.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         EffortField.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         EffortField.RowStyles.Add(new RowStyle(SizeType.Absolute, LogicalToDeviceUnits(30)));
-        EffortLabel = new Label
+        var EffortLabel = new Label
         {
-            AutoSize = true, Text = "推理强度", Tag = eThemeRole.Muted, Font = StudioFonts.Caption,
+            AutoSize = true, Text = "拟推理强度", Tag = eThemeRole.Muted, Font = StudioFonts.Caption,
             Margin = new Padding(0, 0, 0, 3)
         };
         EffortInput = new ThemeComboBox
         {
-            Name = $"FormationEffort{Role}", AccessibleName = SeatProviders.RoleTitle(Role) + "推理强度",
+            Name = $"FormationEffort{Role}", AccessibleName = SeatProviders.RoleTitle(Role) + "拟推理强度",
             Dock = DockStyle.Top, DropDownStyle = ComboBoxStyle.DropDownList, Margin = Padding.Empty
         };
         EffortInput.Items.AddRange(EffortList);
@@ -111,15 +109,11 @@ internal sealed class FormationRoleSelector : TableLayoutPanel, IThemedControl
         };
         BudgetField.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         BudgetField.Controls.Add(new Label { Text = "子代理上限", AutoSize = true, Font = StudioFonts.Caption, Tag = eThemeRole.Muted, Margin = new Padding(0, 0, 0, 3) }, 0, 0);
-        if (Role is eFormationRole.Coordinator or eFormationRole.Executor or eFormationRole.Learner)
-        {
-            BudgetInput = new ThemeComboBox { Name = "FormationBudget" + Role, AccessibleName = SeatProviders.RoleTitle(Role) + "子代理上限", Dock = DockStyle.Top, DropDownStyle = ComboBoxStyle.DropDownList, Margin = Padding.Empty };
-            BudgetInput.Items.AddRange(new object[] { 1, 2, 3, 4 });
-            BudgetInput.SelectedItem = Role == eFormationRole.Coordinator ? 3 : Role == eFormationRole.Executor ? 2 : 1;
-            BudgetInput.SelectedIndexChanged += (_, _) => ConfigurationChanged?.Invoke();
-            BudgetField.Controls.Add(BudgetInput, 0, 1);
-        }
-        else BudgetField.Controls.Add(new Label { Text = "共享统筹预算", AutoSize = true, Font = StudioFonts.Small, Tag = eThemeRole.Muted, Margin = new Padding(0, 6, 0, 0) }, 0, 1);
+        BudgetInput = new ThemeComboBox { Name = "FormationBudget" + Role, AccessibleName = SeatProviders.RoleTitle(Role) + "子代理上限", Dock = DockStyle.Top, DropDownStyle = ComboBoxStyle.DropDownList, Margin = Padding.Empty };
+        BudgetInput.Items.AddRange(new object[] { 1, 2, 3, 4 });
+        BudgetInput.SelectedItem = Math.Max(1, FormationStore.DefaultSubagentMax(Role));
+        BudgetInput.SelectedIndexChanged += (_, _) => ConfigurationChanged?.Invoke();
+        BudgetField.Controls.Add(BudgetInput, 0, 1);
         Controls.Add(BudgetField, 3, 0);
     }
 
@@ -129,7 +123,16 @@ internal sealed class FormationRoleSelector : TableLayoutPanel, IThemedControl
 
     public void SetEffort(string Value) => EffortInput.SelectedItem = EffortList.First(Option => Option.Value == Value);
 
-    public void LoadTemplate(IEnumerable<FormationMember> Members, FormationMember Controller)
+    public void SetNativeDefaults(int Count)
+    {
+        for (int Index = 0; Index < SeatList.Length; Index++)
+        {
+            if (Index >= Count) SeatList[Index] = null;
+            else SeatList[Index] ??= new(new FormationMember { Role = Role, DispatchMode = eFormationDispatchMode.Native, FollowCoordinator = true }, true);
+        }
+    }
+
+    public void LoadTemplate(IEnumerable<FormationMember> Members)
     {
         Array.Clear(SeatList);
         int index = 0;
@@ -138,7 +141,8 @@ internal sealed class FormationRoleSelector : TableLayoutPanel, IThemedControl
             bool Follows = Member.FollowCoordinator;
             SeatList[index++] = new(Member, Follows);
         }
-        if (BudgetInput is not null && Selections.FirstOrDefault()?.Member.SubagentMax is >= 1 and <= 4) BudgetInput.SelectedItem = Selections.First().Member.SubagentMax;
+        BudgetInput.SelectedItem = Selections.FirstOrDefault()?.Member.SubagentMax is >= 1 and <= 4
+            ? Selections.First().Member.SubagentMax : Math.Max(1, FormationStore.DefaultSubagentMax(Role));
         string? FirstEffort = Selections.Select(Item => Item.Member.Effort).FirstOrDefault(Value => EffortList.Any(Option => Option.Value == Value));
         EffortInput.SelectedItem = EffortList.FirstOrDefault(Option => Option.Value == FirstEffort) ?? EffortList[1];
     }
@@ -163,12 +167,8 @@ internal sealed class FormationRoleSelector : TableLayoutPanel, IThemedControl
         int count = Selections.Count();
         CountLabel.Text = $"×{count}";
         CountLabel.Tone = count == 0 ? eTone.Neutral : SeatProviders.RoleTone(Role);
-        bool HasExternal = Selections.Any(Item => !Item.FollowsCoordinator && !SeatProviders.For(Item.Member.InstanceId).SupportsEffort);
-        bool HasCodex = Selections.Any(Item => Item.FollowsCoordinator || SeatProviders.For(Item.Member.InstanceId).SupportsEffort);
         bool Follows = Selections.Any() && Selections.All(Item => Item.FollowsCoordinator);
-        EffortInput.Enabled = !Follows && (!HasExternal || HasCodex);
-        if (BudgetInput is not null) BudgetInput.Enabled = !HasExternal || HasCodex;
-        EffortLabel.Text = Follows ? "跟随统筹推理" : HasExternal ? HasCodex ? "推理强度 · Codex" : "沿用 Agent 推理" : "推理强度";
+        EffortInput.Enabled = !Follows;
     }
 
     public void ApplyTheme(AppTheme Theme)

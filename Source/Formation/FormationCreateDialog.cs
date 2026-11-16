@@ -30,6 +30,7 @@ public sealed class FormationCreateDialog : StudioDialog
     private readonly StudioWrapLabel BudgetHint = new() { Font = StudioFonts.Caption, Tag = eThemeRole.Muted, Margin = Padding.Empty };
     /// <summary> 配置联动防止控件值变化递归刷新 </summary>
     private bool Refreshing;
+    private int AppliedCoordinatorBudget;
     public FormationCreate Request { get; private set; } = new();
     public bool ActivateAfterCreate => true;
 
@@ -95,11 +96,8 @@ public sealed class FormationCreateDialog : StudioDialog
         using var Dialog = new FormationAvatarPickerDialog(Selector.Role, Index, Selector.SelectionAt(Index), Coordinator, Settings, ModelHints,
             Selector.Selections.ToArray(), LoadWorkspaceProjects);
         if (Dialog.ShowThemed(this, Appearance) != DialogResult.OK) return;
-        bool FirstCoordinator = Selector.Role == eFormationRole.Coordinator && Coordinator is null && Dialog.Selection is not null;
         Selector.SetSelection(Index, Dialog.Selection);
-        if (FirstCoordinator)
-            foreach (var Role in new[] { eFormationRole.Reviewer, eFormationRole.Outsider })
-                if (!RoleDict[Role].Selections.Any()) RoleDict[Role].SetSelection(0, new(new FormationMember { Role = Role, DispatchMode = eFormationDispatchMode.Native, FollowCoordinator = true }, true));
+        if (Selector.Role == eFormationRole.Coordinator && Coordinator is null) AppliedCoordinatorBudget = 0;
         RefreshSeats();
     }
 
@@ -110,14 +108,22 @@ public sealed class FormationCreateDialog : StudioDialog
         try
         {
             var Controller = Coordinator;
+            int Budget = RoleDict[eFormationRole.Coordinator].SubagentMax;
+            int Reviewers = Budget >= 3 ? 2 : 1;
+            int Outsiders = Budget - Reviewers;
+            if (Controller is not null && AppliedCoordinatorBudget != Budget)
+            {
+                RoleDict[eFormationRole.Reviewer].SetNativeDefaults(Reviewers);
+                RoleDict[eFormationRole.Outsider].SetNativeDefaults(Outsiders);
+                AppliedCoordinatorBudget = Budget;
+            }
             foreach (var Selector in RoleDict.Values)
             {
                 if (Selector.Selections.Any() && Selector.Selections.All(Item => Item.FollowsCoordinator)) Selector.SetEffort(RoleDict[eFormationRole.Coordinator].Effort);
                 Selector.RefreshSeats(Settings, Controller);
             }
-            int Budget = RoleDict[eFormationRole.Coordinator].SubagentMax;
-            BudgetHint.Text = Budget == 3 ? "统筹原生子代理总预算 3 · 默认 2 个审核 + 1 个外援按需使用 · 点击头像可单独指定"
-                : $"统筹原生子代理总预算 {Budget} · 审核与外援按需共享 · 宿主实际可用额度优先";
+            BudgetHint.Text = Outsiders == 0 ? "默认 1 席审核 · 统筹兼任外援"
+                : $"默认 {Reviewers} 席审核 + {Outsiders} 席外援 · 按需启动 · 额度不含统筹本体";
             RefreshActions();
         }
         finally { Refreshing = false; }
@@ -144,10 +150,10 @@ public sealed class FormationCreateDialog : StudioDialog
                 DisplayName = Member.DisplayName,
                 DispatchMode = Member.DispatchMode,
                 FollowCoordinator = Selection.FollowsCoordinator,
-                SubagentMax = SeatProviders.For(InstanceId).SupportsEffort ? Selector.SubagentMax : 0,
+                SubagentMax = Selector.SubagentMax,
                 InstanceId = InstanceId,
                 Model = Selection.FollowsCoordinator ? Controller.Model : Member.Model,
-                Effort = SeatProviders.For(InstanceId).SupportsEffort ? Selection.FollowsCoordinator ? RoleDict[eFormationRole.Coordinator].Effort : Selector.Effort : "",
+                Effort = Selector.Effort,
                 Project = InstanceId == Member.InstanceId ? Member.Project : "",
                 Cwd = InstanceId == Member.InstanceId ? Member.Cwd : ""
             };
@@ -185,11 +191,14 @@ public sealed class FormationCreateDialog : StudioDialog
             return;
         }
 
-        var Controller = MemberList.Single(Item => Item.Role == eFormationRole.Coordinator);
-        foreach (var Selector in RoleDict.Values)
+        Refreshing = true;
+        try
         {
-            Selector.LoadTemplate(MemberList.Where(Item => Item.Role == Selector.Role), Controller);
+            foreach (var Selector in RoleDict.Values)
+                Selector.LoadTemplate(MemberList.Where(Item => Item.Role == Selector.Role));
+            AppliedCoordinatorBudget = RoleDict[eFormationRole.Coordinator].SubagentMax;
         }
+        finally { Refreshing = false; }
         RefreshSeats();
     }
 

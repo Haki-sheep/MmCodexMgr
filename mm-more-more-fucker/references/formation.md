@@ -4,7 +4,9 @@
 
 ## 创建与管理
 
-新建界面填写问题并配置头像席位、推理档位和子代理预算。点开席位头像可选工作区：Codex 选当前实例的项目，DSH 选已登记的工作区，Cursor、Claude Code 和 Antigravity 选文件夹，原生子代理沿用统筹工作区。问题同时作为初始需求交给统筹，以及会话标题的第一部分。会话标题为「问题 MM-dd 职位」，同一职位的后续席位附序号。统筹首次派发时才新建执行席位的独立会话。执行者最多四席，可混用模型，同职业 Codex 席位共用推理档位和子代理预算。审核与外援默认由统筹按需创建原生子代理，可单独指定模型和推理，或切换到独立会话。
+新建界面填写问题并配置头像席位、拟推理强度和子代理上限。点开席位头像可选工作区：Codex 选当前实例的项目，DSH 选已登记的工作区，Cursor、Claude Code 和 Antigravity 选文件夹，原生子代理沿用统筹工作区。问题同时作为初始需求交给统筹，以及会话标题的第一部分。会话标题为「问题 MM-dd 职位」，同一职位的后续席位附序号。统筹首次派发时才新建执行席位的独立会话。执行者最多四席，可混用模型。审核与外援默认使用原生子代理，也可切换为独立会话。
+
+选择统筹后，新建界面按统筹的子代理上限配置默认席位。上限为 4 时配置两审核两外援，3 时配置两审核一外援，2 时配置一审核一外援，1 时配置一审核并由统筹兼任外援。默认席位按需启动。有多个原生审核席位时，省略 `reviewer_id` 会优先选择未完任务较少的席位。
 
 CLI 的空编队请求为 `{"operation_id":"稳定标识","formation":{"setup_only":true,"preset":"basic"}}`，可省略主题并自动按日期命名。`setup_only` 不接受非空需求。`activate` 只让统筹准备并等待，尚未确认需求时 `task` 会拒绝登记。已确认需求后由统筹调用 `context`，参数为 `run_id`、`operation_id`、`requirement` 和可选 `context`。执行席不能修改需求。
 
@@ -32,7 +34,7 @@ CLI 的空编队请求为 `{"operation_id":"稳定标识","formation":{"setup_on
 2. 统筹调用 CLI 时保持宿主的 `CODEX_HOME` 和 `CODEX_THREAD_ID`，在调用的 PowerShell 子进程设置启动消息提供的 `MMCODEX_FORMATION_MEMBER_TOKEN`。凭据仅用于本编队调用，禁止写入文件、项目配置、长期环境或回报。
 3. 用 `formation show` 读取编队与席位，JSON 提供 `run_id`。按需用 `formation task-show` 读取单项任务，JSON 提供 `run_id` 和 `task_id`。
 4. 用 `formation task` 登记任务，提供 `run_id`、`operation_id`、`title`、`instructions`、`acceptance`、`executor_id`、`workspace`。省略 `reviewer_id` 时使用已经配置的原生审核，显式空值由统筹验收，独立审核填写席位 ID。只读填写 `{"access":"read_only"}`，写入填写 `{"access":"write","write_paths":["实际绝对路径"]}`。
-5. 用 `formation dispatch` 派发，JSON 提供 `run_id`、`task_id`、`operation_id`，执行用 `kind=execute`。每个写请求使用稳定的 `operation_id`，同一请求重试保持 ID 和内容。
+5. 用 `formation dispatch` 派发，JSON 提供 `run_id`、`task_id`、`operation_id`，执行用 `kind=execute`。启动包逐席列出模型、拟推理强度、子代理上限和席位 ID，同角色多席按序编号。独立 Codex 派发按模型公布的档位选最近值，等距选较低档。档位未知或执行端沿用会话配置时使用默认。每个写请求使用稳定的 `operation_id`，同一请求重试保持 ID 和内容。
 6. 独立执行方按 Relay 回报，原生轮次由统筹回传。没有审核席位的任务由统筹用 `formation review` 提交 `run_id`、`task_id`、`attempt_id`、`submission_id`、`operation_id`、`passed` 和 `feedback`。全部任务通过后用 `formation complete` 提交 `run_id`、`operation_id` 与交付 `summary`。
 
 命令通过 Skill 的脚本进入。下列示例假设当前进程已设置本编队角色凭据，并将相应请求 JSON 写入临时文件。
@@ -46,9 +48,9 @@ CLI 的空编队请求为 `{"operation_id":"稳定标识","formation":{"setup_on
 
 席位通过 `dispatch_mode` 选择 `Native` 或 `Session`。老编队及省略该字段的 CLI 请求沿用独立会话。原生席位保持 `session_id`、`project`、`cwd` 为空。`follow_coordinator:true` 在派发时读取统筹的模型和推理设置，关闭跟随后可填写本席 `model`、`effort`。
 
-统筹、独立 Codex 执行及学习席位的 `subagent_max` 可设 1 至 4，原生编队默认分别为 3、2、1。审核与外援共享同一实际统筹会话的原生预算，默认可按需安排两轮审核加一轮外援。独立 Codex 执行者在收到任务时拿到本席预算，外部执行端及原生叶子不接受额外下级预算。各模式均受实际宿主支持的额度和能力约束。
+各角色都可选择 `subagent_max` 1 至 4，表示本体之外的原生子代理并发上限。独立 Codex 会话使用该席预算并受宿主限制。原生审核或外援占用一个统筹额度，作为叶子时下级预算为 0。暂不支持委派的外部执行端使用有效预算 0。
 
-1. 自动审核通知包含原 `operation_id`。真实统筹用同一 ID 调 `formation dispatch`，仅首次收到 `can_spawn:true` 时调用实际宿主子代理工具。使用返回的 `task_name`、`prompt`、`model`、`effort`。不能按指定配置启动时回报未启动或未知。
+1. 自动审核通知包含原 `operation_id`。真实统筹用同一 ID 调 `formation dispatch`，仅首次收到 `can_spawn:true` 时调用实际宿主子代理工具。使用返回的 `task_name`、`prompt`、`model`，参考 `preferred_effort` 和 `effort`，选择目标模型与宿主工具共同支持的最近档位。缺少档位能力时沿用默认。工具不可用时回报未启动或未知。
 2. 从工具结果取得真实 `agent_id` 后调用 `native-bind`，参数为 `run_id`、`task_id`、`attempt_id`、`operation_id`、`agent_id`、`stage`。只确认创建时用 `created`，有启动证据才用 `running`。重新发请求保持原操作 ID 和参数。
 3. 统筹收到结果并由宿主明确确认本轮结束或停止后，调用 `native-report`。除基本轮次字段和 `agent_id`，提供 `outcome` 与 `evidence`。已完成审核填写 `submission_id`、`passed`、`feedback`，外援执行填写 `summary` 及可选 `artifacts` 绝对路径列表。`not_started` 用于有证据明确未创建的轮次，`unknown` 表示待核对并继续占用预算。投递不明时核对原宿主子代理，避免重新创建。
 
@@ -58,9 +60,11 @@ CLI 的空编队请求为 `{"operation_id":"稳定标识","formation":{"setup_on
 
 同一任务在同一需求版本第三次被拒绝时，冻结原执行席尚未通过的任务。接管由操作员处理，必要时先请求停止。原生轮次的停止请求通知统筹，统筹核实宿主确认的实际状态后回报 `stopped` 或 `not_started`。操作员逐轮核实原执行、关联审核和工具进程是否已停止，填写证据后执行 `confirm_stop` 和 `transfer`，移交范围仅为原执行席尚未通过的关联任务。
 
+统筹上限为 1 且只有独立审核、没有外援席时，确认移交后由统筹调用 `formation dispatch` 领取任务。返回 `run_in_coordinator:true` 时，统筹在原会话按返回的工作范围执行，用 `formation submit` 提供 `run_id`、`task_id`、`attempt_id`、`operation_id`、`submission_id`、`summary` 和可选 `artifacts`，再交给审核席。
+
 ## 需求与上下文更新
 
-需求在统筹会话中沟通，由统筹或人工操作员通过 `formation context` 更新，管理界面仅展示版本与内容。同职业 Codex 席位共享推理强度，修改一个席位时同步该职业其余 Codex 席位；关联席位仍执行或待停时会拒绝修改。
+需求在统筹会话中沟通，由统筹或人工操作员通过 `formation context` 更新，管理界面仅展示版本与内容。同职业 Codex 席位共享拟推理强度和子代理上限，各自模型仍按能力解析档位。关联席位仍执行或待停时会拒绝修改。
 
 修改需求会提升需求版本，并将所有任务恢复为待派发，旧成果和审核记录保留。新一轮派发携带旧成果摘要和文件位置，执行者据差异复用成果，不必从头重做；只有当前需求版本的提交与审核全部通过才可完成编队。单纯补充上下文保留已有验收结果。
 

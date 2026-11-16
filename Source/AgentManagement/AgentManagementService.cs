@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace CodexInstanceManager;
 
@@ -173,6 +174,13 @@ public sealed partial class AgentManagementService
         var Settings = LoadSettings();
         var Caller = ResolveInstance(Settings, InstanceId);
         Catalog.Session(Caller, ThreadId);
+        if (SeatProviders.IsExternal(Text(Arguments, "instance")))
+        {
+            var Request = JsonNode.Parse(Arguments.GetRawText())!.AsObject();
+            Request.Remove("thinking");
+            if (Request["worker_limits"] is JsonObject Limits) Limits["subagent_max"] = 0;
+            Arguments = JsonSerializer.SerializeToElement(Request);
+        }
         return StartAsync(Settings, Caller, ThreadId, Arguments, FormationRunId, Cancellation);
     }
 
@@ -207,6 +215,8 @@ public sealed partial class AgentManagementService
         if (CreateTitle?.Length > 120) throw new InvalidOperationException("create_title 最多 120 字符");
         var Main = Catalog.Session(Caller, ThreadId);
         AgentSession? Worker = SessionSelector is null ? null : Unique(Catalog.Sessions(Target, Project, SessionSelector, 0), "会话", Item => Item.Id, Item => Item.Title);
+        if (FormationRunId.Length != 0 && Thinking is not null)
+            Thinking = Existing?.Channel.WorkerThinking ?? FormationModelOptions.ResolveEffort(Target, Model ?? "", Thinking, UseInstanceDefault: Worker is null);
         if (Existing is null && Worker is not null) await Catalog.RequireIdleAsync(Target, Worker.Id, Cancellation);
         var Route = new RelayChannel
         {

@@ -14,15 +14,18 @@ public static class FormationCli
         show      run_id
         create    operation_id formation={theme,requirement,preset:"basic"|"reviewed",instance_id,model,effort} 省略执行配置沿用主实例
                   也可用 template_id 或 member_list 完整配置席位 不会自动启动任务
-                  setup_only:true 仅配置编队 需求留空 主题可省略 执行者最多四席 同职业共用推理强度
-                  席位 dispatch_mode=Session|Native 审核/外援可用 Native follow_coordinator=true 时继承统筹模型与推理
-                  统筹/独立 Codex 执行/学习可设 subagent_max=1..4 显式启用原生模式时默认 3/2/1 旧席位未配置仍为 0
+                  setup_only:true 仅配置编队 需求留空 主题可省略 执行者最多四席 外援最多两席
+                  effort 为拟推理强度 独立 Codex 派发选择模型支持的最近档位 档位未知时沿用默认
+                  席位 dispatch_mode=Session|Native 审核/外援可用 Native follow_coordinator=true 时继承统筹模型与拟推理强度
+                  各席位可设 subagent_max=1..4 不含本体 原生叶子与不支持委派的执行端实际为 0
         context   run_id operation_id requirement [context] 统筹或人工保存已确认需求
         task-show run_id task_id
         task      run_id operation_id title instructions acceptance executor_id [reviewer_id] workspace={access:"read_only"} 或 {access:"write",write_paths:[绝对路径]}
         dispatch  run_id operation_id task_id [kind=execute|review]
                   原生轮次人工仅预留 同一 operation_id 由真实统筹领取一次
-                  仅 can_spawn=true 时用宿主工具创建 返回 task_name prompt model effort
+                  仅 can_spawn=true 时用宿主工具创建 返回 task_name prompt model preferred_effort effort
+                  run_in_coordinator=true 时统筹在当前会话直接接管 通过 submit 提交给审核席
+        submit    run_id operation_id task_id attempt_id submission_id summary [artifacts]
         native-bind   run_id operation_id task_id attempt_id agent_id stage=created|running 仅真实统筹
         native-report run_id operation_id task_id attempt_id outcome=completed|failed|stopped|not_started|unknown evidence [agent_id]
                       仅真实统筹 宿主明确确认本轮结束或停止后提交结果及证据 已登记 Agent 必须带原 ID

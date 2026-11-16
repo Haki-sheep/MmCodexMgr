@@ -48,11 +48,13 @@ public sealed partial class FormationService
                     throw new InvalidOperationException("当前任务状态无法派发该类型轮次");
                 ValidateMember(Target, Controller);
                 bool native = Target.DispatchMode == eFormationDispatchMode.Native;
-                if (!native && (Agents is null || Relay is null)) throw new InvalidOperationException("当前未启用真实联调派发");
+                bool Self = Kind == eFormationAttemptKind.Execute && Target.Id == Controller.Id;
+                if (Self && Caller.IsOperator) throw new InvalidOperationException("统筹接管轮次须由真实统筹会话领取");
+                if (!Self && !native && (Agents is null || Relay is null)) throw new InvalidOperationException("当前未启用真实联调派发");
                 var ActiveList = Database.RunList.SelectMany(Item => Item.TaskList).SelectMany(Item => Item.AttemptList).Where(CountsDispatchCapacity).ToList();
                 int RunUsage = Run.TaskList.SelectMany(Item => Item.AttemptList).Count(CountsDispatchCapacity);
                 if (RunUsage >= Run.MaxParallel || ActiveList.Count >= FormationStore.DefaultGlobalMaxParallel) throw new FormationWaitException("编队或全局并发已满");
-                if (!(native && Kind == eFormationAttemptKind.Review) && Run.TaskList.SelectMany(Item => Item.AttemptList)
+                if (!(native && Kind == eFormationAttemptKind.Review && Target.SubagentMax == 0) && Run.TaskList.SelectMany(Item => Item.AttemptList)
                     .Any(Item => Item.MemberId == Target.Id && CountsDispatchCapacity(Item)))
                     throw new FormationWaitException("当前角色席位正在执行或待核对");
                 if (native) RequireNativeCapacity(Database, Run, Controller, ActiveList);
@@ -70,19 +72,24 @@ public sealed partial class FormationService
                     MemberId = Target.Id,
                     InstanceId = Target.InstanceId,
                     SessionId = Target.SessionId,
-                    DispatchMode = Target.DispatchMode,
+                    DispatchMode = Self ? eFormationDispatchMode.Coordinator : Target.DispatchMode,
                     Model = native && Target.FollowCoordinator ? Controller.Model : Target.Model,
                     Effort = native && Target.FollowCoordinator ? Controller.Effort : Target.Effort,
                     Kind = Kind,
-                    State = eFormationAttemptState.Dispatching,
+                    State = Self ? eFormationAttemptState.Running : eFormationAttemptState.Dispatching,
                     SubmissionId = Submission?.Id ?? "",
                     ContextVersion = Run.ContextVersion,
                     RequirementVersion = Run.RequirementVersion
                 };
                 TaskItem.AttemptList.Add(Attempt);
-                TaskItem.State = eFormationTaskState.Dispatching;
+                TaskItem.State = Self ? eFormationTaskState.Running : eFormationTaskState.Dispatching;
                 FormationStore.AddEvent(Run, Member?.Id ?? "operator", "dispatch_reserved", Attempt.Id);
                 var Draft = new DispatchPlan(Run, TaskItem, Controller, Target, Attempt, false);
+                if (Self)
+                {
+                    DispatchInstructions(Draft);
+                    return Draft;
+                }
                 if (native) return ClaimNative(Database, Draft, Caller);
                 if (!DispatchDict.TryAdd(Attempt.Id, 0)) throw new InvalidOperationException("该派发已在进行");
                 RegisteredAttemptId = Attempt.Id;
@@ -94,7 +101,16 @@ public sealed partial class FormationService
             if (RegisteredAttemptId.Length != 0) DispatchDict.TryRemove(RegisteredAttemptId, out _);
             throw;
         }
+        if (Plan.Attempt.DispatchMode == eFormationDispatchMode.Coordinator)
+        {
+            bool RunHere = !Caller.IsOperator && Plan.Attempt.State == eFormationAttemptState.Running;
+            var Work = RunHere ? DispatchInstructions(Plan) : null;
+            return new { attempt = Plan.Attempt, run_in_coordinator = RunHere, instructions = Work?.Instructions, acceptance = Work?.Acceptance, workspace = Work?.Workspace };
+        }
         if (Plan.Attempt.DispatchMode == eFormationDispatchMode.Native)
+        {
+            var Profile = AgentManagementService.ResolveInstance(LoadSettings(), Plan.Controller.InstanceId);
+            string Resolved = FormationModelOptions.ResolveEffort(Profile, Plan.Attempt.Model, Plan.Attempt.Effort, UseInstanceDefault: false);
             return new
             {
                 attempt = Plan.Attempt,
@@ -102,10 +118,12 @@ public sealed partial class FormationService
                 prompt = Plan.NativePrompt,
                 task_name = "formation_" + Plan.Attempt.Id,
                 model = Plan.Attempt.Model,
-                effort = Plan.Attempt.Effort,
+                effort = Resolved.Length == 0 ? Plan.Attempt.Effort : Resolved,
+                preferred_effort = Plan.Attempt.Effort,
                 parent_subagent_max = Plan.Controller.SubagentMax,
                 worker_limits = new { subagent_max = 0, session_max = 0, cross_agent_max = 0 }
             };
+        }
         if (Plan.Replay) return SyncAttempt(RunId, TaskId, Plan.Attempt.Id, Caller);
         try
         {
@@ -240,7 +258,7 @@ public sealed partial class FormationService
             RequireCoordinator(ActorMember);
             var TaskItem = RequireTask(Run, TaskId);
             var Attempt = RequireAttempt(TaskItem, AttemptId);
-            if (Attempt.DispatchMode == eFormationDispatchMode.Native) return Attempt;
+            if (Attempt.DispatchMode != eFormationDispatchMode.Session) return Attempt;
             if (Relay is null) throw new InvalidOperationException("当前未启用联调对账");
             if (Attempt.State is eFormationAttemptState.Finished or eFormationAttemptState.Stopped || TaskItem.State == eFormationTaskState.Blocked) return Attempt;
             var Saved = FindRelay(Attempt);
@@ -285,7 +303,7 @@ public sealed partial class FormationService
         });
     }
 
-    private RelayTask? FindRelay(FormationAttempt Attempt) => Attempt.DispatchMode == eFormationDispatchMode.Native ? null
+    private RelayTask? FindRelay(FormationAttempt Attempt) => Attempt.DispatchMode != eFormationDispatchMode.Session ? null
         : Attempt.RelayId.Length != 0 ? Relay?.FindTask(Attempt.RelayId)
         : Relay?.FindRequest(Attempt.ControllerInstanceId + "/" + Attempt.ControllerSessionId + "/" + Attempt.RequestId);
 
@@ -296,6 +314,7 @@ public sealed partial class FormationService
             Attempt.InstanceId != Saved.Channel.WorkerInstance.Id || Attempt.SessionId.Length != 0 && Attempt.SessionId != Saved.Channel.WorkerThreadId)
             throw new InvalidOperationException("Relay 执行端与编队轮次不一致");
         Attempt.RelayId = Saved.Id;
+        Attempt.Effort = Saved.Channel.WorkerThinking;
         if (Saved.Channel.WorkerThreadId.Length == 0) return;
         Attempt.SessionId = Saved.Channel.WorkerThreadId;
         Bind(Run, RequireMember(Run, Attempt.MemberId), Attempt.SessionId);
@@ -311,7 +330,7 @@ public sealed partial class FormationService
         {
             Id = FormationStore.NewId(),
             FromMemberId = From,
-            ToMemberId = Run.MemberList.SingleOrDefault(Member => Member.Role == eFormationRole.Outsider && Member.Id != From)?.Id ?? "",
+            ToMemberId = HandoffTarget(Run, From),
             TriggerTaskId = Trigger.Id,
             RequirementVersion = Revision,
             TaskIdList = AffectedList.Select(Item => Item.Id).ToList()
@@ -330,6 +349,20 @@ public sealed partial class FormationService
         }
         Run.HandoffList.Add(Handoff);
         FormationStore.AddEvent(Run, "manager", "handoff_started", Handoff.Id + "/" + From);
+    }
+
+    private static string HandoffTarget(FormationRun Run, string From)
+    {
+        var Target = Run.MemberList.Where(Member => Member.Role == eFormationRole.Outsider && Member.Id != From &&
+                Run.HandoffList.All(Handoff => Handoff.FromMemberId != Member.Id))
+            .OrderBy(Member => Run.TaskList.Count(Item => Item.ExecutorId == Member.Id && Item.State != eFormationTaskState.Passed) +
+                Run.HandoffList.Count(Handoff => Handoff.ToMemberId == Member.Id && !Handoff.Transferred))
+            .FirstOrDefault();
+        if (Target is not null) return Target.Id;
+        var Controller = Run.MemberList.Single(Member => Member.Role == eFormationRole.Coordinator);
+        return Controller.SubagentMax == 1 && Controller.Id != From &&
+            Run.MemberList.All(Member => Member.Role != eFormationRole.Outsider) && Run.MemberList.Any(Member => Member.Role == eFormationRole.Reviewer)
+            ? Controller.Id : "";
     }
 
     private async Task<object> TakeoverAsync(JsonElement Arguments, FormationCaller Caller, CancellationToken Cancellation)
@@ -407,6 +440,8 @@ public sealed partial class FormationService
             {
                 var TaskItem = RequireTask(Run, TaskId);
                 TaskItem.ExecutorId = Handoff.ToMemberId;
+                if (TaskItem.ReviewerId.Length == 0 && RequireMember(Run, Handoff.ToMemberId).Role == eFormationRole.Coordinator)
+                    TaskItem.ReviewerId = SelectReviewer(Run, IncludeSession: true);
                 TaskItem.State = eFormationTaskState.Ready;
             }
             Handoff.Transferred = true;

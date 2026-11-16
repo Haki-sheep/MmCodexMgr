@@ -144,7 +144,8 @@ public static class Program
             if (!File.Exists(CliPath)) throw new FileNotFoundException("编队启动需要同目录的 mmcodex CLI", CliPath);
             await DesktopRelayBridge.EnsureAvailableAsync(Profile, Cancellation);
         }
-        await Bridge.SendToRunningAsync(Profile, Controller.SessionId, Prompt, Controller.Model, Controller.Effort, Cancellation);
+        string Thinking = FormationModelOptions.ResolveEffort(Profile, Controller.Model, Controller.Effort, UseInstanceDefault: false);
+        await Bridge.SendToRunningAsync(Profile, Controller.SessionId, Prompt, Controller.Model, Thinking, Cancellation);
     }
 
     private static async Task ListenAsync(MainForm Form, CancellationToken Cancellation)

@@ -26,7 +26,7 @@ public sealed class SeatEditorDialog : StudioDialog
     private readonly TextBox NameInput = new() { Dock = DockStyle.Fill, PlaceholderText = "留空按编队主题与角色自动命名", Margin = new Padding(0, 5, 0, 7), MaxLength = 120 };
     private readonly TextBox WorkspaceInput = new() { Dock = DockStyle.Fill, Margin = new Padding(0, 5, 0, 7), MaxLength = 1024 };
     private readonly TextBox SessionInput = new() { Dock = DockStyle.Fill, Margin = new Padding(0, 5, 0, 7), MaxLength = 128 };
-    private readonly Label EffortLabel = FieldLabel("同职业推理");
+    private readonly Label EffortLabel = FieldLabel("拟推理强度");
     private readonly Label WorkspaceLabel = FieldLabel("项目");
     private readonly StudioWrapLabel CapabilityLabel = new() { Tag = eThemeRole.Muted, Font = StudioFonts.Caption, Margin = new Padding(0, 10, 0, 0) };
     private readonly StudioButton BrowseButton = new() { Text = "选择目录", Margin = new Padding(8, 3, 0, 3) };
@@ -60,12 +60,9 @@ public sealed class SeatEditorDialog : StudioDialog
             FollowInput.Checked = Member.FollowCoordinator;
             AddRow(Fields, FieldLabel("派发方式"), ModeInput, FollowInput);
         }
-        else
-        {
-            BudgetInput.Items.AddRange(new object[] { 1, 2, 3, 4 });
-            BudgetInput.SelectedItem = Member.SubagentMax is >= 1 and <= 4 ? Member.SubagentMax : Member.Role == eFormationRole.Coordinator ? 3 : Member.Role == eFormationRole.Executor ? 2 : 1;
-            AddRow(Fields, FieldLabel("子代理上限"), BudgetInput, null);
-        }
+        BudgetInput.Items.AddRange(new object[] { 1, 2, 3, 4 });
+        BudgetInput.SelectedItem = Member.SubagentMax is >= 1 and <= 4 ? Member.SubagentMax : Math.Max(1, FormationStore.DefaultSubagentMax(Member.Role));
+        AddRow(Fields, FieldLabel("子代理上限"), BudgetInput, null);
         AddRow(Fields, FieldLabel("执行端"), TargetInput, null);
         AddRow(Fields, FieldLabel("模型"), ModelInput, null);
         AddRow(Fields, EffortLabel, EffortInput, null);
@@ -139,16 +136,14 @@ public sealed class SeatEditorDialog : StudioDialog
         FollowInput.Enabled = Editable && Native;
         ModelInput.Enabled = Provider.SupportsModel && Editable && !Follows;
         EffortInput.Enabled = Editable && !Follows;
-        BudgetInput.Enabled = Editable && Codex;
+        BudgetInput.Enabled = Editable;
         if (!Provider.SupportsModel) ModelInput.Text = "";
-        EffortLabel.Visible = EffortInput.Visible = Provider.SupportsEffort;
         WorkspaceLabel.Text = Provider.UsesCwd ? "工作目录" : Codex ? "项目" : "工作区";
         BrowseButton.Visible = Provider.UsesCwd;
         WorkspaceInput.PlaceholderText = Provider.UsesCwd ? "绝对路径 留空沿用执行端默认目录" : Codex ? "项目 ID 名称或路径 留空沿用实例默认" : "DSH 工作区 ID 或名称 留空使用默认工作区";
-        CapabilityLabel.Text = Native ? "由统筹在宿主中创建真实原生子代理 · 审核与外援共享统筹预算 · 原生子代理不能继续分派"
-            : Codex ? "Codex 支持指定模型与推理强度  ·  模型 ID 可手输 留空沿用实例配置"
-            : Provider.SupportsModel ? Provider.Label + " 支持指定模型 不支持推理强度  ·  模型 ID 可手输 留空沿用默认"
-            : Provider.Label + " 沿用会话自身的模型与推理配置  ·  编队不下发模型";
+        CapabilityLabel.Text = Native ? "原生子代理占用统筹额度 · 该席作为原生子代理执行时不能继续分派"
+            : Codex ? "派发时按目标模型选择最近的可用档位 · 子代理上限不含席位本体"
+            : Provider.Label + " 使用会话推理设置 · 拟强度和子代理上限记录在统筹计划中";
     }
 
     private void Confirm()
@@ -169,12 +164,12 @@ public sealed class SeatEditorDialog : StudioDialog
             Role = Source.Role,
             DispatchMode = Native ? eFormationDispatchMode.Native : eFormationDispatchMode.Session,
             FollowCoordinator = Native && FollowInput.Checked,
-            SubagentMax = (Source.Role is eFormationRole.Coordinator or eFormationRole.Executor or eFormationRole.Learner) && Provider.SupportsEffort ? (int)BudgetInput.SelectedItem! : 0,
+            SubagentMax = (int)BudgetInput.SelectedItem!,
             DisplayName = NameInput.Text.Trim(),
             InstanceId = Native ? Controller?.InstanceId ?? Source.InstanceId : Target.Id,
             SessionId = Native ? "" : SessionInput.Text.Trim(),
             Model = Provider.SupportsModel ? ModelInput.Text.Trim() : "",
-            Effort = Provider.SupportsEffort && Effort != InheritEffort ? Effort : "",
+            Effort = Effort != InheritEffort ? Effort : "",
             Project = Native || Provider.UsesCwd ? "" : Workspace,
             Cwd = !Native && Provider.UsesCwd ? Workspace : ""
         };

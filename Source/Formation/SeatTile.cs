@@ -68,12 +68,12 @@ public static class SeatProviders
             "执行端 " + (Provider == Codex ? "Codex · " + InstanceName(Settings, Member.InstanceId) : Provider.Label),
             "模型 " + (!Provider.SupportsModel ? "沿用会话配置" : Member.Model.Length == 0 ? "沿用默认" : Member.Model)
         };
-        if (Provider.SupportsEffort) LineList.Add("推理强度 " + (Member.Effort.Length == 0 ? "沿用默认" : Member.Effort));
+        LineList.Add("拟推理强度 " + (Member.FollowCoordinator ? "跟随统筹" : Member.Effort.Length == 0 ? "沿用默认" : Member.Effort));
+        if (Member.SubagentMax > 0) LineList.Add("子代理上限 " + Member.SubagentMax);
         if (Member.DispatchMode == eFormationDispatchMode.Native) LineList.Add("原生子代理 · " + (Member.FollowCoordinator ? "模型与推理跟随统筹" : "单独指定模型与推理") + " · 共享统筹预算");
         else
         {
             LineList.Add("会话 " + (Member.SessionId.Length == 0 ? "按需新建" : Member.SessionId));
-            if (Member.SubagentMax > 0) LineList.Add("子代理上限 " + Member.SubagentMax);
         }
         if (Member.Project.Length != 0) LineList.Add("项目 " + Member.Project);
         if (Member.Cwd.Length != 0) LineList.Add("工作目录 " + Member.Cwd);
@@ -225,8 +225,8 @@ public sealed class SeatBoard : Control, IThemedControl
         string ModelText = !Provider.SupportsModel ? "模型 沿用会话" : Member.Model.Length == 0 ? "模型 沿用" : Member.Model;
         int Used = StudioPaint.Chip(Canvas, ModelText, StudioFonts.Small, new Point(ChipLeft, ChipTop), Provider.SupportsModel && Member.Model.Length != 0 ? eTone.Accent : eTone.Neutral, Colors, Scale, ChipRight - ChipLeft);
         ChipLeft += Used + (int)(6 * Scale);
-        if (Provider.SupportsEffort && ChipRight - ChipLeft > (int)(40 * Scale))
-            StudioPaint.Chip(Canvas, Member.Effort.Length == 0 ? "推理 沿用" : "推理 " + Member.Effort, StudioFonts.Small, new Point(ChipLeft, ChipTop), Member.Effort.Length == 0 ? eTone.Neutral : eTone.Violet, Colors, Scale, ChipRight - ChipLeft);
+        if (ChipRight - ChipLeft > (int)(40 * Scale))
+            StudioPaint.Chip(Canvas, Member.Effort.Length == 0 ? "拟强度 沿用" : "拟强度 " + Member.Effort, StudioFonts.Small, new Point(ChipLeft, ChipTop), Member.Effort.Length == 0 ? eTone.Neutral : eTone.Violet, Colors, Scale, ChipRight - ChipLeft);
     }
 
     private void PaintPlaceholder(Graphics Canvas, SeatSlot Slot, bool Hover, float Scale)

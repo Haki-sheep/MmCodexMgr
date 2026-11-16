@@ -18,7 +18,7 @@ public enum eFormationAttemptState { Dispatching, DeliveryUnknown, Running, Fini
 [JsonConverter(typeof(JsonStringEnumConverter<eFormationDeliveryState>))]
 public enum eFormationDeliveryState { Pending, Dispatching, Delivered, DeliveryUnknown }
 [JsonConverter(typeof(JsonStringEnumConverter<eFormationDispatchMode>))]
-public enum eFormationDispatchMode { Session, Native }
+public enum eFormationDispatchMode { Session, Native, Coordinator }
 
 public sealed class FormationMember
 {

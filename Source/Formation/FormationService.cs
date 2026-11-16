@@ -226,8 +226,8 @@ public sealed partial class FormationService
                 Target.Id = MemberId;
                 if (Target.DisplayName.Length == 0) Target.DisplayName = Member?.DisplayName ?? $"{Run.Theme} {Run.CreatedAt:MM-dd} 外援";
                 FormationStore.RequireText(Target.DisplayName, "席位显示名", 120);
-                if (Member is null && (Target.Role != eFormationRole.Outsider || Run.MemberList.Any(Item => Item.Role == eFormationRole.Outsider)))
-                    throw new InvalidOperationException("只支持补充当前缺少的外援席位");
+                if (Member is null && (Target.Role != eFormationRole.Outsider || Run.MemberList.Count(Item => Item.Role == eFormationRole.Outsider) >= 2))
+                    throw new InvalidOperationException("只支持补充外援席位 最多两席");
                 var Controller = Run.MemberList.Single(Item => Item.Role == eFormationRole.Coordinator);
                 ValidateMember(Target, Controller);
                 if (Target.Role == eFormationRole.Coordinator && Target.SubagentMax == 0 &&
@@ -262,8 +262,8 @@ public sealed partial class FormationService
                 }
                 if (Target.SessionId.Length != 0 && !IsExternal(Target.InstanceId)) VerifyCodexSession(Target, Target.SessionId);
                 if (Target.SessionId.Length != 0) Bind(Run, Target, Target.SessionId);
-                if (Member is not null) Run.MemberList.Remove(Member);
-                Run.MemberList.Add(Target);
+                if (Member is null) Run.MemberList.Add(Target);
+                else Run.MemberList[Run.MemberList.IndexOf(Member)] = Target;
                 if (Target.Role == eFormationRole.Coordinator)
                 {
                     Run.ActivationState = eFormationDeliveryState.Pending;
@@ -319,7 +319,8 @@ public sealed partial class FormationService
         }
         var Revision = Draft.Run.RevisionList[^1];
         string Prompt = $"你是编队 {Draft.Run.Theme} 的统筹 编队 ID {Draft.Run.Id}\n需求\n{Revision.Requirement}\n上下文\n{Revision.Context}\n目前只初始化此真实会话 回报已准备并结束本轮 等待管理器发送启动包";
-        var Created = await Catalog.CreateAsync(Profile, Project, Draft.Member.DisplayName, Prompt, Draft.Member.Model, Draft.Member.Effort, Cancellation);
+        string Thinking = FormationModelOptions.ResolveEffort(Profile, Draft.Member.Model, Draft.Member.Effort, UseInstanceDefault: true);
+        var Created = await Catalog.CreateAsync(Profile, Project, Draft.Member.DisplayName, Prompt, Draft.Member.Model, Thinking, Cancellation);
         return Store.Update(Database =>
         {
             var Run = FormationStore.RequireRun(Database, RunId);
@@ -350,9 +351,9 @@ public sealed partial class FormationService
 
     private void ValidateMember(FormationMember Member, FormationMember? Controller = null)
     {
-        if (!Enum.IsDefined(Member.DispatchMode)) throw new InvalidOperationException("席位派发模式无效");
-        if (Member.SubagentMax is < 0 or > 4 || Member.SubagentMax != 0 && FormationStore.DefaultSubagentMax(Member.Role) == 0)
-            throw new InvalidOperationException("只有统筹 执行和学习席位可配置 1 至 4 个子代理");
+        if (Member.DispatchMode is not (eFormationDispatchMode.Native or eFormationDispatchMode.Session)) throw new InvalidOperationException("席位派发模式无效");
+        if (Member.SubagentMax is < 0 or > 4)
+            throw new InvalidOperationException("席位子代理上限须为 1 至 4 旧记录可沿用 0");
         if (Member.FollowCoordinator && Member.Role is not (eFormationRole.Reviewer or eFormationRole.Outsider))
             throw new InvalidOperationException("仅审核或外援席位可跟随统筹");
         if (Member.DispatchMode == eFormationDispatchMode.Native)
@@ -362,16 +363,14 @@ public sealed partial class FormationService
                 throw new InvalidOperationException("只有审核与外援可作为统筹的原生子代理 原生席位不能绑定独立会话或工作区");
             Member.InstanceId = Controller.InstanceId;
         }
-        if (IsExternal(Member.InstanceId) && Member.SubagentMax != 0)
-            throw new InvalidOperationException("当前外部执行端不支持编队子代理预算 " + Member.InstanceId);
         if (!IsExternal(Member.InstanceId)) Member.InstanceId = AgentManagementService.ResolveInstance(LoadSettings(), Member.InstanceId).Id;
         if (Member.Role == eFormationRole.Coordinator && IsExternal(Member.InstanceId)) throw new InvalidOperationException("统筹须绑定真实 Codex 会话");
         if (Member.Project.Length != 0 && Member.InstanceId is CursorRelayRunner.InstanceId or ClaudeRelayRunner.InstanceId or AntigravityRelayRunner.InstanceId)
             throw new InvalidOperationException("该执行端使用 cwd 指定工作目录 " + Member.InstanceId);
         if (Member.Cwd.Length != 0 && (!IsExternal(Member.InstanceId) || Member.InstanceId == DshRelayRunner.InstanceId))
             throw new InvalidOperationException("该执行端使用 project 指定项目或工作区 " + Member.InstanceId);
-        if (Member.Effort.Length != 0 && (IsExternal(Member.InstanceId) || Member.Effort is not ("none" or "minimal" or "low" or "medium" or "high" or "xhigh" or "max" or "ultra")))
-            throw new InvalidOperationException("该实例或推理强度不受支持 " + Member.InstanceId + " " + Member.Effort);
+        if (Member.Effort.Length != 0 && !RelayLimits.CodexThinkingList.Contains(Member.Effort))
+            throw new InvalidOperationException("未知拟推理强度 " + Member.Effort);
         if (Member.Model.Length != 0 && Member.InstanceId is DshRelayRunner.InstanceId or AntigravityRelayRunner.InstanceId)
             throw new InvalidOperationException("该执行端沿用会话模型 当前不支持按编队派单指定模型 " + Member.InstanceId);
     }
@@ -391,7 +390,7 @@ public sealed partial class FormationService
             throw new InvalidOperationException("该执行席位已退出派单");
         string ReviewerId = Arguments.TryGetProperty("reviewer_id", out _)
             ? OptionalText(Arguments, "reviewer_id")
-            : Run.MemberList.FirstOrDefault(Item => Item.Role == eFormationRole.Reviewer && Item.DispatchMode == eFormationDispatchMode.Native)?.Id ?? "";
+            : SelectReviewer(Run, IncludeSession: false);
         if (ReviewerId.Length != 0 && RequireMember(Run, ReviewerId).Role != eFormationRole.Reviewer) throw new InvalidOperationException("请指定审核席位");
         var TaskItem = new FormationTask
         {
@@ -410,6 +409,11 @@ public sealed partial class FormationService
         FormationStore.AddEvent(Run, Actor?.Id ?? "operator", "task_added", TaskItem.Id);
         return TaskItem;
     }
+
+    private static string SelectReviewer(FormationRun Run, bool IncludeSession) => Run.MemberList
+        .Where(Member => Member.Role == eFormationRole.Reviewer && (IncludeSession || Member.DispatchMode == eFormationDispatchMode.Native))
+        .OrderBy(Member => Run.TaskList.Count(Task => Task.ReviewerId == Member.Id && Task.State != eFormationTaskState.Passed))
+        .FirstOrDefault()?.Id ?? "";
 
     private static FormationRun ChangeContext(FormationRun Run, FormationMember? Actor, JsonElement Arguments)
     {

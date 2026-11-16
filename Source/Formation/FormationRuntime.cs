@@ -45,7 +45,7 @@ public sealed partial class FormationService
                 {
                     Cancellation.ThrowIfCancellationRequested();
                     var Attempt = Item.AttemptList.LastOrDefault();
-                    if (Attempt is null || Attempt.DispatchMode == eFormationDispatchMode.Native || Item.State is eFormationTaskState.AwaitingHandoff or eFormationTaskState.Blocked ||
+                    if (Attempt is null || Attempt.DispatchMode != eFormationDispatchMode.Session || Item.State is eFormationTaskState.AwaitingHandoff or eFormationTaskState.Blocked ||
                         Attempt.State is not (eFormationAttemptState.Dispatching or eFormationAttemptState.DeliveryUnknown or eFormationAttemptState.Running))
                         continue;
                     var Saved = FindRelay(Attempt);
@@ -70,6 +70,7 @@ public sealed partial class FormationService
                 var Submission = Item.SubmissionList.LastOrDefault();
                 if (Submission is null) continue;
                 string targetId = Review ? Item.ReviewerId : Item.ExecutorId;
+                if (!Review && Run.MemberList.Any(Member => Member.Id == targetId && Member.Role == eFormationRole.Coordinator)) continue;
                 if ((Relay is null || Agents is null) && Run.MemberList.All(Member => Member.Id != targetId || Member.DispatchMode != eFormationDispatchMode.Native)) continue;
                 string Kind = Review ? "review" : "execute";
                 int PriorCount = Item.AttemptList.Count;
@@ -123,7 +124,7 @@ public sealed partial class FormationService
             yield return new("revision/" + Revision.ContextVersion,
                 $"编队 {Run.Id} 上下文已更新至 v{Revision.ContextVersion}，需求版本 v{Revision.RequirementVersion}。\n" +
                 "需求摘要 " + Excerpt(Revision.Requirement, 640) + "\n上下文摘要 " + Excerpt(Revision.Context, 640) +
-                "\n已派发轮次继续按原快照处理。使用 formation show 并提供 run_id 查看完整更新。");
+                "\n已派发轮次继续按原快照处理。使用 formation show 并提供 run_id 查看完整更新。\n" + FormatSeatPlan(Run));
         }
         foreach (var Handoff in Run.HandoffList.Where(Item => !Item.Transferred))
         {
@@ -140,6 +141,13 @@ public sealed partial class FormationService
         }
         foreach (var Item in Run.TaskList)
         {
+            if (Run.State == eFormationState.Active && Item.State is (eFormationTaskState.Ready or eFormationTaskState.NeedsRework) &&
+                Run.MemberList.Any(Member => Member.Id == Item.ExecutorId && Member.Role == eFormationRole.Coordinator))
+            {
+                yield return new("coordinator-takeover/" + Item.Id + "/" + Item.AttemptList.Count,
+                    $"编队 {Run.Id} 任务 {Item.Title} 已交给统筹兼任外援。先调用 formation dispatch 领取；run_in_coordinator=true 时在本会话执行，完成后调用 formation submit 交给审核席。\n" +
+                    Output(new { run_id = Run.Id, task_id = Item.Id, kind = "execute", operation_id = $"coordinator-{Item.Id}-{Item.AttemptList.Count}" }).GetRawText());
+            }
             var Attempt = Item.AttemptList.LastOrDefault();
             if (Attempt is null) continue;
             if (Run.State == eFormationState.Active && Attempt.DispatchMode == eFormationDispatchMode.Native &&
@@ -309,13 +317,38 @@ public sealed partial class FormationService
         string Preparation = Run.SetupOnly
             ? "当前仅完成编队配置，尚无业务需求。简短说明编队已就绪，然后等待用户在本会话提出任务。不要自行编造需求、登记或派发任务。收到并确认需求后，先用 formation context 保存 requirement 和可选 context，再制定计划和派发。\n"
             : $"以下是用户创建编队时提交的初始需求。范围明确时，本轮登记任务并派发给配置的执行者，首次派发时新建该席位的独立会话。\n需求\n{Revision.Requirement}\n上下文\n{Revision.Context}\n";
-        return $"[Mm AgentWork Mgr 编队启动]\n你是此编队的统筹。编队 ID {Run.Id}，主题 {Run.Theme}。\n" + Preparation +
+        return $"[Mm AgentWork Mgr 编队启动]\n你是此编队的统筹。编队 ID {Run.Id}，主题 {Run.Theme}。\n" + Preparation + FormatSeatPlan(Run) +
             "通过 mmcodex formation show 读取席位与现有任务，task-show 查看指定任务，通过 task 登记新任务，dispatch 启动执行。按需指定审核席位，工具会自动回收结果、派发审核和返工。" +
             "无审核席位的提交由你按原验收标准使用 review 处理。任务全部通过后用 complete 提交交付总结。需要外援时等待管理器的人工作业停止核对。\n" +
             $"你的原生子代理预算为 {Run.MemberList.Single(Item => Item.Role == eFormationRole.Coordinator).SubagentMax}，仍受宿主额度约束。原生审核与外援只在 formation dispatch 返回 can_spawn=true 时启动一次。" +
-            "使用宿主真正的 spawn_agent，使用返回的 task_name、prompt 与模型推理配置。无法使用配置、工具或额度不足时据实报告，不开其他会话替代。" +
+            "使用宿主真正的 spawn_agent，使用返回的 task_name、prompt 和 model；参考 preferred_effort 和 effort，按该宿主对模型开放的档位选择实际强度。额度或工具不足时据实报告。" +
+            "遇到 run_in_coordinator=true 时在本会话直接接手，完成后通过 formation submit 交由审核。" +
             "使用 native-bind 登记真实 Agent ID 和宿主阶段。收到原生回报并由宿主明确确认本轮结束或停止后，用 native-report 提交结果和证据。仅收到停止请求回执不算已停止。响应丢失或投递未知先用宿主工具核对，不重复创建。\n" +
             "每次调用在当前 PowerShell 子进程设置本编队凭据，只用于调用编队 CLI。不得写入项目、回报或系统环境。保持宿主实际会话身份。\n" +
             $"$env:MMCODEX_FORMATION_MEMBER_TOKEN = '{Credential}'\n& '{CliPath}' formation help\n";
+    }
+
+    private static string FormatSeatPlan(FormationRun Run)
+    {
+        var Controller = Run.MemberList.Single(Member => Member.Role == eFormationRole.Coordinator);
+        var LineList = new List<string> { "席位计划" };
+        foreach (var Role in SeatProviders.RoleOrder)
+        {
+            var MemberList = Run.MemberList.Where(Member => Member.Role == Role).ToList();
+            for (int Index = 0; Index < MemberList.Count; Index++)
+            {
+                var Member = MemberList[Index];
+                var Preference = Member.FollowCoordinator ? Controller : Member;
+                string Name = Role == eFormationRole.Coordinator ? "统筹者" : SeatProviders.RoleTitle(Role);
+                if (MemberList.Count > 1) Name += " " + (Index + 1);
+                string Model = Preference.Model.Length == 0 ? "沿用会话或实例默认" : Preference.Model;
+                string Effort = Preference.Effort.Length == 0 ? "沿用默认" : Preference.Effort;
+                LineList.Add($"{Name} 模型 {Model} 拟推理强度 {Effort} 子代理上限 {Member.SubagentMax} 席位ID {Member.Id}");
+            }
+        }
+        if (Controller.SubagentMax == 1 && Run.MemberList.All(Member => Member.Role != eFormationRole.Outsider))
+            LineList.Add("统筹兼任外援，接管须等待原轮次停止得到人工确认。");
+        LineList.Add("通过 formation dispatch 按席位派发。拟推理强度是目标偏好；无对应档位时选目标模型支持的最近档位，能力未公开时沿用默认。子代理上限不计席位本体，原生叶子与不支持委派的执行端以宿主能力为准。");
+        return string.Join("\n", LineList) + "\n";
     }
 }

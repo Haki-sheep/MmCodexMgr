@@ -28,11 +28,18 @@ internal static class FormationTests
                 JsonSerializer.SerializeToElement(Arguments, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower }),
                 Caller ?? FormationCaller.Operator(), CancellationToken.None);
             var Members = Settings.InstanceList.Select(Seat).ToList();
+            Members[0].Model = "controller-test";
+            Members[0].Effort = "high";
+            Members[1].Model = "worker-test";
+            Members[1].Effort = Members[2].Effort = "medium";
             var Run = (FormationRun)await Call("create", new { operation_id = "setup", formation = new FormationCreate { SetupOnly = true, MemberList = Members } });
             Require(Run.SetupOnly && Run.RevisionList.Single().Requirement.Length == 0 && Run.Theme.StartsWith("编队 "), "空编队自动命名并保留等待需求状态");
             await Call("activate", new { run_id = Run.Id, operation_id = "prepare" });
             Require(ActivationPrompt.Contains("等待用户在本会话提出任务") && ActivationPrompt.Contains("formation context") && Store.Get(Run.Id).TaskList.Count == 0,
                 "准备统筹仅等待需求 不创建执行任务");
+            Require(ActivationPrompt.Contains("统筹者 模型 controller-test 拟推理强度 high") &&
+                ActivationPrompt.Contains("执行者 1 模型 worker-test 拟推理强度 medium") && ActivationPrompt.Contains("执行者 2 模型") &&
+                ActivationPrompt.Contains("目标模型支持的最近档位"), "统筹启动包逐席列出模型及拟强度并说明档位选择");
             var TaskRequest = new { run_id = Run.Id, operation_id = "new-task", title = "收到需求后的任务", instructions = "只读检查", acceptance = "结果正确", executor_id = "worker1", workspace = new { access = "read_only" } };
             await RejectAsync(() => Call("task", TaskRequest), "没有需求不能派生任务");
             var Token = await Call("member", new { run_id = Run.Id, member_id = "main", mode = "credential", operation_id = "main-key" });
@@ -86,7 +93,7 @@ internal static class FormationTests
                 Service.ExecuteAsync(Action, JsonSerializer.SerializeToElement(Args, Wire), Caller ?? FormationCaller.Operator(), CancellationToken.None);
             Task Process() => Service.ProcessResultsAsync(CancellationToken.None);
             FormationTask Work(string RunId, string TaskId) => Store.Get(RunId).TaskList.Single(Item => Item.Id == TaskId);
-            async Task<(FormationRun Run, FormationCaller Actor)> Create(string Label, int Budget)
+            async Task<(FormationRun Run, FormationCaller Actor)> Create(string Label, int Budget, bool UseCoordinator = false)
             {
                 var Seats = Settings.InstanceList.Select(Seat).ToList();
                 var Controller = Seats.Single(Item => Item.Role == eFormationRole.Coordinator);
@@ -102,6 +109,15 @@ internal static class FormationTests
                 var Outsider = Seats.Single(Item => Item.Role == eFormationRole.Outsider);
                 Outsider.Model = "outsider-model";
                 Outsider.Effort = "xhigh";
+                if (UseCoordinator)
+                {
+                    Seats.Remove(Outsider);
+                    foreach (var SeatItem in Seats.Where(Item => Item.Role == eFormationRole.Executor))
+                    {
+                        SeatItem.Model = "limited-worker";
+                        SeatItem.Effort = "high";
+                    }
+                }
                 var Run = (FormationRun)await Call("create", new { operation_id = Label, formation = new FormationCreate
                     { Theme = Label, Requirement = "测试原生和独立执行", MemberList = Seats, MaxParallel = 4 } });
                 await Call("activate", new { run_id = Run.Id, operation_id = "activate" });
@@ -261,6 +277,49 @@ internal static class FormationTests
                 Work(First.Run.Id, A).SubmissionList[^1].AttemptId == Outsider.Id &&
                 Work(First.Run.Id, A).AttemptList[^1].Kind == eFormationAttemptKind.Review,
                 "原生外援结果进入原提交和自动审核链路 不生成独立会话");
+            var FinalReview = Work(First.Run.Id, A).AttemptList[^1];
+            await VerifyClaim(First.Run.Id, A, FinalReview, First.Actor, "controller-model", "high");
+            await Bind(First.Run.Id, A, FinalReview, "native-final-review", "running", First.Actor);
+            await Review(First.Run.Id, A, FinalReview, "native-final-review", true, First.Actor);
+            await Process();
+
+            string WorkerHome = Path.Combine(Root, "worker-models");
+            Directory.CreateDirectory(WorkerHome);
+            File.WriteAllText(Path.Combine(WorkerHome, "models_cache.json"),
+                """{"models":[{"slug":"limited-worker","supported_reasoning_levels":[{"effort":"medium"},{"effort":"xhigh"}]}]}""");
+            Settings.InstanceList.Single(Item => Item.Id == "worker1").HomePath = WorkerHome;
+            var Local = await Create("统筹兼任外援", 1, UseCoordinator: true);
+            string LocalId = Local.Run.Id;
+            string LocalTask = await Add(LocalId, "worker1", "转给统筹");
+            for (int Round = 1; Round <= 3; Round++)
+            {
+                await FinishRelay(LocalId, LocalTask, "local-work-" + Round);
+                var TaskItem = Work(LocalId, LocalTask);
+                Require(TaskItem.AttemptList.Last(Item => Item.Kind == eFormationAttemptKind.Execute).Effort == "medium",
+                    "独立派发在目标模型档位等距时选择较低档位并记录实际值");
+                var ReviewAttempt = TaskItem.AttemptList[^1];
+                await VerifyClaim(LocalId, LocalTask, ReviewAttempt, Local.Actor, "controller-model", "high");
+                string AgentId = "local-review-" + Round;
+                await Bind(LocalId, LocalTask, ReviewAttempt, AgentId, "running", Local.Actor);
+                await Review(LocalId, LocalTask, ReviewAttempt, AgentId, false, Local.Actor);
+                await Process();
+            }
+            var LocalHandoff = Store.Get(LocalId).HandoffList.Single();
+            Require(LocalHandoff.ToMemberId == "main", "额度一且无外援席时选择统筹接管");
+            foreach (string AttemptId in LocalHandoff.AttemptIdList)
+                await Call("takeover", new { run_id = LocalId, handoff_id = LocalHandoff.Id, mode = "confirm_stop", attempt_id = AttemptId,
+                    operation_id = AttemptId + "-local-stop", confirmed = true, evidence = "夹具核实原轮停止" });
+            await Call("takeover", new { run_id = LocalId, handoff_id = LocalHandoff.Id, mode = "transfer", operation_id = "local-transfer", evidence = "夹具确认接管" });
+            int RelayCount = Relay.Count();
+            var LocalPlan = JsonSerializer.SerializeToElement(await Call("dispatch", new { run_id = LocalId, task_id = LocalTask, operation_id = "local-self" }, Local.Actor), Wire);
+            var LocalAttempt = Work(LocalId, LocalTask).AttemptList[^1];
+            Require(LocalPlan.GetProperty("run_in_coordinator").GetBoolean() && LocalAttempt.SessionId == "main-thread" && Relay.Count() == RelayCount,
+                "统筹在原会话领取外援任务 无联调回环或新会话");
+            await Call("submit", new { run_id = LocalId, task_id = LocalTask, attempt_id = LocalAttempt.Id,
+                operation_id = "local-submit", submission_id = "local-delivery", summary = "在统筹会话交付" }, Local.Actor);
+            await Process();
+            Require(Work(LocalId, LocalTask).AttemptList[^1].Kind == eFormationAttemptKind.Review,
+                "统筹接管结果进入独立审核");
             Console.WriteLine("PASS formation native reservations claims scoped budgets reports rework and takeover using host-response fixtures");
         }
         finally
@@ -588,6 +647,9 @@ internal static class FormationTests
             else WorkerPromptList.Add(Prompt);
             return Task.CompletedTask;
         }
+
+        public Task SendAsync(InstanceProfile Instance, string ThreadId, string Prompt, string Model, string Thinking, CancellationToken Cancellation)
+            => SendAsync(Instance, ThreadId, Prompt, Model, Cancellation);
     }
 
     private sealed class FakeCatalog : IAgentCatalog

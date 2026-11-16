@@ -88,13 +88,15 @@ public sealed class FormationStore
     private static List<FormationMember> BuildMembers(List<FormationMember> MemberList, string Theme, DateTimeOffset Date, bool Template)
     {
         if (MemberList.Count is < 2 or > 64 || MemberList.Count(Item => Item.Role == eFormationRole.Coordinator) != 1 ||
-            !MemberList.Any(Item => Item.Role == eFormationRole.Executor) || MemberList.Count(Item => Item.Role == eFormationRole.Outsider) > 1 ||
-            MemberList.Count(Item => Item.Role == eFormationRole.Learner) > 1) throw new InvalidOperationException("编队需要一位统筹与至少一位执行 外援和学习各最多一席");
+            !MemberList.Any(Item => Item.Role == eFormationRole.Executor) ||
+            MemberList.Count(Item => Item.Role == eFormationRole.Learner) > 1) throw new InvalidOperationException("编队需要一位统筹与至少一位执行 学习者最多一席");
+        if (MemberList.Count(Item => Item.Role == eFormationRole.Outsider) > 2)
+            throw new InvalidOperationException("外援最多两席");
         if (MemberList.Count(Item => Item.Role == eFormationRole.Executor) > 4)
             throw new InvalidOperationException("执行者最多四席");
         if (MemberList.GroupBy(Item => Item.Role).Any(Group => Group.Where(Item => SeatProviders.For(Item.InstanceId).SupportsEffort)
             .Select(Item => Item.Effort).Distinct(StringComparer.Ordinal).Count() > 1))
-            throw new InvalidOperationException("同一职业的 Codex 席位须使用相同推理强度");
+            throw new InvalidOperationException("同一职业的 Codex 席位须使用相同拟推理强度");
         var CountDict = new Dictionary<eFormationRole, int>();
         var ResultList = new List<FormationMember>();
         var Controller = MemberList.Single(Item => Item.Role == eFormationRole.Coordinator);
@@ -106,7 +108,7 @@ public sealed class FormationStore
             RequireText(instanceId, "角色实例 ID", 128);
             RequireOptionalText(Input.DisplayName, "角色显示名", 120);
             RequireOptionalText(Input.Model, "角色模型", 128);
-            RequireOptionalText(Input.Effort, "角色推理强度", 20);
+            RequireOptionalText(Input.Effort, "角色拟推理强度", 20);
             RequireOptionalText(Input.SessionId, "角色会话 ID", 128);
             RequireOptionalText(Input.Project, "角色项目", 1024);
             RequireOptionalText(Input.Cwd, "角色目录", 1024);

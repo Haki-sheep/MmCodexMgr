@@ -59,16 +59,18 @@ internal static class FormationAvatarUiTests
 
         var Seats = AllControls(Form).OfType<Button>().Where(Item => Item.Name.StartsWith("FormationSeat", StringComparison.Ordinal)).ToList();
         var Create = Find<Button>(Form, "FormationSetupCreate");
-        Require(Seats.Count == 8 && Seats.Count(Item => Item.Name.StartsWith("FormationSeatExecutor", StringComparison.Ordinal)) == 4,
-            "fixed capacity is one coordinator, four executors and three optional seats");
+        Require(Seats.Count == 10 && Seats.Count(Item => Item.Name.StartsWith("FormationSeatExecutor", StringComparison.Ordinal)) == 4,
+            "seat controls include two candidates each for reviewers and outsiders");
         Require(Seats.All(Item => Item.AccessibleName?.StartsWith("选择", StringComparison.Ordinal) == true) && !Create.Enabled,
             "every seat begins empty and creation requires a coordinator and an executor");
         var ProblemInput = Find<TextBox>(Form, "FormationProblem");
         Require(AllControls(Form).OfType<TextBox>().Single() == ProblemInput && ProblemInput.Text.Length == 0,
             "setup dialog exposes one empty problem field");
-        Require(AllControls(Form).OfType<ComboBox>().Count() == 8 &&
+        Require(AllControls(Form).OfType<ComboBox>().Count() == 10 &&
             AllControls(Form).OfType<ComboBox>().Where(Item => Item.Name.StartsWith("FormationEffort")).All(Item => Item.Items.Cast<object>().Select(Option => Option.ToString()).SequenceEqual(new[] { "低", "中", "高", "极高", "ultra" })),
-            "each role has effort and three independent roles have budgets");
+            "all five roles expose a proposed effort and an independent budget selector");
+        Require(AllControls(Form).OfType<ComboBox>().Where(Item => Item.Name.StartsWith("FormationBudget"))
+            .All(Item => Item.Items.Cast<int>().SequenceEqual(new[] { 1, 2, 3, 4 })), "every role offers the same four budget values");
         Require(new[] { "Coordinator", "Executor", "Learner" }.Select(Role => (int)Find<ComboBox>(Form, "FormationBudget" + Role).SelectedItem!).SequenceEqual(new[] { 3, 2, 1 }), "native budgets default to 3, 2, 1");
         Require(AllControls(Find<Panel>(Form, "FormationCoordinatorGroup")).Count(Item => Item.Name is "FormationRoleCoordinator" or "FormationRoleReviewer" or "FormationRoleOutsider") == 3, "coordinator review and outsider share one group");
         SaveImage(Form, $"formation-avatar-empty-{Variant}.png");
@@ -144,14 +146,25 @@ internal static class FormationAvatarUiTests
             if (Dark) SaveImage(Picker, "formation-avatar-picker-dark.png");
             Find<Button>(Picker, "FormationSeatConfirm").PerformClick();
         });
-        Require(!Find<ComboBox>(Form, "FormationEffortLearner").Enabled, "external-only role shows no configurable effort");
+        Require(Find<ComboBox>(Form, "FormationEffortLearner").Enabled && Find<ComboBox>(Form, "FormationBudgetLearner").Enabled,
+            "external seats retain independently selectable preferences");
 
         Find<ComboBox>(Form, "FormationEffortCoordinator").SelectedIndex = 2;
         Find<ComboBox>(Form, "FormationEffortExecutor").SelectedIndex = 3;
         Require(!Find<ComboBox>(Form, "FormationEffortReviewer").Enabled && !Find<ComboBox>(Form, "FormationEffortOutsider").Enabled,
             "native followers inherit coordinator reasoning by default");
-        Find<ComboBox>(Form, "FormationBudgetCoordinator").SelectedItem = 4;
+        var CoordinatorBudget = Find<ComboBox>(Form, "FormationBudgetCoordinator");
+        (int Budget, int Reviewers, int Outsiders)[] Allocations = [(1, 1, 0), (2, 1, 1), (3, 2, 1), (4, 2, 2)];
+        foreach (var Expected in Allocations)
+        {
+            CoordinatorBudget.SelectedItem = Expected.Budget;
+            Require(Find<Label>(Form, "FormationCountReviewer").Text == "×" + Expected.Reviewers &&
+                Find<Label>(Form, "FormationCountOutsider").Text == "×" + Expected.Outsiders,
+                "coordinator budget allocates the expected number of review and outsider seats");
+        }
         Find<ComboBox>(Form, "FormationBudgetExecutor").SelectedItem = 1;
+        Find<ComboBox>(Form, "FormationBudgetReviewer").SelectedItem = 2;
+        Find<ComboBox>(Form, "FormationBudgetOutsider").SelectedItem = 3;
         Select(Form, "Coordinator1", "second", "model-b");
         Edit(Form, "Coordinator1", Picker =>
         {
@@ -188,8 +201,8 @@ internal static class FormationAvatarUiTests
             Request.Requirement == Request.Theme && Request.Context == "" && Request.MaxParallel == 4,
             "the same trimmed problem names the formation and starts the coordinator with a requirement");
         var Controller = Members.Single(Item => Item.Role == eFormationRole.Coordinator);
-        var Review = Members.Single(Item => Item.Role == eFormationRole.Reviewer);
-        var Outsider = Members.Single(Item => Item.Role == eFormationRole.Outsider);
+        var Review = Members.First(Item => Item.Role == eFormationRole.Reviewer);
+        var Outsider = Members.First(Item => Item.Role == eFormationRole.Outsider);
         Require(Review.InstanceId == Controller.InstanceId && Outsider.InstanceId == Controller.InstanceId &&
             Review.Model == "review-override" && Outsider.Model == Controller.Model && Controller.InstanceId == "second" && Controller.Model == "model-b",
             "native override and inherited model preserve coordinator host");
@@ -197,11 +210,15 @@ internal static class FormationAvatarUiTests
         Require(Controller.Project == "second-workspace" && Review.Project.Length == 0 && Outsider.Project.Length == 0 &&
             Members.Single(Item => Item.Role == eFormationRole.Learner) is { Project: "dsh-workspace", Cwd.Length: 0 },
             "workspace selection persists the IDs for the respective desktop agents");
-        Require(Review.DispatchMode == eFormationDispatchMode.Native && !Review.FollowCoordinator && Outsider.DispatchMode == eFormationDispatchMode.Native && Outsider.FollowCoordinator && Controller.SubagentMax == 4 && Review.SubagentMax == 0 && Outsider.SubagentMax == 0, "native children share the coordinator budget without recursive budget");
+        Require(Review.DispatchMode == eFormationDispatchMode.Native && !Review.FollowCoordinator && Outsider.DispatchMode == eFormationDispatchMode.Native &&
+            Outsider.FollowCoordinator && Controller.SubagentMax == 4 && Review.SubagentMax == 2 && Outsider.SubagentMax == 3 &&
+            Members.Count(Item => Item.Role == eFormationRole.Reviewer) == 2 && Members.Count(Item => Item.Role == eFormationRole.Outsider) == 2,
+            "both native roles persist their configured independent limits and two members each");
         var ExecutorList = Members.Where(Item => Item.Role == eFormationRole.Executor).ToList();
         Require(ExecutorList.Count == 4 && ExecutorList.All(Item => Item.Effort == "xhigh" && Item.SubagentMax == 1) && ExecutorList.Select(Item => Item.Model).Distinct().Count() == 4,
             "executors use independent models and the same role effort");
-        Require(Members.Single(Item => Item.Role == eFormationRole.Learner).Effort == "", "unsupported effort is left to the selected Agent");
+        Require(Members.Single(Item => Item.Role == eFormationRole.Learner) is { Effort: "medium", SubagentMax: 1 },
+            "external learner preferences persist for the coordinator plan");
     }
 
     private static void SelectWorkspace(Form Picker, string AgentId)
