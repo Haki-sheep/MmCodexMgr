@@ -1,0 +1,85 @@
+using System;
+using System.IO;
+using System.Linq;
+using System.Collections.Generic;
+using System.Security.Cryptography;
+using UnityEditor;
+using UnityEngine;
+
+public static class MmEffectStagePackage
+{
+    [Serializable]
+    public sealed class Job
+    {
+        /// <summary> 目标工程绝对路径 </summary>
+        public string project;
+        /// <summary> 只读导出文件目录 </summary>
+        public string package;
+        /// <summary> 导出包内相对路径 </summary>
+        public string[] pathList;
+        /// <summary> 与路径对应的 SHA256 </summary>
+        public string[] hashList;
+    }
+
+    /// <summary>
+    /// 校验全部文件后仅补充新文件 相同内容保持不动
+    /// </summary>
+    public static object Execute()
+    {
+        var Config = JsonUtility.FromJson<Job>(@"__MM_EFFECT_JOB__");
+        string Project = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
+        if (!string.Equals(Project.TrimEnd('\\', '/'), Path.GetFullPath(Config.project).TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Wrong Unity project");
+        string SourceRoot = Path.GetFullPath(Config.package) + Path.DirectorySeparatorChar;
+        var CreatedList = new List<string>();
+        var PreservedList = new List<string>();
+        for (int I = 0; I < Config.pathList.Length; I++)
+        {
+            string Relative = Config.pathList[I];
+            string ExpectedHash = Config.hashList[I];
+            if (!Relative.StartsWith("FXForge/", StringComparison.Ordinal) || Relative.Split('/').Any(Part => Part == ".." || Part == "." || Part.Length == 0) || Relative.Contains("\\") || Relative.Contains(":")) throw new InvalidOperationException("Invalid package path " + Relative);
+            string Extension = Path.GetExtension(Relative).ToLowerInvariant();
+            if (!new[] { ".cs", ".shader", ".json", ".png", ".txt" }.Contains(Extension)) throw new InvalidOperationException("Unsupported file " + Relative);
+            string Source = Path.GetFullPath(Path.Combine(SourceRoot, Relative));
+            if (!Source.StartsWith(SourceRoot, StringComparison.OrdinalIgnoreCase) || Hash(Source) != ExpectedHash) throw new InvalidOperationException("Package hash mismatch " + Relative);
+            string Target = Path.Combine(Application.dataPath, Relative);
+            if (File.Exists(Target))
+            {
+                if (Hash(Target) != ExpectedHash) throw new InvalidOperationException("Existing asset differs No files were changed " + Target);
+                PreservedList.Add("Assets/" + Relative);
+            }
+            else CreatedList.Add("Assets/" + Relative);
+        }
+        AssetDatabase.StartAssetEditing();
+        try
+        {
+            foreach (string AssetPath in CreatedList)
+            {
+                EnsureFolder(Path.GetDirectoryName(AssetPath).Replace('\\', '/'));
+                File.Copy(Path.Combine(SourceRoot, AssetPath.Substring(7)), Path.Combine(Project, AssetPath), false);
+            }
+        }
+        finally { AssetDatabase.StopAssetEditing(); }
+        return new { project = Project, createdList = CreatedList.ToArray(), preservedList = PreservedList.ToArray(), next = "structured import and compile gate" };
+    }
+
+    /// <summary>
+    /// 使用 Unity API 创建导入目录
+    /// </summary>
+    private static void EnsureFolder(string Folder)
+    {
+        if (AssetDatabase.IsValidFolder(Folder)) return;
+        string Parent = Path.GetDirectoryName(Folder).Replace('\\', '/');
+        EnsureFolder(Parent);
+        if (string.IsNullOrEmpty(AssetDatabase.CreateFolder(Parent, Path.GetFileName(Folder)))) throw new IOException("Cannot create asset folder " + Folder);
+    }
+
+    /// <summary>
+    /// 读取普通导入文件并计算摘要
+    /// </summary>
+    private static string Hash(string FilePath)
+    {
+        using (var Algorithm = SHA256.Create())
+        using (var Stream = File.OpenRead(FilePath))
+            return BitConverter.ToString(Algorithm.ComputeHash(Stream)).Replace("-", "").ToLowerInvariant();
+    }
+}

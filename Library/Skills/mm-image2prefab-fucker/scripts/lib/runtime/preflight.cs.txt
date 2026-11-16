@@ -1,0 +1,38 @@
+using System;
+using System.Linq;
+using UnityEditor;
+using UnityEditor.SceneManagement;
+using UnityEngine;
+using TMPro;
+
+public static class DxxUiPreflight
+{
+    /// <summary>
+    /// 只读检查UGUI TMP字体与编辑器状态 返回工程接入缺项
+    /// </summary>
+    public static object Execute()
+    {
+        bool ugui = Type.GetType("UnityEngine.UI.Button, UnityEngine.UI") != null;
+        bool tmp = Type.GetType("TMPro.TMP_FontAsset, Unity.TextMeshPro") != null;
+        var tmpSettings = tmp ? TMP_Settings.instance : null;
+        bool tmpResourcesReady = tmpSettings != null;
+        var defaultFont = tmpResourcesReady ? TMP_Settings.defaultFontAsset : null;
+        var fonts = tmp ? AssetDatabase.FindAssets("t:TMP_FontAsset").Select(AssetDatabase.GUIDToAssetPath).ToArray() : new string[0];
+        var glyphs = new DxxUiFontGlyphs();
+        const string sample = "商店货舱航线日志购买整理出售";
+        var fontDetails = fonts.Select(path => {
+            var font = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(path);
+            var face = font.faceInfo;
+            return new { path, name = font.name, sourceFont = AssetDatabase.GetAssetPath(font.sourceFontFile), atlasPopulationMode = font.atlasPopulationMode.ToString(),
+                sampleText = sample, missingSample = new string(sample.Where(value => !glyphs.HasCharacter(font, value)).ToArray()),
+                faceInfo = new { face.familyName, face.styleName, face.pointSize, face.scale, face.lineHeight, face.ascentLine, face.descentLine } };
+        }).ToArray();
+        var sourceFonts = AssetDatabase.FindAssets("t:Font").Select(AssetDatabase.GUIDToAssetPath).Where(path => path.EndsWith(".otf", StringComparison.OrdinalIgnoreCase) || path.EndsWith(".ttf", StringComparison.OrdinalIgnoreCase)).ToArray();
+        var prefabs = AssetDatabase.IsValidFolder("Assets/UI") ? AssetDatabase.FindAssets("t:Prefab", new[] { "Assets/UI" }).Select(AssetDatabase.GUIDToAssetPath).Take(40).ToArray() : new string[0];
+        bool PrefabStageOpen = PrefabStageUtility.GetCurrentPrefabStage() != null;
+        return new { ugui, tmp, prefab_stage_open = PrefabStageOpen, tmp_resources_ready = tmpResourcesReady, default_font = defaultFont == null ? null : AssetDatabase.GetAssetPath(defaultFont), fonts, fontDetails, sourceFonts, prefabs, unity = Application.unityVersion,
+            edit_mode = !EditorApplication.isPlayingOrWillChangePlaymode,
+            compiling = EditorApplication.isCompiling, importing = EditorApplication.isUpdating,
+            ready = ugui && tmp && tmpResourcesReady && fonts.Length > 0 && !PrefabStageOpen && !EditorApplication.isPlayingOrWillChangePlaymode && !EditorApplication.isCompiling && !EditorApplication.isUpdating };
+    }
+}

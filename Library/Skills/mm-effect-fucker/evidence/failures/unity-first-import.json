@@ -1,0 +1,80 @@
+{
+  "argv": [
+    "editor",
+    "exec",
+    "--code-file",
+    "-",
+    "--timeout",
+    "180",
+    "--request-id",
+    "effect-capture-58415ad9-9d36-4f3e-b896-6d0756593eb9"
+  ],
+  "exitCode": 65,
+  "stderr": "",
+  "response": {
+    "schema_version": "1.0",
+    "command": "editor exec",
+    "ok": false,
+    "dry_run": false,
+    "data": null,
+    "error": {
+      "code": "FUC_EDITOR_OPERATION_FAILED",
+      "message": "Editor online operation ended in terminal state 'runtime_error'.",
+      "location": null,
+      "suggestions": [],
+      "retryable": false,
+      "recovery": "Inspect response artifact, fix the reported Editor error, then submit a new request ID.",
+      "details": {
+        "transport_ok": true,
+        "operation_ok": false,
+        "terminal_state": "runtime_error",
+        "data": {
+          "request_id": "effect-capture-58415ad9-9d36-4f3e-b896-6d0756593eb9",
+          "state": "runtime_error",
+          "completed": true,
+          "replayed": false,
+          "result": null,
+          "response": {
+            "protocol_version": "1.1",
+            "request_id": "effect-capture-58415ad9-9d36-4f3e-b896-6d0756593eb9",
+            "state": "runtime_error",
+            "success": false,
+            "submitted_at": "2026-11-11T03:30:37.9129788Z",
+            "started_at": "2026-11-11T03:30:37.9306614Z",
+            "completed_at": "2026-11-11T03:30:39.5746477Z",
+            "editor_pid": 30696,
+            "editor_instance_id": "30696-639299645785955946",
+            "editor_session_id": "20261111T033036.6204799-30696-c38ed0f8",
+            "unity_version": "2022.3.62f3",
+            "operation": "roslyn-exec",
+            "code_sha256": "3ba1cb882028fac1fca6b118d22996fc084a58a9b11c219f990c0d4adba9dbec",
+            "payload_sha256": "cfa261fbb45e23e1bec39fad4993caa28f7b645ebd867eca6bc475cc0717b404",
+            "result_json": "",
+            "result_text": "",
+            "result_type": "",
+            "error_type": "System.InvalidOperationException",
+            "error_message": "Generated prefab missing Complete the structured import first Assets/FXForge/Variants/fx_16b638dd296117d5c2c8/Effects/sumi_sword_slash_forward.prefab",
+            "error_stack_trace": "System.InvalidOperationException: Generated prefab missing Complete the structured import first Assets/FXForge/Variants/fx_16b638dd296117d5c2c8/Effects/sumi_sword_slash_forward.prefab\r\n  at FakeUnityCLI.EditorBridge.RoslynExecutor.Execute (System.String source) [0x000e7] in .\\Packages\\com.fakeunity.cli.editorbridge\\Editor\\RoslynExecutor.cs:88 ",
+            "diagnostics": [],
+            "artifacts": [],
+            "compile_ms": 1372,
+            "execute_ms": 0
+          },
+          "backend": null,
+          "operation_id": null
+        }
+      }
+    },
+    "meta": {
+      "warnings": [],
+      "truncation": {
+        "truncated": false,
+        "total_count": 0,
+        "cursor": null,
+        "full_output_path": null
+      },
+      "artifacts": null,
+      "project": null
+    }
+  }
+}

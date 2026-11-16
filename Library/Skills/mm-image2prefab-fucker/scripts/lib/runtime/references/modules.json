@@ -1,0 +1,532 @@
+[
+  {
+    "id": "module_1774248671772_hmmgdw",
+    "name": "文生图(banana)",
+    "exposedInputs": [
+      {
+        "alias": "文本输入",
+        "dataType": "text",
+        "required": true
+      }
+    ],
+    "configurableFields": [
+      {
+        "key": "aspectRatio",
+        "label": "宽高比",
+        "type": "enum",
+        "description": "生成图像的宽高比",
+        "required": false,
+        "defaultValue": "default",
+        "options": [
+          "default",
+          "1:1",
+          "1:4",
+          "1:8",
+          "2:3",
+          "3:2",
+          "3:4",
+          "4:1",
+          "4:3",
+          "4:5",
+          "5:4",
+          "8:1",
+          "9:16",
+          "16:9",
+          "21:9"
+        ]
+      },
+      {
+        "key": "resolution",
+        "label": "分辨率",
+        "type": "enum",
+        "description": "生成图像的分辨率",
+        "required": false,
+        "defaultValue": "1K",
+        "options": [
+          "0.5K",
+          "1K",
+          "2K",
+          "4K"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "module_1774928100822_ltprtx",
+    "name": "图像编辑(banana)",
+    "exposedInputs": [
+      {
+        "alias": "文本输入",
+        "dataType": "text",
+        "required": true
+      },
+      {
+        "alias": "图像输入1",
+        "dataType": "image",
+        "required": true
+      },
+      {
+        "alias": "图像输入9",
+        "dataType": "image",
+        "required": false
+      },
+      {
+        "alias": "图像输入8",
+        "dataType": "image",
+        "required": false
+      },
+      {
+        "alias": "图像输入7",
+        "dataType": "image",
+        "required": false
+      },
+      {
+        "alias": "图像输入5",
+        "dataType": "image",
+        "required": false
+      },
+      {
+        "alias": "图像输入6",
+        "dataType": "image",
+        "required": false
+      },
+      {
+        "alias": "图像输入4",
+        "dataType": "image",
+        "required": false
+      },
+      {
+        "alias": "图像输入3",
+        "dataType": "image",
+        "required": false
+      },
+      {
+        "alias": "图像输入2",
+        "dataType": "image",
+        "required": false
+      },
+      {
+        "alias": "图像输入10",
+        "dataType": "image",
+        "required": false
+      }
+    ],
+    "configurableFields": [
+      {
+        "key": "aspectRatio",
+        "label": "宽高比",
+        "type": "enum",
+        "description": "生成图像的宽高比",
+        "required": false,
+        "defaultValue": "default",
+        "options": [
+          "default",
+          "1:1",
+          "1:4",
+          "1:8",
+          "2:3",
+          "3:2",
+          "3:4",
+          "4:1",
+          "4:3",
+          "4:5",
+          "5:4",
+          "8:1",
+          "9:16",
+          "16:9",
+          "21:9"
+        ]
+      },
+      {
+        "key": "resolution",
+        "label": "分辨率",
+        "type": "enum",
+        "description": "生成图像的分辨率",
+        "required": false,
+        "defaultValue": "1K",
+        "options": [
+          "0.5K",
+          "1K",
+          "2K",
+          "4K"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "module_1775132709269_g2bm6q",
+    "name": "文生图(seedream5.0)",
+    "exposedInputs": [
+      {
+        "alias": "文本输入",
+        "dataType": "text",
+        "required": true
+      }
+    ],
+    "configurableFields": [
+      {
+        "key": "size",
+        "label": "尺寸",
+        "type": "enum",
+        "description": "生成图像的尺寸",
+        "required": false,
+        "defaultValue": "2048x2048",
+        "options": [
+          "2048x2048",
+          "1728x2304",
+          "2304x1728",
+          "1600x2848",
+          "2848x1600",
+          "3072x3072"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "module_1775132631201_xoi7u9",
+    "name": "图像编辑(seedream5.0)",
+    "exposedInputs": [
+      {
+        "alias": "文本输入",
+        "dataType": "text",
+        "required": true
+      },
+      {
+        "alias": "图像输入1",
+        "dataType": "image",
+        "required": true
+      },
+      {
+        "alias": "图像输入9",
+        "dataType": "image",
+        "required": false
+      },
+      {
+        "alias": "图像输入8",
+        "dataType": "image",
+        "required": false
+      },
+      {
+        "alias": "图像输入7",
+        "dataType": "image",
+        "required": false
+      },
+      {
+        "alias": "图像输入5",
+        "dataType": "image",
+        "required": false
+      },
+      {
+        "alias": "图像输入6",
+        "dataType": "image",
+        "required": false
+      },
+      {
+        "alias": "图像输入4",
+        "dataType": "image",
+        "required": false
+      },
+      {
+        "alias": "图像输入3",
+        "dataType": "image",
+        "required": false
+      },
+      {
+        "alias": "图像输入2",
+        "dataType": "image",
+        "required": false
+      },
+      {
+        "alias": "图像输入10",
+        "dataType": "image",
+        "required": false
+      }
+    ],
+    "configurableFields": [
+      {
+        "key": "size",
+        "label": "尺寸",
+        "type": "enum",
+        "description": "生成图像的尺寸",
+        "required": false,
+        "defaultValue": "2048x2048",
+        "options": [
+          "2048x2048",
+          "1728x2304",
+          "2304x1728",
+          "1600x2848",
+          "2848x1600",
+          "3072x3072"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "module_1776858044139_c8c3gg",
+    "name": "image2生图",
+    "exposedInputs": [
+      {
+        "alias": "文本输入",
+        "dataType": "text",
+        "required": true
+      },
+      {
+        "alias": "图像输入1",
+        "dataType": "image",
+        "required": false
+      },
+      {
+        "alias": "图像输入9",
+        "dataType": "image",
+        "required": false
+      },
+      {
+        "alias": "图像输入8",
+        "dataType": "image",
+        "required": false
+      },
+      {
+        "alias": "图像输入7",
+        "dataType": "image",
+        "required": false
+      },
+      {
+        "alias": "图像输入5",
+        "dataType": "image",
+        "required": false
+      },
+      {
+        "alias": "图像输入6",
+        "dataType": "image",
+        "required": false
+      },
+      {
+        "alias": "图像输入4",
+        "dataType": "image",
+        "required": false
+      },
+      {
+        "alias": "图像输入3",
+        "dataType": "image",
+        "required": false
+      },
+      {
+        "alias": "图像输入2",
+        "dataType": "image",
+        "required": false
+      },
+      {
+        "alias": "图像输入10",
+        "dataType": "image",
+        "required": false
+      }
+    ],
+    "configurableFields": [
+      {
+        "key": "size",
+        "label": "尺寸",
+        "type": "enum",
+        "description": "生成图像的尺寸",
+        "required": false,
+        "defaultValue": "auto",
+        "options": [
+          "auto",
+          "1024x1024",
+          "2048x2048",
+          "4096x4096",
+          "1536x1024",
+          "1024x1536",
+          "1344x1024",
+          "1024x1344",
+          "2048x1536",
+          "1536x2048",
+          "1280x1024",
+          "1024x1280",
+          "1920x1080",
+          "1080x1920",
+          "1824x1024",
+          "1024x1824",
+          "2560x1440",
+          "1440x2560",
+          "3840x2160",
+          "2160x3840",
+          "3840x1280",
+          "1280x3840",
+          "1600x900",
+          "900x1600",
+          "800x600"
+        ]
+      },
+      {
+        "key": "quality",
+        "label": "画质",
+        "type": "enum",
+        "description": "生成图像的画质",
+        "required": false,
+        "defaultValue": "auto",
+        "options": [
+          "auto",
+          "low",
+          "medium",
+          "high"
+        ]
+      },
+      {
+        "key": "background",
+        "label": "背景",
+        "type": "enum",
+        "description": "生成图像的背景模式",
+        "required": false,
+        "defaultValue": "auto",
+        "options": [
+          "auto",
+          "transparent",
+          "opaque"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "module_1789274948598_5spzxq",
+    "name": "image2.5生图",
+    "exposedInputs": [
+      {
+        "alias": "文本输入",
+        "dataType": "text",
+        "required": true
+      },
+      {
+        "alias": "图像输入1",
+        "dataType": "image",
+        "required": false
+      },
+      {
+        "alias": "图像输入9",
+        "dataType": "image",
+        "required": false
+      },
+      {
+        "alias": "图像输入8",
+        "dataType": "image",
+        "required": false
+      },
+      {
+        "alias": "图像输入7",
+        "dataType": "image",
+        "required": false
+      },
+      {
+        "alias": "图像输入5",
+        "dataType": "image",
+        "required": false
+      },
+      {
+        "alias": "图像输入6",
+        "dataType": "image",
+        "required": false
+      },
+      {
+        "alias": "图像输入4",
+        "dataType": "image",
+        "required": false
+      },
+      {
+        "alias": "图像输入3",
+        "dataType": "image",
+        "required": false
+      },
+      {
+        "alias": "图像输入2",
+        "dataType": "image",
+        "required": false
+      },
+      {
+        "alias": "图像输入10",
+        "dataType": "image",
+        "required": false
+      }
+    ],
+    "configurableFields": [
+      {
+        "key": "image25Size",
+        "label": "尺寸",
+        "type": "string",
+        "description": "auto 或 宽x高，例如 1024x1024、1536x1024、2048x1152、3840x2160。宽高为16倍数，最长边3840，比例不超过3:1，总像素655360–8294400",
+        "required": false,
+        "defaultValue": "1024x1024",
+        "options": [
+          "auto",
+          "1024x1024",
+          "1536x1024",
+          "1024x1536",
+          "1344x1024",
+          "1024x1344",
+          "1824x1024",
+          "1024x1824",
+          "3840x1280",
+          "1280x3840",
+          "2048x2048",
+          "2048x1536",
+          "1536x2048",
+          "2048x1152",
+          "1152x2048",
+          "3840x2160",
+          "2160x3840"
+        ],
+        "nodeId": "1789304498396",
+        "sourceKey": "image25Size",
+        "sourceNodeType": "image25"
+      },
+      {
+        "key": "image25Quality",
+        "label": "质量",
+        "type": "enum",
+        "description": "Image 2.5 生成质量",
+        "required": false,
+        "defaultValue": "auto",
+        "options": [
+          "auto",
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ],
+        "nodeId": "1789304498396",
+        "sourceKey": "image25Quality",
+        "sourceNodeType": "image25"
+      },
+      {
+        "key": "image25Background",
+        "label": "背景",
+        "type": "enum",
+        "description": "透明背景仅支持 PNG",
+        "required": false,
+        "defaultValue": "auto",
+        "options": [
+          "auto",
+          "transparent",
+          "opaque"
+        ],
+        "nodeId": "1789304498396",
+        "sourceKey": "image25Background",
+        "sourceNodeType": "image25"
+      },
+      {
+        "key": "image25OutputFormat",
+        "label": "输出格式",
+        "type": "enum",
+        "description": "PNG 或 JPEG，不支持 WebP 输出",
+        "required": false,
+        "defaultValue": "png",
+        "options": [
+          "png",
+          "jpeg"
+        ],
+        "nodeId": "1789304498396",
+        "sourceKey": "image25OutputFormat",
+        "sourceNodeType": "image25"
+      }
+    ]
+  }
+]

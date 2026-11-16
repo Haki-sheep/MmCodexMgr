@@ -1,0 +1,4 @@
+interface:
+  display_name: "mm-effect-fucker"
+  short_description: "制作粒子特效并生成GIF对照 通过FakeUnityCLI验证Unity导出"
+  default_prompt: "使用 $mm-effect-fucker 制作或调整这个特效，给出可编辑预设和 GIF，并按需要验证 Unity 导出。"

@@ -5,5 +5,5 @@
 *.suo
 !Library/**
 /Library/Skills/*
-!/Library/Skills/mm-more-more-fucker/
-!/Library/Skills/mm-more-more-fucker/**
+!/Library/Skills/mm-*/
+!/Library/Skills/mm-*/**

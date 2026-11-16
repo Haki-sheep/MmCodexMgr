@@ -1,0 +1,78 @@
+using System;
+using System.IO;
+using System.Linq;
+using System.Security.Cryptography;
+using UnityEditor;
+using UnityEngine;
+using Newtonsoft.Json.Linq;
+public static class ShaderReplacementPlan
+{
+    private const string Backup = __BACKUP__;
+    private const string ExpectedProject = __PROJECT__;
+    private const bool CompileOnly = __CHECK_ONLY__;
+    private const string RowsFile = __ROWS_FILE__;
+    public static object Execute()
+    {
+        if (CompileOnly) return new { status = "compiled_not_executed" };
+        if (!string.Equals(Path.GetFullPath(Path.GetDirectoryName(Application.dataPath)).TrimEnd('\\', '/'), Path.GetFullPath(ExpectedProject).TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Editor belongs to another project");
+        if (EditorApplication.isPlayingOrWillChangePlaymode || EditorApplication.isCompiling) throw new InvalidOperationException("Editor must be idle in Edit Mode");
+        string Root = Path.GetDirectoryName(Application.dataPath);
+        var Shaders = File.ReadAllLines(RowsFile).Select(Line => Line.Split('\t')).ToArray();
+        if (Directory.Exists(Backup)) throw new IOException("Backup already exists " + Backup);
+        var ShaderPlan = Shaders.Select(Row => {
+            string OriginalPath = Path.GetFullPath(Path.Combine(Root, Row[0]));
+            if (!OriginalPath.StartsWith(Path.Combine(Root,"Assets")+Path.DirectorySeparatorChar,StringComparison.OrdinalIgnoreCase) || Path.GetExtension(OriginalPath)!=".asset" || Path.ChangeExtension(Row[0],".shader").Replace('\\','/')!=Row[1]) throw new InvalidOperationException("Unexpected replacement target "+Row[0]);
+            var Shader = AssetDatabase.LoadAssetAtPath<Shader>(Row[0]);
+            if (!Shader || Shader.name != Row[5]) throw new InvalidOperationException("Unexpected source Shader " + Row[0]);
+            if (!AssetDatabase.TryGetGUIDAndLocalFileIdentifier(Shader, out string Guid, out long LocalId)) throw new InvalidOperationException("Shader identity missing " + Row[0]);
+            if (File.Exists(Path.Combine(Root, Row[1])) || File.Exists(Path.Combine(Root, Row[1] + ".meta"))) throw new IOException("Replacement already exists " + Row[1]);
+            if (Hash(Path.Combine(Root, Row[0])) != Row[3] || Hash(Row[2]) != Row[4]) throw new InvalidOperationException("Source changed since export " + Row[0]);
+            return new { oldPath = Row[0], newPath = Row[1], source = Row[2], guid = Guid, localId = LocalId, shader = Shader.name, oldHash = Row[3], restoredHash = Row[4], importer = AssetImporter.GetAtPath(Row[0]).GetType().Name };
+        }).ToArray();
+        var TargetPaths = ShaderPlan.Select(Item => Item.oldPath).ToHashSet(StringComparer.Ordinal);
+        var Materials = AssetDatabase.FindAssets("t:Material", new[] { "Assets" }).Select(AssetDatabase.GUIDToAssetPath).Select(Path => new { path = Path, material = AssetDatabase.LoadAssetAtPath<Material>(Path) }).Where(Item => Item.material && Item.material.shader && TargetPaths.Contains(AssetDatabase.GetAssetPath(Item.material.shader))).Select(Item => {
+            if (EditorUtility.IsDirty(Item.material) || Item.material.isVariant) throw new InvalidOperationException("Material is dirty or a variant "+Item.path);
+            AssetDatabase.TryGetGUIDAndLocalFileIdentifier(Item.material.shader, out string Guid, out long LocalId);
+            return new { path = Item.path, shaderPath = AssetDatabase.GetAssetPath(Item.material.shader), shaderGuid = Guid, shaderLocalId = LocalId, hash = Hash(Path.Combine(Root, Item.path)), metaHash = Hash(Path.Combine(Root,Item.path+".meta")) };
+        }).ToArray();
+        var GuidList = ShaderPlan.Select(Item => Item.guid).ToHashSet(StringComparer.Ordinal);
+        var SourcePaths = ShaderPlan.SelectMany(Item=>new[]{Item.oldPath,Item.newPath}).ToHashSet(StringComparer.Ordinal);
+        var References = AssetDatabase.GetAllAssetPaths().Where(Path => (Path.StartsWith("Assets/",StringComparison.Ordinal)||Path.StartsWith("Packages/",StringComparison.Ordinal)) && !AssetDatabase.IsValidFolder(Path) && !(Path.StartsWith("Assets/",StringComparison.Ordinal)&&Path.EndsWith(".mat",StringComparison.OrdinalIgnoreCase)) && !SourcePaths.Contains(Path)).Select(Path => new { path=Path, shaders=AssetDatabase.GetDependencies(Path,false).Where(Dependency=>GuidList.Contains(AssetDatabase.AssetPathToGUID(Dependency))).ToArray() }).Where(Item=>Item.shaders.Length>0).ToArray();
+        if (References.Length>0)
+        {
+            string ReferenceReport=Path.Combine(Path.GetDirectoryName(RowsFile),"blocked-references.json");
+            File.WriteAllText(ReferenceReport,Newtonsoft.Json.JsonConvert.SerializeObject(References,Newtonsoft.Json.Formatting.Indented));
+            throw new InvalidOperationException("Non-material or package references require a dedicated migration "+ReferenceReport);
+        }
+        Directory.CreateDirectory(Backup);
+        foreach (var Item in ShaderPlan)
+        {
+            string Destination = Path.Combine(Backup, Item.oldPath);
+            Directory.CreateDirectory(Path.GetDirectoryName(Destination));
+            File.Copy(Path.Combine(Root, Item.oldPath), Destination);
+            File.Copy(Path.Combine(Root, Item.oldPath + ".meta"), Destination + ".meta");
+            if (Hash(Destination) != Item.oldHash) throw new IOException("Backup verification failed " + Destination);
+        }
+        File.WriteAllLines(Path.Combine(Backup, "identities.tsv"), ShaderPlan.Select(Item => string.Join("\t", Item.oldPath, Item.newPath, Item.source, Item.guid, Item.localId.ToString(), Item.oldHash, Item.restoredHash)));
+        File.WriteAllLines(Path.Combine(Backup, "materials.tsv"), Materials.Select(Item => string.Join("\t", Item.path, Item.shaderGuid, Item.shaderLocalId.ToString(), Item.hash, Item.metaHash)));
+        string SnapshotFolder=Path.Combine(Backup,"material-snapshots");
+        Directory.CreateDirectory(SnapshotFolder);
+        foreach(var Item in Materials)
+        {
+            string Destination=Path.Combine(Backup,Item.path);
+            Directory.CreateDirectory(Path.GetDirectoryName(Destination));
+            File.Copy(Path.Combine(Root,Item.path),Destination);
+            File.Copy(Path.Combine(Root,Item.path+".meta"),Destination+".meta");
+            if(Hash(Destination)!=Item.hash || Hash(Destination+".meta")!=Item.metaHash) throw new IOException("Material backup verification failed "+Item.path);
+            var Material=AssetDatabase.LoadAssetAtPath<Material>(Item.path);
+            File.WriteAllText(Path.Combine(SnapshotFolder,AssetDatabase.AssetPathToGUID(Item.path)+".json"),EditorJsonUtility.ToJson(Material));
+        }
+        var Result=new { status="planned", backup = Backup, shaderCount = ShaderPlan.Length, materialCount = Materials.Length, shaders = ShaderPlan, materials = Materials };
+        File.WriteAllText(Path.Combine(Backup,"plan-result.json"),Newtonsoft.Json.JsonConvert.SerializeObject(Result,Newtonsoft.Json.Formatting.Indented));
+        return new { status="planned", backup=Backup, shaderCount=ShaderPlan.Length, materialCount=Materials.Length };
+    }
+    private static string Hash(string Path)
+    {
+        using (var Algorithm = SHA256.Create()) return BitConverter.ToString(Algorithm.ComputeHash(File.ReadAllBytes(Path))).Replace("-", "").ToLowerInvariant();
+    }
+}

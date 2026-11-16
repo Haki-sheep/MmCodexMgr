@@ -1,0 +1,123 @@
+{
+  "generator": "eng/unity6-core/CoreOracle.cs",
+  "observations": [
+    {
+      "editor_version": "6000.3.26f1",
+      "generation": "passed",
+      "offline_write_import_readback": "passed",
+      "mixed_graph_preservation": "passed",
+      "mixed_graph_assets": [
+        {
+          "asset": "Assets/Mixed.prefab",
+          "preserved_component_sha256": [
+            "e1ac4658c192a35d9fa135f8de476a3475b01358460fa0239a02639947e63322",
+            "487c0cb8f7aa9493b41402a255ae938074cb73f1d94fd59510e43c8727fbb907"
+          ],
+          "unknown_component_mutation": "rejected-zero-write"
+        },
+        {
+          "asset": "Assets/Mixed.unity",
+          "preserved_component_sha256": [
+            "6171a87b030fd9b2c4c80ec8efcd89a088d583fffc26c305faa7ff8a7ddab2a4",
+            "aaca0fa227a57c9d8407ffa193a40fccaa35d2d40167aeda06414ab21f23ae92"
+          ],
+          "unknown_component_mutation": "rejected-zero-write"
+        }
+      ]
+    },
+    {
+      "editor_version": "6000.4.10f1",
+      "generation": "passed",
+      "offline_write_import_readback": "passed",
+      "mixed_graph_preservation": "passed",
+      "mixed_graph_assets": [
+        {
+          "asset": "Assets/Mixed.prefab",
+          "preserved_component_sha256": [
+            "4a5f95acdb21a52dd42d636e65ea2845eda2f0197711de7fec4bab814cd3f012",
+            "f61bad4b7939035ca864ad704e21ab82e8989ce5bcd3abf03fcd8d26d7a77bbd"
+          ],
+          "unknown_component_mutation": "rejected-zero-write"
+        },
+        {
+          "asset": "Assets/Mixed.unity",
+          "preserved_component_sha256": [
+            "c4dbdd829044e05e5ff2a85758cba8fa31d4bc12456cf7dcb528910de9b93a51",
+            "497e0c2874900921268fb21711cbf36ce0f6bb706b4da24260dea05e62227125"
+          ],
+          "unknown_component_mutation": "rejected-zero-write"
+        }
+      ]
+    },
+    {
+      "editor_version": "6000.5.1f1",
+      "generation": "passed",
+      "offline_write_import_readback": "passed",
+      "mixed_graph_preservation": "passed",
+      "mixed_graph_assets": [
+        {
+          "asset": "Assets/Mixed.prefab",
+          "preserved_component_sha256": [
+            "43f2f98a0bb313ef29a39a8bfb835efff983b6d921c9336b5cefbd42f6d5529b",
+            "c1d6e8b4dab76629ad8c56b30f5533943c7b9554e41a89af23001749b36301fb"
+          ],
+          "unknown_component_mutation": "rejected-zero-write"
+        },
+        {
+          "asset": "Assets/Mixed.unity",
+          "preserved_component_sha256": [
+            "f8531acc5dba2465aa3158b52636e43d9ee02ea0e279662308191e336f4a760f",
+            "cc62f93137eddced8d56fd95f026ebeb9584e8d1a9b07fae5519c3c7b7a811d9"
+          ],
+          "unknown_component_mutation": "rejected-zero-write"
+        }
+      ]
+    },
+    {
+      "editor_version": "6000.6.4f1",
+      "generation": "passed",
+      "offline_write_import_readback": "passed",
+      "mixed_graph_preservation": "passed",
+      "mixed_graph_assets": [
+        {
+          "asset": "Assets/Mixed.prefab",
+          "preserved_component_sha256": [
+            "78b2305ffc9718cbe081ba4765efbb047a3e6715178fe2267a58e16f2f87472e",
+            "4c1a9634d1515ab0a7858141f8193cf3f15e5b3f8f77d8ff3bd7862cd76905b9"
+          ],
+          "unknown_component_mutation": "rejected-zero-write"
+        },
+        {
+          "asset": "Assets/Mixed.unity",
+          "preserved_component_sha256": [
+            "cc19434422095f850e488a1868603adc3358e110d243c6c29d69cf41b0a34ce0",
+            "12cca6da84443ac7915c144e5b107aa3a1357962b4f73c043aa50c4af426d49a"
+          ],
+          "unknown_component_mutation": "rejected-zero-write"
+        }
+      ]
+    }
+  ],
+  "verified_operations": [
+    "ordinary-prefab-create",
+    "gameobject-add-rename-active-tag-layer",
+    "transform-local-position-scale",
+    "existing-scene-core-edit",
+    "boxcollider-monobehaviour-byte-preservation",
+    "noncore-component-write-rejected-zero-write"
+  ],
+  "unverified": [
+    "Unity 6000.0 through 6000.2",
+    "noncore component field mutation",
+    "scene-create",
+    "PrefabInstance",
+    "Variant",
+    "MonoBehaviour field mutation",
+    "Dictionary field mutation",
+    "Importer",
+    "Material",
+    "Linux",
+    "macOS",
+    "Player"
+  ]
+}
