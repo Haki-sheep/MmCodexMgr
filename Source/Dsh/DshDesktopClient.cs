@@ -102,13 +102,21 @@ public sealed class DshDesktopClient : IDisposable
         using var Registry = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(Connection.HomePath, "storages", "workspace.json")));
         var ArchivedHashList = Registry.RootElement.GetProperty("global").GetProperty("archivedSessionIds").EnumerateArray().Select(Value => Value.GetString()!).ToHashSet();
         var Result = await CallAsync("session/list", new { _request = new { } }, Cancellation);
-        return Result.GetProperty("items").EnumerateArray().Where(Row => !Row.TryGetProperty("parentSessionId", out _)).Select(Row =>
+        var SessionList = new List<DshSession>();
+        foreach (var Row in Result.GetProperty("items").EnumerateArray().Where(Row => !Row.TryGetProperty("parentSessionId", out _)))
         {
             string Id = Row.GetProperty("sessionId").GetString()!;
-            var Projection = Row.GetProperty("projections");
-            string Title = Projection.GetProperty("values").TryGetProperty("title", out var Value) ? Value.GetString() ?? Id : Id;
-            return new DshSession(Id, Title, Row.TryGetProperty("cwd", out var Cwd) ? Cwd.GetString() ?? "" : "", Row.GetProperty("running").GetBoolean(), ArchivedHashList.Contains(Id), Projection.GetProperty("asOfSeq").GetInt32());
-        }).ToList();
+            try
+            {
+                // 冷会话摘要可省略投影 按会话读取真实元数据
+                var Projection = Row.TryGetProperty("projections", out var Inline) ? Inline : await CallAsync("session/projections", new { request = new { sessionId = Id } }, Cancellation);
+                if (Projection.ValueKind == JsonValueKind.Null) throw new InvalidDataException("DSH session/projections 未返回会话投影");
+                string Title = Projection.GetProperty("values").TryGetProperty("title", out var Value) ? Value.GetString() ?? Id : Id;
+                SessionList.Add(new DshSession(Id, Title, Row.TryGetProperty("cwd", out var Cwd) ? Cwd.GetString() ?? "" : "", Row.GetProperty("running").GetBoolean(), ArchivedHashList.Contains(Id), Projection.GetProperty("asOfSeq").GetInt32()));
+            }
+            catch (Exception Error) when (Error is not OperationCanceledException) { throw new InvalidDataException("DSH session/list 会话元数据读取失败 " + Id + " " + Error.Message, Error); }
+        }
+        return SessionList;
     }
 
     public async Task<DshSession> SessionAsync(string Id, CancellationToken Cancellation) => (await SessionsAsync(Cancellation)).SingleOrDefault(Session => Session.Id == Id && !Session.Archived) ?? throw new InvalidOperationException("DSH 未找到未归档会话 " + Id);

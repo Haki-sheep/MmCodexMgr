@@ -10,6 +10,7 @@ internal static class DshTests
     /// <summary> 断言数量 </summary>
     private static int Count;
 
+    #region Verification
     public static async Task RunAsync(bool Live = false)
     {
         string Root = Path.Combine(Path.GetTempPath(), "MmDshTests-" + Guid.NewGuid().ToString("N"));
@@ -56,6 +57,7 @@ internal static class DshTests
                 Handler.WrongRpc = true;
                 await RejectAsync(() => Client.SessionAsync("session-test", CancellationToken.None), "RPC identity mismatch rejected");
             }
+            await SessionQueriesAsync(Root);
             await RelayAsync(Root);
             if (Live) await LiveAsync();
             Console.WriteLine("PASS DSH " + Count + " assertions" + (Live ? " including live desktop model round" : ""));
@@ -68,6 +70,39 @@ internal static class DshTests
             try { Directory.Delete(Root, true); }
             catch (Exception CleanupError) when (Failure is not null) { throw new AggregateException("DSH 测试与清理均失败 " + Root, Failure, CleanupError); }
         }
+    }
+
+    private static async Task SessionQueriesAsync(string Root)
+    {
+        File.WriteAllText(Path.Combine(Root, "storages", "workspace.json"), "{\"global\":{\"archivedSessionIds\":[\"archived\"]}}");
+        var Handler = new FakeHandler(Root)
+        {
+            SessionListResponse = JsonSerializer.SerializeToElement(new
+            {
+                items = new object[]
+                {
+                    new { sessionId = "inline", running = true, cwd = Root, projections = new { kind = "sequenced", asOfSeq = 7, values = new { title = "内联会话" } } },
+                    new { sessionId = "session-test", running = false, cwd = Root },
+                    new { sessionId = "cached", running = false, cwd = Root, projections = new { kind = "cached", asOfSeq = 3, values = new { title = "缓存会话" } } },
+                    new { sessionId = "archived", running = false, cwd = Root, projections = new { kind = "sequenced", asOfSeq = 2, values = new { title = "归档会话" } } },
+                    new { sessionId = "child", parentSessionId = "inline", running = false }
+                }
+            })
+        };
+        using var Client = new DshDesktopClient(new(Root, new Uri("http://127.0.0.1:37891")), Handler);
+        var SessionList = await Client.SessionsAsync(CancellationToken.None);
+        Require(SessionList.Count == 4 && SessionList.All(Session => Session.Id != "child"), "optional projections keep all main sessions and exclude subagents");
+        Require(SessionList[0] is { Title: "内联会话", Running: true, Sequence: 7 } && SessionList[2] is { Title: "缓存会话", Sequence: 3 }, "inline and cached projection metadata stay intact");
+        Require(SessionList[1] is { Id: "session-test", Title: "会话", Sequence: 4, Archived: false } && SessionList[1].Cwd == Root, "cold session metadata comes from exact projection query");
+        Require(SessionList[3].Archived && Handler.ProjectionReads == 1, "archive state retained and only missing main projection queried");
+        Require((await Client.SessionAsync("session-test", CancellationToken.None)).Title == "会话", "exact session resolution survives unrelated cold summaries");
+        Handler.ProjectionResponse = JsonSerializer.SerializeToElement<object?>(null);
+        await RejectAsync(() => Client.SessionsAsync(CancellationToken.None), "absent exact projection must fail with session identity", "session-test");
+        Handler.ProjectionResponse = JsonSerializer.SerializeToElement(new { kind = "sequenced", values = new { title = "损坏投影" } });
+        await RejectAsync(() => Client.SessionsAsync(CancellationToken.None), "malformed exact projection must fail with session identity", "session-test");
+        Handler.ProjectionResponse = null;
+        Handler.FailedMethod = "session/projections";
+        await RejectAsync(() => Client.SessionsAsync(CancellationToken.None), "projection RPC failure retains original service error", "session/projections test/projection-failure projection read failed");
     }
 
     private static async Task RelayAsync(string Root)
@@ -111,8 +146,10 @@ internal static class DshTests
 
     private static void Require(bool Value, string Message) { if (!Value) throw new Exception(Message); Count++; }
     private static void Reject(Action Action, string Message) { try { Action(); } catch (InvalidOperationException) { Count++; return; } throw new Exception(Message); }
-    private static async Task RejectAsync(Func<Task> Action, string Message) { try { await Action(); } catch (Exception Error) when (Error is IOException or InvalidOperationException or InvalidDataException) { Count++; return; } throw new Exception(Message); }
+    private static async Task RejectAsync(Func<Task> Action, string Message, string? ExpectedError = null) { try { await Action(); } catch (Exception Error) when (Error is IOException or InvalidOperationException or InvalidDataException) { if (ExpectedError is not null && !Error.Message.Contains(ExpectedError, StringComparison.Ordinal)) throw new Exception(Message + " unexpected error " + Error.Message, Error); Count++; return; } throw new Exception(Message); }
+    #endregion
 
+    #region Fixtures
     private sealed class FakeBridge : IRelayBridge
     {
         public TaskCompletionSource<bool> Returned { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -153,6 +190,10 @@ internal static class DshTests
         public bool Complete = true;
         /// <summary> 模拟响应标识损坏 </summary>
         public bool WrongRpc;
+        public JsonElement? SessionListResponse { get; set; }
+        public JsonElement? ProjectionResponse { get; set; }
+        public string? FailedMethod { get; set; }
+        public int ProjectionReads { get; private set; }
         public FakeHandler(string Root) => this.Root = Root;
         public Task<HttpResponseMessage> DispatchAsync(HttpRequestMessage Request, CancellationToken Cancellation) => SendAsync(Request, Cancellation);
 
@@ -163,15 +204,17 @@ internal static class DshTests
             var Root = Document.RootElement;
             var Arguments = Root.GetProperty("payload").GetProperty("args");
             string Method = Root.GetProperty("method").GetString()!;
+            if (Method == FailedMethod)
+                return new(HttpStatusCode.OK) { Content = new StringContent(JsonSerializer.Serialize(new { type = "server-response", rpcId = Root.GetProperty("rpcId").GetString(), result = new { ok = false, error = new { code = "test/projection-failure", message = "projection read failed" } } }), Encoding.UTF8, "application/json") };
             var Args = Arguments.TryGetProperty("request", out var Value) ? Value : default;
             object Result;
             switch (Method)
             {
                 case "session/create": Id = Args.GetProperty("sessionId").GetString()!; Created++; Result = new { sessionId = Id }; break;
                 case "session/rename": Title = Args.GetProperty("title").GetString()!; Result = new { title = Title, seq = 3 }; break;
-                case "session/list": Result = new { items = new[] { new { sessionId = Id, running = false, cwd = this.Root, projections = new { kind = "sequenced", asOfSeq = 4, values = new { title = Title } } } } }; break;
+                case "session/list": Result = SessionListResponse.HasValue ? SessionListResponse.Value : new { items = new[] { new { sessionId = Id, running = false, cwd = this.Root, projections = new { kind = "sequenced", asOfSeq = 4, values = new { title = Title } } } } }; break;
                 case "session/prompt": RequestId = Args.GetProperty("requestId").GetString()!; Prompts++; Result = new { accepted = true }; break;
-                case "session/projections": Result = new { kind = "sequenced", asOfSeq = 4, values = new { inbox = new Dictionary<string, object> { ["next-turn"] = Queued ? new object[] { new { id = "queue-item", source = new { kind = "user", rpcId = RequestId } } } : Array.Empty<object>(), ["next-step"] = Array.Empty<object>() } } }; break;
+                case "session/projections": Require(Args.GetProperty("sessionId").GetString() == Id, "projection query addresses original session"); ProjectionReads++; Result = ProjectionResponse.HasValue ? ProjectionResponse.Value : new { kind = "sequenced", asOfSeq = 4, values = new { title = Title, inbox = new Dictionary<string, object> { ["next-turn"] = Queued ? new object[] { new { id = "queue-item", source = new { kind = "user", rpcId = RequestId } } } : Array.Empty<object>(), ["next-step"] = Array.Empty<object>() } } }; break;
                 case "session/page": Result = new { records = EventList().Select(Event => new { type = "event", @event = Event }).ToArray(), hasMore = false }; break;
                 case "session/cancel": Cancelled++; Result = new { accepted = true }; break;
                 case "session/updateQueue": Require(Args.GetProperty("itemId").GetString() == "queue-item" && Args.GetProperty("action").GetProperty("kind").GetString() == "remove", "only addressed queue occurrence removed"); Removed++; Queued = false; Result = new { accepted = true }; break;
@@ -192,4 +235,5 @@ internal static class DshTests
             return List;
         }
     }
+    #endregion
 }

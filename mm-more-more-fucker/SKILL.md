@@ -123,6 +123,8 @@ CLI 从 `CODEX_HOME` 和 `CODEX_THREAD_ID` 读取当前身份 不要填写另一
 
 `projects --instance dsh` 列出桌面工作区 `sessions --instance dsh` 列出未归档的主会话 支持 `--project <default|工作区ID|名称|绝对路径>` 与 `--session <准确ID|完整名称>` 重名必须指定 ID
 
+DSH 冷会话摘要可省略 `projections` 管理器通过只读 `session/projections` 补查真实标题与序号 不遗漏该会话 补查失败仍中止查询并保留会话 ID 与原错误
+
 联调任务复用 `agent_start` 或 CLI `start` 设置 `instance=dsh` `session` 与 `create_title` 二选一 `project` 可选 新建时省略则放入默认工作区 已有会话沿用原工作区 不接受 `cwd` `model` `cursor_cli_path` 沿用桌面会话模型 当前 DSH 执行端直接完成本次任务 `worker_limits` 三项必须全为 0 默认全为 0 主会话自身预算不受影响 `workspace` 仍必须声明 属于任务写入约束 不自动更改已有桌面会话的沙盒模式
 
 管理器把会话与任务放入原看板 自动按稳定请求 ID 读取持久事件 对应轮次结束并取得合法结构化结果后回传原主会话 受理消息不等于完成 主会话按事件回传与验收的规则处理已到达结果和独立工作 再等待未到达的结果 管理器重启后 `resume` 只恢复原请求监测 不重复发送原任务 若派发是否送达不明 先核对原会话与请求 不能直接重试创建 取消会停止结果监测并核对请求归属后请求取消 DSH 活动轮次或移除待执行消息 接口异常时仍需在桌面核对工具进程 不声称所有脚本已终止
