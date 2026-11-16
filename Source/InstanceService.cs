@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Management;
 using System.Runtime.InteropServices;
@@ -9,6 +10,8 @@ public sealed record RunningInstance(int ProcessId, string CommandLine, IntPtr W
 
 public static class InstanceService
 {
+    private static readonly ConcurrentDictionary<string, Lazy<int>> LaunchDict = new(StringComparer.OrdinalIgnoreCase);
+
     #region Launch
     public static List<RunningInstance> ListRunning()
     {
@@ -66,6 +69,14 @@ public static class InstanceService
     }
 
     public static int Launch(InstanceProfile Profile)
+    {
+        string Key = Profile.IsPrimary ? "" : ManagerPaths.Normalize(Profile.DataPath);
+        var Launch = LaunchDict.GetOrAdd(Key, _ => new Lazy<int>(() => LaunchOrShow(Profile)));
+        try { return Launch.Value; }
+        finally { LaunchDict.TryRemove(new KeyValuePair<string, Lazy<int>>(Key, Launch)); }
+    }
+
+    private static int LaunchOrShow(InstanceProfile Profile)
     {
         ResponsesCompatProfile.EnsureRunning(Profile, AgentCliDeployment.LoadPath());
         var Existing = Find(Profile, ListRunning());

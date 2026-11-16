@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.IO.Pipes;
 using System.Text;
 using System.Text.Json;
 using System.Xml.Linq;
@@ -21,13 +22,12 @@ internal static class PackagedAppLauncher
         var Application = Package.Descendants().Single(Item => Item.Name.LocalName == "Application" &&
             string.Equals(Path.GetFullPath(Path.Combine(PackageRoot, Item.Attribute("Executable")!.Value)), AppPath, StringComparison.OrdinalIgnoreCase));
         string AppId = Application.Attribute("Id")!.Value;
-        string ResultPath = Path.Combine(ManagerPaths.Root, "launch-" + Guid.NewGuid().ToString("N") + ".json");
-        Directory.CreateDirectory(ManagerPaths.Root);
+        string PipeName = @"LOCAL\MmCodexLaunch-" + Guid.NewGuid().ToString("N");
+        using var Receipt = new NamedPipeServerStream(PipeName, PipeDirection.In, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
         if (!Profile.IsPrimary) Directory.CreateDirectory(Profile.DataPath);
         string DataSetup = Profile.IsPrimary ? "" : "$Info.EnvironmentVariables['CODEX_ELECTRON_USER_DATA_PATH']=" + Quote(Profile.DataPath) + "; $Info.Arguments=" + Quote("--user-data-dir=\"" + Profile.DataPath + "\"") + ";";
         // 在包身份内设置环境变量 避免激活代理丢弃实例目录
-        string InnerScript = "$Result=& { " + """
-            $ErrorActionPreference='Stop';
+        string StartScript = """
             try {
                 $Info=New-Object System.Diagnostics.ProcessStartInfo;
                 $Info.UseShellExecute=$false;
@@ -38,7 +38,20 @@ internal static class PackagedAppLauncher
                 $Started=[System.Diagnostics.Process]::Start($Info);
                 @{processId=$Started.Id} | ConvertTo-Json -Compress
             } catch { @{error=$_.Exception.ToString()} | ConvertTo-Json -Compress }
-            """ + " }; $Result | Set-Content -LiteralPath " + Quote(ResultPath + ".tmp") + " -Encoding UTF8; Move-Item -LiteralPath " + Quote(ResultPath + ".tmp") + " -Destination " + Quote(ResultPath);
+            """;
+        string InnerScript = "$Pipe=[IO.Pipes.NamedPipeClientStream]::new('.', " + Quote(PipeName) + ", [IO.Pipes.PipeDirection]::Out); " + """
+            $ErrorActionPreference='Stop';
+            try {
+                $Pipe.Connect(5000);
+                $Writer=[IO.StreamWriter]::new($Pipe, [Text.UTF8Encoding]::new($false));
+                try {
+                    $Result=& {
+            """ + StartScript + """
+                    };
+                    $Writer.WriteLine($Result);
+                } finally { $Writer.Dispose() }
+            } finally { $Pipe.Dispose() }
+            """;
         string InnerArguments = "-NoProfile -NonInteractive -WindowStyle Hidden -EncodedCommand " + Encode(InnerScript);
         string OuterScript = "$ErrorActionPreference='Stop'; Invoke-CommandInDesktopPackage -PackageFamilyName " + Quote(PackageFamily) + " -AppId " + Quote(AppId) + " -Command powershell.exe -Args " + Quote(InnerArguments) + " -PreventBreakaway";
         var Activation = new ProcessStartInfo("powershell.exe") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
@@ -46,29 +59,28 @@ internal static class PackagedAppLauncher
         Activation.ArgumentList.Add("-NonInteractive");
         Activation.ArgumentList.Add("-EncodedCommand");
         Activation.ArgumentList.Add(Encode(OuterScript));
+        using var Activator = Process.Start(Activation) ?? throw new IOException("无法启动应用包激活器");
+        var Output = Activator.StandardOutput.ReadToEndAsync();
+        var ErrorOutput = Activator.StandardError.ReadToEndAsync();
+        if (!Activator.WaitForExit(15000)) throw new TimeoutException("应用包激活器超时 请核对目标实例是否已经启动");
+        string Details = ErrorOutput.GetAwaiter().GetResult();
+        Output.GetAwaiter().GetResult();
+        if (Activator.ExitCode != 0) throw new IOException("应用包激活失败 " + Details);
+        using var Timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
         try
         {
-            using var Process = System.Diagnostics.Process.Start(Activation) ?? throw new IOException("无法启动应用包激活器");
-            var Output = Process.StandardOutput.ReadToEndAsync();
-            var Error = Process.StandardError.ReadToEndAsync();
-            if (!Process.WaitForExit(15000)) throw new TimeoutException("应用包激活器超时 请核对目标实例是否已经启动");
-            string Details = Error.GetAwaiter().GetResult();
-            Output.GetAwaiter().GetResult();
-            if (Process.ExitCode != 0) throw new IOException("应用包激活失败 " + Details);
-            var Timer = Stopwatch.StartNew();
-            while (Timer.Elapsed < TimeSpan.FromSeconds(15))
-            {
-                if (!File.Exists(ResultPath)) { Thread.Sleep(100); continue; }
-                using var Result = JsonDocument.Parse(File.ReadAllText(ResultPath));
-                if (Result.RootElement.TryGetProperty("error", out var Failure)) throw new IOException("包内实例启动失败 " + Failure.GetString());
-                return Result.RootElement.GetProperty("processId").GetInt32();
-            }
-            throw new TimeoutException("未收到包内启动结果 请核对目标实例是否已经启动");
+            Receipt.WaitForConnectionAsync(Timeout.Token).GetAwaiter().GetResult();
+            using var Reader = new StreamReader(Receipt, Encoding.UTF8);
+            string? Response = Reader.ReadLineAsync(Timeout.Token).AsTask().GetAwaiter().GetResult();
+            if (Response is null) throw new IOException($"包内启动回执已断开 实例 {Profile.Name}");
+            using var Result = JsonDocument.Parse(Response);
+            if (Result.RootElement.TryGetProperty("error", out var Failure))
+                throw new IOException("包内实例启动失败 " + Failure.GetString());
+            return Result.RootElement.GetProperty("processId").GetInt32();
         }
-        finally
+        catch (OperationCanceledException Error) when (Timeout.IsCancellationRequested)
         {
-            if (File.Exists(ResultPath)) File.Delete(ResultPath);
-            if (File.Exists(ResultPath + ".tmp")) File.Delete(ResultPath + ".tmp");
+            throw new TimeoutException($"包内启动回执超时 实例 {Profile.Name} 请刷新运行状态", Error);
         }
     }
 

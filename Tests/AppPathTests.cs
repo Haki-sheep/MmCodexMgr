@@ -32,10 +32,18 @@ internal static class AppPathTests
         string Root = Path.Combine(Path.GetTempPath(), "CodexAppLaunchTests-" + Guid.NewGuid().ToString("N"));
         var Profile = new InstanceProfile { Name = "路径回归测试", HomePath = Path.Combine(Root, "home"), DataPath = Path.Combine(Root, "data") };
         var BeforeList = InstanceService.ListRunning();
-        int ProcessId = InstanceService.Launch(Profile);
-        using var DesktopProcess = Process.GetProcessById(ProcessId);
         try
         {
+            using var StartGate = new Barrier(2);
+            var LaunchList = Enumerable.Range(0, 2).Select(_ => Task.Factory.StartNew(() =>
+            {
+                if (!StartGate.SignalAndWait(TimeSpan.FromSeconds(5))) throw new TimeoutException("并发启动测试未同步");
+                return InstanceService.Launch(Profile);
+            }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default)).ToArray();
+            var ProcessIdList = Task.WhenAll(LaunchList).GetAwaiter().GetResult();
+            int ProcessId = ProcessIdList[0];
+            if (ProcessIdList[1] != ProcessId) throw new InvalidOperationException("FAILED: concurrent launch created multiple processes");
+            using var DesktopProcess = Process.GetProcessById(ProcessId);
             var Timeout = Stopwatch.StartNew();
             while (Timeout.Elapsed < TimeSpan.FromSeconds(30))
             {
@@ -45,7 +53,7 @@ internal static class AppPathTests
                 if (Running is not null && Running.ProcessId == ProcessId && Running.Window != IntPtr.Zero)
                 {
                     if (BeforeList.Any(Item => RunningList.All(After => After.ProcessId != Item.ProcessId))) throw new InvalidOperationException("FAILED: an existing Codex instance exited during the launch test");
-                    Console.WriteLine($"PASS fresh Codex window PID={ProcessId}; existing instances preserved; fixture={Root}");
+                    Console.WriteLine($"PASS package launch receipt and concurrent launch shared PID={ProcessId}; fresh window found; existing instances preserved");
                     return;
                 }
                 Thread.Sleep(250);
@@ -54,7 +62,18 @@ internal static class AppPathTests
         }
         finally
         {
-            if (!DesktopProcess.HasExited) { DesktopProcess.Kill(true); DesktopProcess.WaitForExit(); }
+            if (!ManagerPaths.IsUnder(Root, Path.GetTempPath())) throw new IOException("启动测试清理路径越界");
+            foreach (var Running in InstanceService.ListRunning())
+            {
+                if (InstanceService.Find(Profile, new() { Running }) is null) continue;
+                InstanceService.StopAsync(Profile, Running.ProcessId).GetAwaiter().GetResult();
+            }
+            var Cleanup = Stopwatch.StartNew();
+            while (Directory.Exists(Root))
+            {
+                try { Directory.Delete(Root, true); }
+                catch (IOException) when (Cleanup.Elapsed < TimeSpan.FromSeconds(5)) { Thread.Sleep(100); }
+            }
         }
     }
 }
