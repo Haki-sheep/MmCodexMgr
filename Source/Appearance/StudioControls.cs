@@ -324,6 +324,9 @@ public sealed class StudioChip : Label, IThemedControl
     private eTone ToneValue;
     /// <summary> 当前调色板 </summary>
     private ThemePalette Colors = ThemePalette.Light;
+    private System.Windows.Forms.Timer? Animation;
+    private long StartedAt;
+    private (Color Fore, Color Back)? TransitionFrom;
 
     public StudioChip()
     {
@@ -335,10 +338,63 @@ public sealed class StudioChip : Label, IThemedControl
         DoubleBuffered = true;
     }
 
-    public eTone Tone { get => ToneValue; set { ToneValue = value; Invalidate(); } }
+    public eTone Tone
+    {
+        get => ToneValue;
+        set
+        {
+            if (ToneValue == value && TransitionFrom is null) return;
+            StopTransition();
+            ToneValue = value;
+            Invalidate();
+        }
+    }
+
+    internal void TransitionTo(eTone Tone)
+    {
+        if (ToneValue == Tone) return;
+        if (!Visible || !SystemInformation.IsMenuAnimationEnabled)
+        {
+            this.Tone = Tone;
+            return;
+        }
+        TransitionFrom = DisplayColors();
+        ToneValue = Tone;
+        StartedAt = System.Diagnostics.Stopwatch.GetTimestamp();
+        if (Animation is null)
+        {
+            Animation = new() { Interval = 16 };
+            Animation.Tick += (_, _) =>
+            {
+                if (!Visible || System.Diagnostics.Stopwatch.GetElapsedTime(StartedAt).TotalMilliseconds >= 180) StopTransition();
+                Invalidate();
+            };
+        }
+        Animation.Start();
+        Invalidate();
+    }
+
+    private (Color Fore, Color Back) DisplayColors()
+    {
+        var Current = Colors.Tone(ToneValue);
+        if (TransitionFrom is not { } Previous) return Current;
+        double Progress = Math.Min(1, System.Diagnostics.Stopwatch.GetElapsedTime(StartedAt).TotalMilliseconds / 180);
+        double Amount = 1 - (1 - Progress) * (1 - Progress);
+        return (Interpolate(Previous.Fore, Current.Fore, Amount), Interpolate(Previous.Back, Current.Back, Amount));
+    }
+
+    private static Color Interpolate(Color From, Color To, double Amount) => Color.FromArgb(
+        (int)(From.R + (To.R - From.R) * Amount), (int)(From.G + (To.G - From.G) * Amount), (int)(From.B + (To.B - From.B) * Amount));
+
+    private void StopTransition()
+    {
+        Animation?.Stop();
+        TransitionFrom = null;
+    }
 
     public void ApplyTheme(AppTheme Theme)
     {
+        StopTransition();
         Colors = Theme.Palette;
         BackColor = Parent?.BackColor ?? Colors.Surface;
         Invalidate();
@@ -349,11 +405,17 @@ public sealed class StudioChip : Label, IThemedControl
         var Canvas = Event.Graphics;
         ButtonRenderer.DrawParentBackground(Canvas, ClientRectangle, this);
         Canvas.SmoothingMode = SmoothingMode.AntiAlias;
-        var (Fore, Back) = Colors.Tone(ToneValue);
+        var (Fore, Back) = DisplayColors();
         using (var Path = StudioGeometry.Rounded(new RectangleF(0, 0, Width - 1, Height - 1), (Height - 1) / 2f))
         using (var Brush = new SolidBrush(Back))
             Canvas.FillPath(Brush, Path);
         TextRenderer.DrawText(Canvas, Text, Font, ClientRectangle, Fore, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis);
+    }
+
+    protected override void Dispose(bool Disposing)
+    {
+        if (Disposing) Animation?.Dispose();
+        base.Dispose(Disposing);
     }
 }
 

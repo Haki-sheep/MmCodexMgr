@@ -20,7 +20,7 @@ internal sealed class FormationAvatarButton : Button, IThemedControl
     private readonly bool ClipToCircle;
 
     public eTone Tone { get; init; }
-    public eTone? StatusTone { get; init; }
+    public eTone? StatusTone { get; set; }
     public string SeatNumber { get; init; } = "";
 
     public FormationAvatarButton(int Diameter, bool ClipToCircle = false)

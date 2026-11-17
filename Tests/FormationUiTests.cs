@@ -12,7 +12,17 @@ internal static class FormationUiTests
         string Root = Path.Combine(Path.GetTempPath(), "MmFormationUi-" + Guid.NewGuid().ToString("N"));
         try
         {
-            foreach (bool Dark in new[] { true, false }) Verify(Root, Dark);
+            using var Dispatcher = new Control();
+            _ = Dispatcher.Handle;
+            Exception? Failure = null;
+            Dispatcher.BeginInvoke(() =>
+            {
+                try { foreach (bool Dark in new[] { true, false }) Verify(Root, Dark); }
+                catch (Exception Error) { Failure = Error; }
+                finally { Application.ExitThread(); }
+            });
+            Application.Run();
+            if (Failure is not null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(Failure).Throw();
             Console.WriteLine($"PASS formation UI {Count} assertions");
             return 0;
         }
@@ -58,10 +68,16 @@ internal static class FormationUiTests
             Application.DoEvents();
             var Page = Descendants(Form).OfType<FormationPage>().Single();
             var Card = Page.Cards.Single();
-            long AllocatedBefore = GC.GetAllocatedBytesForCurrentThread();
-            for (int Refresh = 0; Refresh < 50; Refresh++) Page.Reload();
+            Application.DoEvents();
+            int Layouts = 0;
+            Card.Parent!.Layout += (_, _) => Layouts++;
+            int Repaints = 0;
+            Card.Invalidated += (_, _) => Repaints++;
+            var RefreshList = Enumerable.Range(0, 50).Select(_ => Page.ReloadAsync()).ToArray();
+            Wait(() => RefreshList.All(Task => Task.IsCompletedSuccessfully), "unchanged refresh burst");
             Require(ReferenceEquals(Card, Page.Cards.Single()) && !Card.IsDisposed, "unchanged refresh retains cards and their native controls");
-            Console.WriteLine("50 unchanged refresh allocations: " + (GC.GetAllocatedBytesForCurrentThread() - AllocatedBefore));
+            Require(RefreshList.All(Task => ReferenceEquals(Task, RefreshList[0])) && Layouts == 0 && Repaints == 0,
+                "unchanged refresh burst coalesces and avoids card layout or paint");
             Require(Page.Visible && Card.Run.Id == Run.Id, "home page renders the persisted formation");
             Require(Card.ActionButton(FormationCard.ContextAction) is null, "business requirements are discussed in the coordinator chat");
             Require(Card.Board.Members.Select(Item => Item.Id).SequenceEqual(Run.MemberList.Select(Item => Item.Id)), "seat board binds every persisted seat");
@@ -91,11 +107,29 @@ internal static class FormationUiTests
             Host.Controls.Add(Writable);
             Theme.Apply(Host);
             Host.Show();
-            Application.DoEvents();
+            Wait(() => Writable.Cards.Count == 1, "initial background refresh");
             Require(Writable.CanWrite && Descendants(Writable).OfType<Button>().Single(Item => Item.Name == "FormationCreate").Enabled, "connected page enables creation");
+            var Original = Writable.Cards.Single();
+            var Seat = Original.Board.Controls.OfType<Button>().First();
+            var DetailButton = Original.ActionButton(FormationCard.DetailAction);
+            VerifyRefreshDuringStoreLock(Writable, Path.Combine(Case, "formation"), Original);
             Writable.Cards.Single().ActionButton(FormationCard.PauseAction)!.PerformClick();
             Wait(() => Store.Get(Run.Id).State == eFormationState.Paused, "pause");
             Wait(() => Writable.Cards.SingleOrDefault()?.Run.State == eFormationState.Paused, "pause refresh");
+            Require(ReferenceEquals(Original, Writable.Cards.Single()) && ReferenceEquals(Seat, Original.Board.Controls.OfType<Button>().First())
+                && ReferenceEquals(DetailButton, Original.ActionButton(FormationCard.DetailAction)),
+                "a changed formation keeps its existing card, seats and unchanged buttons");
+            if (SystemInformation.IsMenuAnimationEnabled)
+            {
+                var Clock = System.Diagnostics.Stopwatch.StartNew();
+                Wait(() => Clock.ElapsedMilliseconds >= 65, "card transition intermediate frame");
+                Color Highlight = ReadHeaderPixel(Original);
+                Wait(() => Clock.ElapsedMilliseconds >= 240, "card transition");
+                int SettledColor = ReadHeaderPixel(Original).ToArgb();
+                Require(Highlight.ToArgb() != SettledColor && SettledColor == Theme.Palette.Surface.ToArgb(),
+                    "the changed card header eases to its normal background");
+            }
+            else Console.WriteLine("Header animation disabled by the Windows animation preference");
             Require(FormationCard.StatusText(Writable.Cards.Single().Run) == "阻塞中", "paused scheduling uses the blocked display status");
             Require(Writable.Cards.Single().Visible && Writable.Cards.Single().Height > 100 && Writable.Cards.Single().Parent!.Height >= Writable.Cards.Single().Height,
                 "blocked formation retains a visible card and an allocated scroll layout");
@@ -110,7 +144,7 @@ internal static class FormationUiTests
             Wait(() => Activation.IsCompleted, "activation");
             Require(Activation.IsFaulted && Activation.Exception!.InnerException!.Message.Contains("没有接入真实统筹启动消息") && Store.Get(Run.Id).ActivationState == eFormationDeliveryState.Pending, "activation without a real coordinator bridge fails visibly instead of faking delivery");
 
-            using var Detail = new FormationDetailDialog(Run.Id, Store, Settings, Theme, false, (_, _, _) => Task.FromException<object>(new InvalidOperationException("只读详情不应执行")));
+            using var Detail = new FormationDetailDialog(Store.Get(Run.Id), Store, Settings, Theme, false, (_, _, _) => Task.FromException<object>(new InvalidOperationException("只读详情不应执行")));
             Theme.Apply(Detail);
             Detail.Show();
             Application.DoEvents();
@@ -119,7 +153,81 @@ internal static class FormationUiTests
             Require(!Descendants(Detail).Any(Item => Item.Text is "最近事件" or "交付总结" or "需求" or "上下文") &&
                 !Descendants(Detail).OfType<TextBox>().Any(), "detail omits event logs summary and requirement context views");
             Require(Store.Get(Run.Id).RevisionList.Count > 0 && Store.Get(Run.Id).EventList.Count > 0, "view removal preserves CLI records");
+
+            var Removable = Store.Create(new()
+            {
+                Theme = "归档并移出列表测试", SetupOnly = true,
+                MemberList = new()
+                {
+                    new() { Role = eFormationRole.Coordinator, InstanceId = "primary" },
+                    new() { Role = eFormationRole.Executor, InstanceId = "primary" }
+                }
+            });
+            var Refresh = Writable.ReloadAsync();
+            Wait(() => Refresh.IsCompletedSuccessfully, "refresh after creating removable formation");
+            Require(Writable.Cards.Single(Item => Item.Run.Id == Removable.Id).ActionButton(FormationCard.ArchiveAction)!.Enabled,
+                "archive is available on a normal card");
+            const string RemoveAction = "archive-remove";
+            var PlanTask = Writable.ExecuteAsync("lifecycle-preview", new { run_id = Removable.Id, action = RemoveAction }, "");
+            Wait(() => PlanTask.IsCompleted, "archive-and-remove preview");
+            var Plan = (FormationLifecyclePlan)PlanTask.GetAwaiter().GetResult();
+            var Remove = Writable.ExecuteAsync(RemoveAction,
+                new { run_id = Removable.Id, operation_id = "remove", plan_token = Plan.Token }, "");
+            Wait(() => Remove.IsCompleted, "archive-and-remove");
+            Remove.GetAwaiter().GetResult();
+            Wait(() => Writable.Cards.Count == 1, "default view hides removed card");
+            Require(Writable.Cards.Single().Run.Id == Run.Id && Store.Get(Removable.Id).RemovedFromView, "only the requested card leaves the default view");
+            var Toggle = Descendants(Writable).OfType<Button>().Single(Item => Item.Name == "FormationShowRemoved");
+            Toggle.PerformClick();
+            Wait(() => Writable.Cards.Count == 2, "show removed formations");
+            Require(Writable.Cards.Single(Item => Item.Run.Id == Removable.Id).ActionButton(FormationCard.UnarchiveAction)!.Enabled,
+                "removed cards can be opened and restored from the list");
+            Toggle.PerformClick();
+            Wait(() => Writable.Cards.Count == 1, "hide removed formations");
+            Require(Writable.Cards.Count == 1, "removed cards can be hidden again");
         }
+    }
+
+    private static void VerifyRefreshDuringStoreLock(FormationPage Page, string Root, FormationCard Card)
+    {
+        string StatePath = Path.Combine(Root, "formations.json").ToUpperInvariant();
+        string Digest = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(StatePath)));
+        using var Locked = new ManualResetEventSlim();
+        using var Finish = new ManualResetEventSlim();
+        var Owner = Task.Run(() =>
+        {
+            using var Gate = new Mutex(false, "Local\\MmCodexMgr-Formation-" + Digest);
+            if (!Gate.WaitOne(TimeSpan.FromSeconds(5))) throw new TimeoutException("无法获取测试编队存储锁");
+            try { Locked.Set(); Finish.Wait(TimeSpan.FromSeconds(3)); }
+            finally { Gate.ReleaseMutex(); }
+        });
+        try
+        {
+            Require(Locked.Wait(TimeSpan.FromSeconds(5)), "test holds the real formation store mutex");
+            var Clock = System.Diagnostics.Stopwatch.StartNew();
+            Descendants(Page).OfType<Button>().Single(Button => Button.Name == "FormationRefresh").PerformClick();
+            bool Responsiveness = false;
+            Page.BeginInvoke(() => Responsiveness = true);
+            Application.DoEvents();
+            Require(Responsiveness && !Owner.IsCompleted && Clock.ElapsedMilliseconds < 1500,
+                "manual refresh leaves the UI message loop responsive while the store is locked");
+            Require(Card.Visible && ReferenceEquals(Card, Page.Cards.Single()), "manual refresh keeps the visible card while waiting for the store");
+            Console.WriteLine($"Refresh click and UI message while store is locked: {Clock.ElapsedMilliseconds} ms");
+        }
+        finally
+        {
+            Finish.Set();
+            Owner.GetAwaiter().GetResult();
+        }
+        var Refresh = Page.ReloadAsync();
+        Wait(() => Refresh.IsCompletedSuccessfully, "refresh after unlocking the store");
+    }
+
+    private static Color ReadHeaderPixel(FormationCard Card)
+    {
+        using var Image = new Bitmap(Card.Width, Card.Height);
+        Card.DrawToBitmap(Image, new Rectangle(Point.Empty, Image.Size));
+        return Image.GetPixel(Card.Width / 2, Card.Padding.Top + Card.LogicalToDeviceUnits(45));
     }
 
     private static void VerifyCompactCard(ManagerSettings Settings, bool Dark)

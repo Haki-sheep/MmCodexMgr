@@ -9,6 +9,81 @@ internal static class FormationTests
         await VerifyAsync(true);
         await VerifySetupAsync();
         await VerifyNativeAsync();
+        await VerifyLearnerAsync();
+    }
+
+    private static async Task VerifyLearnerAsync()
+    {
+        string Root = Path.Combine(Path.GetTempPath(), "MmFormationLearner-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var Settings = new ManagerSettings { InstanceList = Profiles() };
+            var Store = new FormationStore(Path.Combine(Root, "formation"));
+            var Relay = new RelayStore(Path.Combine(Root, "relay"));
+            var Bridge = new FakeBridge();
+            var Catalog = new FakeCatalog();
+            using var Coordinator = new RelayCoordinator(Relay, Bridge);
+            var Agents = new AgentManagementService(Relay, Coordinator, Catalog, Environment.ProcessPath!, () => Settings);
+            var Service = new FormationService(Store, Settings, Agents, Relay, Catalog, Activate: (_, _, _) => Task.CompletedTask);
+            Task<object> Call(string Action, object Arguments) =>
+                Service.ExecuteAsync(Action, JsonSerializer.SerializeToElement(Arguments), FormationCaller.Operator(), CancellationToken.None);
+            Task Process() => Service.ProcessResultsAsync(CancellationToken.None);
+            var MemberList = Settings.InstanceList.Where(Item => Item.Id is "main" or "worker1" or "learner").Select(Seat).ToList();
+            MemberList.Single(Item => Item.Role == eFormationRole.Learner).SessionId = "";
+            var Run = Store.Create(new() { Theme = "学习者回归", Requirement = "收集验收证据", MemberList = MemberList });
+            string RunId = Run.Id;
+            await Process();
+            Require(Relay.Count() == 0, "统筹启动前不创建学习者会话");
+            await Call("activate", new { run_id = RunId, operation_id = "activate" });
+            await Call("pause", new { run_id = RunId, operation_id = "pause" });
+            await Process();
+            Require(Relay.Count() == 0, "暂停中的编队不会启动学习者");
+            await Call("resume", new { run_id = RunId, operation_id = "resume" });
+            await Process();
+            var Current = Store.Get(RunId);
+            string SessionId = Current.MemberList.Single(Item => Item.Role == eFormationRole.Learner).SessionId;
+            var Preparation = Relay.FindRequest("main/main-thread/learner-prepare-" + RunId)!;
+            Require(SessionId == Preparation.Channel.WorkerThreadId && Preparation.Channel.CreateTitle == $"学习者回归 {Run.CreatedAt:MM-dd} 学习者",
+                "启动后创建并绑定命名正确的学习者会话");
+            Require(!Preparation.Instructions.Contains("收集验收证据"), "初始化不发送业务材料");
+
+            Service = new FormationService(Store, Settings, Agents, Relay, Catalog);
+            await Process();
+            Require(Relay.Count() == 1, "重复推进或重建编队服务不重复派发初始化");
+            await Coordinator.ReportAsync("learner", SessionId, Preparation.Id, "completed", "已就绪", new());
+            await Process();
+            var Work = (FormationTask)await Call("task", new
+            {
+                run_id = RunId, operation_id = "register", title = "收集证据", instructions = "只读检查", acceptance = "验收证据有效",
+                executor_id = "worker1", workspace = new { access = "read_only" }
+            });
+            var Attempt = (FormationAttempt)await Call("dispatch", new { run_id = RunId, task_id = Work.Id, operation_id = "dispatch", kind = "execute" });
+            await Coordinator.ReportAsync("worker1", Attempt.SessionId, Attempt.RelayId, "completed", "已核对的执行结果", new());
+            await Process();
+            await RejectAsync(() => Call("complete", new { run_id = RunId, operation_id = "early", summary = "待通过" }), "验收前无法结案");
+            Require(Relay.Count() == 2, "未验收的成果不会交给学习者");
+            var Submission = Store.Get(RunId).TaskList.Single().SubmissionList.Single();
+            await Call("review", new { run_id = RunId, task_id = Work.Id, attempt_id = Attempt.Id, submission_id = Submission.Id,
+                operation_id = "review", passed = true, feedback = "证据已验证" });
+            await Call("complete", new { run_id = RunId, operation_id = "complete", summary = "最终结论" });
+            await Process();
+            var Summary = Relay.FindRequest("main/main-thread/learner-summary-" + RunId)!;
+            Require(Summary.Channel.WorkerThreadId == SessionId && Summary.Channel.CreateTitle.Length == 0 &&
+                Summary.Instructions.Contains("最终结论") && Summary.Instructions.Contains("已核对的执行结果") &&
+                Summary.Instructions.Contains("证据已验证"), "结案后将通过验收的材料发给同一学习者会话");
+            await Coordinator.ReportAsync("learner", SessionId, Summary.Id, "completed", "学习整理结果", new());
+            await Process();
+            await Process();
+            Current = Store.Get(RunId);
+            Require(Relay.Count() == 3 && Current.NotificationList.Single(Item => Item.Id == "learner-summary") is
+                { State: eFormationDeliveryState.Delivered, Detail: "学习整理结果" }, "保存学习结果且重复推进不重发");
+            Console.WriteLine("PASS learner preparation, accepted material delivery, reuse and restart idempotency");
+        }
+        finally
+        {
+            if (!ManagerPaths.IsUnder(Root, Path.GetTempPath())) throw new IOException("测试清理路径越界");
+            if (Directory.Exists(Root)) Directory.Delete(Root, true);
+        }
     }
 
     private static async Task VerifySetupAsync()
@@ -656,7 +731,7 @@ internal static class FormationTests
     {
         public Task<List<AgentProject>> ProjectsAsync(InstanceProfile Instance, CancellationToken Cancellation) => Task.FromResult(new List<AgentProject>());
         public List<AgentSession> Sessions(InstanceProfile Instance, AgentProject? Project, string? Selector, int Offset)
-            => new() { Session(Instance, Instance.Id + "-thread") };
+            => new() { Session(Instance, Selector == Instance.Id + "-created" ? Selector : Instance.Id + "-thread") };
         public AgentSession Session(InstanceProfile Instance, string Id) => new(Id, Id, "", "");
         public Task RequireIdleAsync(InstanceProfile Instance, string Id, CancellationToken Cancellation) => Task.CompletedTask;
         public Task<RelayThread> CreateAsync(InstanceProfile Instance, AgentProject? Project, string Title, string Prompt, CancellationToken Cancellation)

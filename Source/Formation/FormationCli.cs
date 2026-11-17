@@ -37,9 +37,9 @@ public static class FormationCli
         lifecycle-preview run_id action=archive|unarchive|delete  返回目标清单 token blocker_list 与 resume_operation_id
         archive   run_id operation_id plan_token  原生归档关联会话 已归档项跳过
         unarchive run_id operation_id plan_token  恢复本次归档的会话 原先归档状态保留 调度保持暂停
-        delete    run_id operation_id plan_token confirm_delete=true  永久删除编队及关联会话 须先预览
+        delete    run_id operation_id plan_token confirm_delete=true  停止关联会话 使用原生删除或归档 核实后删除编队
                   失败保留逐会话进度 重试沿用 resume_operation_id 并使用最新预览 token
-                  Codex 删除可能需在原应用确认 DSH 不支持原生删除 Claude/Cursor CLI 暂不支持
+                  Codex 删除可能需在原应用确认 DSH 使用归档 Claude/Cursor CLI 暂无已验证的删除或归档接口
         status: InProgress=进行中 Blocked=阻塞中 Archived=已归档 state 保留调度状态 complete 不等于 archive
         """;
 

@@ -36,6 +36,19 @@ public sealed partial class RelayStore
     public RelayTask? FindTask(string Id) => Find("id", Id);
     public RelayTask? FindRequest(string Key) => Find("request_key", Key);
 
+    internal List<RelayTask> FormationTasks(string RunId)
+    {
+        using var Database = Open();
+        using var Command = Database.CreateCommand();
+        Command.CommandText = "SELECT data FROM relay_tasks WHERE json_extract(data,'$.Channel.FormationRunId')=$run";
+        Command.Parameters.AddWithValue("$run", RunId);
+        using var Reader = Command.ExecuteReader();
+        var TaskList = new List<RelayTask>();
+        while (Reader.Read())
+            TaskList.Add(JsonSerializer.Deserialize<RelayTask>(Reader.GetString(0)) ?? throw new InvalidDataException("编队联调任务数据为空"));
+        return TaskList;
+    }
+
     public int Count()
     {
         using var Database = Open();

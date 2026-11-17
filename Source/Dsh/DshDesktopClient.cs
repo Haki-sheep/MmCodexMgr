@@ -138,6 +138,36 @@ public sealed class DshDesktopClient : IDisposable
     public Task<JsonElement> PromptAsync(string Id, string RequestId, string Prompt, CancellationToken Cancellation) => CallAsync("session/prompt", new { request = new { sessionId = Id, requestId = RequestId, content = new[] { new { type = "text", text = Prompt } }, mode = "queue", clientTimeZone = TimeZoneInfo.TryConvertWindowsIdToIanaId(TimeZoneInfo.Local.Id, out string? Zone) ? Zone : TimeZoneInfo.Local.Id } }, Cancellation);
     public Task<JsonElement> CancelAsync(string Id, CancellationToken Cancellation) => CallAsync("session/cancel", new { request = new { sessionId = Id } }, Cancellation);
 
+    internal static bool HasActiveWork(JsonElement State) =>
+        State.TryGetProperty("active", out var Active) && HasPendingWork(Active) ||
+        State.TryGetProperty("running", out var Running) && Running.ValueKind == JsonValueKind.True ||
+        State.TryGetProperty("pendingInput", out var Pending) && HasPendingWork(Pending);
+
+    private static bool HasPendingWork(JsonElement Value) => Value.ValueKind switch
+    {
+        JsonValueKind.Null or JsonValueKind.False or JsonValueKind.Undefined => false,
+        JsonValueKind.Array => Value.GetArrayLength() != 0,
+        _ => true
+    };
+
+    internal async Task<List<string>> QueuedInputIdsAsync(string Id, CancellationToken Cancellation)
+    {
+        var Projection = await CallAsync("session/projections", new { request = new { sessionId = Id } }, Cancellation);
+        var Inbox = Projection.GetProperty("values").GetProperty("inbox");
+        return Inbox.EnumerateObject().SelectMany(Queue => Queue.Value.EnumerateArray())
+            .Select(Message => Message.GetProperty("id").GetString()!).ToList();
+    }
+
+    internal async Task StopSessionAsync(string Id, CancellationToken Cancellation)
+    {
+        foreach (string ItemId in await QueuedInputIdsAsync(Id, Cancellation))
+        {
+            await CallAsync("session/updateQueue", new { request = new { sessionId = Id, itemId = ItemId, action = new { kind = "remove" } } }, Cancellation);
+        }
+        var State = await CallAsync("session/state", new { request = new { sessionId = Id } }, Cancellation);
+        if (HasActiveWork(State)) await CancelAsync(Id, Cancellation);
+    }
+
     public async Task CancelRequestAsync(string Id, string RequestId, CancellationToken Cancellation)
     {
         var Projection = await CallAsync("session/projections", new { request = new { sessionId = Id } }, Cancellation);

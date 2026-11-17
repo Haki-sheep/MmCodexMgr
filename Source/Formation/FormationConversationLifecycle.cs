@@ -24,6 +24,22 @@ public sealed partial class FormationConversationLifecycle(Func<ManagerSettings>
         return ResultList.DistinctBy(Item => Item.Key).ToList();
     }
 
+    public async Task StopAsync(FormationConversation Conversation, CancellationToken Cancellation)
+    {
+        if (!Conversation.CanStop) throw new NotSupportedException("无法停止会话 " + Conversation.Title);
+        if (Conversation.InstanceId == DshRelayRunner.InstanceId)
+        {
+            using var Client = await DshDesktopClient.ConnectAsync(LoadSettings().Dsh, Cancellation);
+            await Client.StopSessionAsync(Conversation.SessionId, Cancellation);
+        }
+        else if (Conversation.InstanceId == AntigravityRelayRunner.InstanceId)
+        {
+            using var Client = AntigravityDesktopClient.Connect();
+            await Client.CancelAsync(Conversation.SessionId, Cancellation);
+        }
+        else await CodexConversationStop.InterruptAsync(Conversation.SessionId, Cancellation);
+    }
+
     public async Task SetArchivedAsync(FormationConversation Conversation, bool Archived, CancellationToken Cancellation)
     {
         if (!Conversation.CanArchive) throw new NotSupportedException(Conversation.Detail);
@@ -75,12 +91,12 @@ public sealed partial class FormationConversationLifecycle(Func<ManagerSettings>
             Target.Archived = ArchivedHashList.Contains(Target.SessionId);
             Target.CanArchive = true;
             Target.CanDelete = false;
+            Target.CanStop = true;
             Target.Detail = "DeepSeek Harness 当前版本不提供会话永久删除接口";
             if (Target.Exists)
             {
                 var State = await Client.CallAsync("session/state", new { request = new { sessionId = Target.SessionId } }, Cancellation);
-                Target.Busy = State.TryGetProperty("active", out var Active) && Active.ValueKind is not (JsonValueKind.Null or JsonValueKind.False or JsonValueKind.Undefined) || Flag(State, "running") ||
-                    State.TryGetProperty("pendingInput", out var Pending) && Pending.ValueKind is not (JsonValueKind.Null or JsonValueKind.Undefined);
+                Target.Busy = DshDesktopClient.HasActiveWork(State) || (await Client.QueuedInputIdsAsync(Target.SessionId, Cancellation)).Count != 0;
                 if (Row.TryGetProperty("projections", out var Projection) && Projection.TryGetProperty("values", out var Values))
                     Target.Title = Text(Values, "title") is { Length: > 0 } Title ? Title : Target.Title;
             }
@@ -106,6 +122,7 @@ public sealed partial class FormationConversationLifecycle(Func<ManagerSettings>
             if (!Target.Exists) continue;
             bool Local = !Flag(Row, "cloud") && Text(Row, "trajectoryType") == "CORTEX_TRAJECTORY_TYPE_CASCADE";
             Target.CanArchive = Target.CanDelete = Local;
+            Target.CanStop = Local;
             Target.Detail = Local ? "" : "只支持本地 Antigravity 会话";
             if (Row.TryGetProperty("annotations", out var Annotations))
             {

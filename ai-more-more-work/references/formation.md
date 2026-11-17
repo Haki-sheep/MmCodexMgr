@@ -16,17 +16,17 @@ CLI 的空编队请求为 `{"operation_id":"稳定标识","formation":{"setup_on
 
 界面和 CLI 的 `status` 为 `InProgress` 进行中、`Blocked` 阻塞中、`Archived` 已归档。暂停、任务阻塞、投递未知、待交接、结案待归档或会话操作未完成都显示阻塞中；底层 `state` 保留调度状态，`complete` 仅结案，不会自动归档。阻塞编队仍显示卡片。卡片及 `formation open` 可打开已绑定统筹，包括已归档会话，不发送工作消息。
 
-卡片上方提供归档、取消归档和彻底删除。详情不展示需求上下文、交付总结或最近事件，完整记录仍可通过 CLI `show` / `task-show` 查询。
+卡片上方提供归档、取消归档和删除。详情不展示需求上下文、交付总结或最近事件，完整记录仍可通过 CLI `show` / `task-show` 查询。
 
 会话生命周期操作只允许人工身份，均先调用 `formation lifecycle-preview`，JSON 为 `{"run_id":"编队ID","action":"archive"}`；action 可换为 `unarchive` 或 `delete`。检查返回的 `target_list`、`blocker_list` 与 `can_apply`，向用户展示确切会话范围，获得相应操作授权后执行。已有授权可沿用，不能从普通任务完成推断永久删除授权。
 
 - `formation archive`：提交 `run_id`、`operation_id`、预览的 `plan_token`。调用各 Agent 原生归档，已经归档或已不存在的项跳过。保存归档前逐会话状态，不重复归档已处理项。
 - `formation unarchive`：相同字段。只恢复由本次编队操作归档的会话；Codex 原生恢复会连带子代理，因此按父先子后校正并核实原有归档状态。取消归档后调度保持暂停，需人工恢复，不自动派发。
-- `formation delete`：另加 `confirm_delete:true`。永久删除编队及预览中的关联会话；会话全部删除核实后才移除编队和角色凭据。不会用删除编队记录冒充删除会话。模板和用户成果文件不由管理器清理，Codex 的原生确认以其实际提示为准。
+- `formation delete` 另加 `confirm_delete:true`。先请求停止所有仍活动的关联会话并核实停止，再执行预览逐条列出的原生删除或归档。只支持归档的应用会保留已归档会话。全部核实后移除编队和角色凭据。Codex 可能在原应用要求确认。
 
-目标包括当前席位、历史独立执行轮次、Codex 原生子代理与附属会话，按实例和会话 ID 去重。运行中会话、未确认停止的轮次、其他编队仍关联的会话或不支持的能力会阻止操作。失败保留逐会话进度并显示阻塞，先重新预览，再用返回的 `resume_operation_id` 和最新 token 重试；不能换 ID 绕过原操作。操作期间不改派席位或启动新任务。
+目标包括当前席位、历史独立执行轮次、Codex 原生子代理与附属会话，按实例和会话 ID 去重。删除可处理运行中的会话。停止未确认、其他编队仍关联、或所需原生能力缺失时保留编队。失败保留逐会话进度并显示阻塞，重新预览后用返回的 `resume_operation_id` 和最新 token 重试。操作期间不改派席位或启动新任务。
 
-已接入 Codex、DeepSeek Harness 和 Antigravity 原生归档；Codex 与 Antigravity 有原生删除入口。当前 DSH 不提供单会话永久删除，Claude Code / Cursor CLI 暂无已验证的单会话原生归档与删除入口，相关范围会明确阻止，不改成管理器虚拟归档、不批量清理项目存档。Codex 使用已运行实例的桌面工具，删除可能在原应用出现确认提示，未确认不会报告成功。
+Codex 与 Antigravity 支持原生删除，DeepSeek Harness 在删除编队时使用原生归档。Claude Code 和 Cursor CLI 暂无已验证的单会话原生删除或归档接口，遇到此类关联会话时预览会显示具体阻塞原因。
 
 ## 统筹任务
 
@@ -63,6 +63,8 @@ CLI 的空编队请求为 `{"operation_id":"稳定标识","formation":{"setup_on
 统筹上限为 1 且只有独立审核、没有外援席时，确认移交后由统筹调用 `formation dispatch` 领取任务。返回 `run_in_coordinator:true` 时，统筹在原会话按返回的工作范围执行，用 `formation submit` 提供 `run_id`、`task_id`、`attempt_id`、`operation_id`、`submission_id`、`summary` 和可选 `artifacts`，再交给审核席。
 
 ## 需求与上下文更新
+
+配置学习者后，管理器在统筹启动包送达后，于该席位选定的应用和工作区新建会话并发送就绪消息。已绑定的学习会话直接沿用。全部任务通过当前需求版本的验收且统筹调用 `formation complete` 结案后，管理器把交付总结、已验收任务的结果摘要、审核反馈和产物路径发到同一会话，让学习者只读整理，结果保存在编队记录。投递待核对时界面显示「学习待核对」，可从 `formation show` 查看投递详情。
 
 需求在统筹会话中沟通，由统筹或人工操作员通过 `formation context` 更新，管理界面仅展示版本与内容。同职业 Codex 席位共享拟推理强度和子代理上限，各自模型仍按能力解析档位。关联席位仍执行或待停时会拒绝修改。
 

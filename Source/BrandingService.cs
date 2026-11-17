@@ -105,12 +105,13 @@ public sealed class BrandingService : IDisposable
         if (!WindowDict.TryGetValue(Window, out var Previous) || Previous.ProcessId != ProcessId || Previous.StartedAt != StartedAt)
         {
             ClearLegacyShellProperties(Window);
-            WindowDict[Window] = new WindowBranding(ReadIcon(Window, 0), ReadIcon(Window, 1), (int)ProcessId, StartedAt, Signature);
+            Previous = new WindowBranding(ReadIcon(Window, 0), ReadIcon(Window, 1), (int)ProcessId, StartedAt, Signature);
+            WindowDict[Window] = Previous;
+            if (Previous.SmallIcon != InstanceIcon.Handle) SendIcon(Window, 0, InstanceIcon.Handle);
+            if (Previous.LargeIcon != InstanceIcon.Handle) SendIcon(Window, 1, InstanceIcon.Handle);
+            return;
         }
-        else if (Previous.Signature != Signature || ReadIcon(Window, 0) != InstanceIcon.Handle || ReadIcon(Window, 1) != InstanceIcon.Handle)
-        {
-            WindowDict[Window] = Previous with { Signature = Signature };
-        }
+        if (Previous.Signature != Signature) WindowDict[Window] = Previous with { Signature = Signature };
         if (ReadIcon(Window, 0) != InstanceIcon.Handle) SendIcon(Window, 0, InstanceIcon.Handle);
         if (ReadIcon(Window, 1) != InstanceIcon.Handle) SendIcon(Window, 1, InstanceIcon.Handle);
     }

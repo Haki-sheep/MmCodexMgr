@@ -20,6 +20,8 @@ public sealed class MainForm : Form
     private readonly Icon AppIcon;
     private readonly NotifyIcon TrayIcon = new();
     private readonly BrandingService Branding = new();
+    private readonly object BrandingGate = new();
+    private bool BrandingDisposed;
     private readonly AgentTaskbarService AgentTaskbar = new();
     private readonly AgentTaskbarProfiles TaskbarProfiles = new();
     private readonly System.Windows.Forms.Timer RefreshDelay = new() { Interval = 150 };
@@ -251,7 +253,11 @@ public sealed class MainForm : Form
             if (AgentIcons.Enabled)
             {
                 var BrandedList = WindowTargetList.Select(Target => Target with { Profile = AgentIcons.Branded(Target.Profile, Target.Provider) }).ToList();
-                foreach (var Target in BrandedList) Branding.Apply(Target.Profile, Target.Window, Target.Provider, Target.ProcessId, Target.StartedAt);
+                await Task.Run(() => UpdateWindowBranding(() =>
+                {
+                    foreach (var Target in BrandedList) Branding.Apply(Target.Profile, Target.Window, Target.Provider, Target.ProcessId, Target.StartedAt);
+                }));
+                if (IsDisposed || Disposing) return;
                 await AgentTaskbar.UpdateAsync(BrandedList.Where(Target => InstanceWindowService.IsVisible(Target.Window)).ToList());
                 if (IsDisposed || Disposing) return;
             }
@@ -259,13 +265,25 @@ public sealed class MainForm : Form
             {
                 await AgentTaskbar.UpdateAsync(Array.Empty<AgentIconTarget>());
                 if (IsDisposed || Disposing) return;
-                Branding.RestoreNative(WindowTargetList.Select(Target => Target.Window));
-                AgentTrayOriginal.RestoreLegacyFiles();
+                await Task.Run(() =>
+                {
+                    UpdateWindowBranding(() => Branding.RestoreNative(WindowTargetList.Select(Target => Target.Window)));
+                    AgentTrayOriginal.RestoreLegacyFiles();
+                });
+                if (IsDisposed || Disposing) return;
             }
             await Task.Run(() => AgentTrayBranding.Apply(AgentIcons, TrayTargetList));
         }
         catch (Exception Error) when (Configuration is null) { Agents.SetStatus("刷新实例状态失败 " + Error.Message); Program.LogError(Error); }
         finally { RefreshGate.Release(); if (RefreshAgain) { RefreshAgain = false; QueueInstanceRefresh(); } }
+    }
+
+    private void UpdateWindowBranding(Action Update)
+    {
+        lock (BrandingGate)
+        {
+            if (!BrandingDisposed) Update();
+        }
     }
 
     private void QueueInstanceRefresh()
@@ -300,7 +318,11 @@ public sealed class MainForm : Form
             ActivityMonitor.Changed -= QueueInstanceRefresh;
             ActivityMonitor.Dispose();
             AgentTaskbar.Dispose();
-            Branding.Dispose();
+            lock (BrandingGate)
+            {
+                BrandingDisposed = true;
+                Branding.Dispose();
+            }
             TrayIcon.Dispose();
         }
         base.Dispose(Disposing);

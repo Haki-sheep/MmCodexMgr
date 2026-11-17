@@ -7,6 +7,7 @@ namespace CodexInstanceManager;
 public sealed class InstanceActivityMonitor : IDisposable
 {
     private const uint ObjectDestroy = 0x8001;
+    private const uint ObjectShow = 0x8002;
     private const uint ObjectHide = 0x8003;
     private readonly Dictionary<int, Process> ProcessDict = new();
     private readonly HashSet<IntPtr> WindowHashList = new();
@@ -70,9 +71,19 @@ public sealed class InstanceActivityMonitor : IDisposable
     {
         if (Disposed || ObjectId != 0 || ChildId != 0) return;
         if (WindowHashList.Contains(Window)) { Changed?.Invoke(); return; }
-        if (Event == ObjectDestroy || GetAncestor(Window, 2) != Window) return;
+        if (Event != ObjectShow || GetAncestor(Window, 2) != Window) return;
         var ClassName = new StringBuilder(64);
-        if (GetClassName(Window, ClassName, ClassName.Capacity) != 0 && ClassName.ToString() == "Chrome_WidgetWin_1") Changed?.Invoke();
+        if (GetClassName(Window, ClassName, ClassName.Capacity) == 0 || ClassName.ToString() != "Chrome_WidgetWin_1") return;
+        GetWindowThreadProcessId(Window, out uint ProcessId);
+        if (ProcessId == 0) return;
+        try
+        {
+            using var Owner = Process.GetProcessById((int)ProcessId);
+            if (Owner.ProcessName.ToLowerInvariant() is "chatgpt" or "cursor" or "antigravity" or "claude" or "deepseek harness")
+                Changed?.Invoke();
+        }
+        catch (ArgumentException) { }
+        catch (InvalidOperationException) when (!WindowExists(Window)) { }
     }
 
     private delegate void WinEventCallback(IntPtr Hook, uint Event, IntPtr Window, int ObjectId, int ChildId, uint ThreadId, uint Time);
@@ -83,6 +94,11 @@ public sealed class InstanceActivityMonitor : IDisposable
     private static extern bool UnhookWinEvent(IntPtr Hook);
     [DllImport("user32.dll")]
     private static extern IntPtr GetAncestor(IntPtr Window, uint Flags);
+    [DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr Window, out uint ProcessId);
+    [DllImport("user32.dll", EntryPoint = "IsWindow")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool WindowExists(IntPtr Window);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern int GetClassName(IntPtr Window, StringBuilder ClassName, int Capacity);
 }

@@ -11,6 +11,7 @@ public sealed class FormationConversation
     public bool Exists { get; set; } = true;
     public bool Archived { get; set; }
     public bool Busy { get; set; }
+    public bool CanStop { get; set; }
     public bool CanArchive { get; set; }
     public bool CanDelete { get; set; }
     public string Detail { get; set; } = "";
@@ -23,6 +24,7 @@ public sealed class FormationLifecycleTarget
     public FormationConversation Conversation { get; set; } = new();
     public bool WasArchived { get; set; }
     public bool DesiredArchived { get; set; }
+    public bool? DeleteConversation { get; set; }
     public bool ChangedByOperation { get; set; }
     public bool Completed { get; set; }
     public string Result { get; set; } = "";
@@ -52,6 +54,7 @@ public sealed class FormationLifecyclePlan
 public interface IFormationConversationLifecycle
 {
     Task<List<FormationConversation>> ReadAsync(IReadOnlyList<FormationConversation> ConversationList, CancellationToken Cancellation);
+    Task StopAsync(FormationConversation Conversation, CancellationToken Cancellation);
     Task SetArchivedAsync(FormationConversation Conversation, bool Archived, CancellationToken Cancellation);
     Task DeleteAsync(FormationConversation Conversation, CancellationToken Cancellation);
 }

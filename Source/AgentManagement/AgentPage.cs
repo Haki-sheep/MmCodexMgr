@@ -39,6 +39,7 @@ public sealed class AgentPage : UserControl
     private readonly Label CcLabel = new() { AutoSize = false, Dock = DockStyle.Fill, Height = 24, AutoEllipsis = true, Font = StudioFonts.Mono, Margin = new Padding(0, 0, 0, 6) };
     private readonly CancellationTokenSource Lifetime = new();
     private List<RunningInstance> RunningList = new();
+    private readonly Dictionary<string, (string Text, eTone Tone)> RunningStateDict = new();
     private string CurrentColor = "#5465E8";
     private string CurrentIcon = "";
     public bool IsBusy { get; private set; }
@@ -212,6 +213,7 @@ public sealed class AgentPage : UserControl
     #region Entries
     private void RefreshEntries(string? SelectId)
     {
+        RunningStateDict.Clear();
         AgentList.Items.Clear();
         foreach (var Profile in Settings.InstanceList)
             AgentList.Items.Add(new AgentEntry(Profile.Id, Profile.Name, Profile.IsPrimary ? "Codex 主实例" : "Codex 实例", Profile.Badge, eTone.Accent, Profile));
@@ -219,6 +221,7 @@ public sealed class AgentPage : UserControl
         AgentList.Items.Add(new AgentEntry(DshRelayRunner.InstanceId, "DeepSeek Harness", "桌面后台连接", "DS", eTone.Violet, null));
         AgentList.Items.Add(new AgentEntry(ClaudeRelayRunner.InstanceId, "Claude Code", "Claude Desktop 网关", "Cl", eTone.Warning, null));
         AgentList.Items.Add(new AgentEntry(AntigravityRelayRunner.InstanceId, "Antigravity", "桌面 App 联调", "Ag", eTone.Pink, null));
+        UpdateRunning(RunningList);
         var Entries = AgentList.Items.Cast<AgentEntry>().ToList();
         AgentList.SelectedItem = Entries.FirstOrDefault(Item => Item.Id == SelectId) ?? Entries.First();
     }
@@ -259,11 +262,18 @@ public sealed class AgentPage : UserControl
     public void UpdateRunning(List<RunningInstance> RunningList)
     {
         this.RunningList = RunningList;
-        if (Visible) AgentList.Invalidate();
-        RefreshHeaderState();
+        for (int Index = 0; Index < AgentList.Items.Count; Index++)
+        {
+            if (AgentList.Items[Index] is not AgentEntry { Profile: { } Profile }) continue;
+            var State = ReadRunningState(Profile, RunningList);
+            if (RunningStateDict.TryGetValue(Profile.Id, out var Previous) && Previous == State) continue;
+            RunningStateDict[Profile.Id] = State;
+            if (Visible && AgentList.IsHandleCreated) AgentList.Invalidate(AgentList.GetItemRectangle(Index));
+        }
+        RefreshHeaderState(Animate: Visible);
     }
 
-    private (string Text, eTone Tone) RunningState(InstanceProfile Profile)
+    private static (string Text, eTone Tone) ReadRunningState(InstanceProfile Profile, List<RunningInstance> RunningList)
     {
         var Running = InstanceService.Find(Profile, RunningList);
         if (Running is null) return ("未启动", eTone.Neutral);
@@ -271,12 +281,13 @@ public sealed class AgentPage : UserControl
         return InstanceWindowService.IsVisible(Running.Window) ? ("窗口已显示", eTone.Success) : ("运行中 窗口隐藏", eTone.Info);
     }
 
-    private void RefreshHeaderState()
+    private void RefreshHeaderState(bool Animate = false)
     {
         if (Selected is not { } Profile) return;
-        var (Text, Tone) = RunningState(Profile);
-        HeaderState.Text = Text;
-        HeaderState.Tone = Tone;
+        if (!RunningStateDict.TryGetValue(Profile.Id, out var State)) return;
+        if (HeaderState.Text != State.Text) HeaderState.Text = State.Text;
+        if (Animate) HeaderState.TransitionTo(State.Tone);
+        else HeaderState.Tone = State.Tone;
     }
 
     private void DrawEntry(object? Sender, DrawItemEventArgs Event)
@@ -316,7 +327,7 @@ public sealed class AgentPage : UserControl
         var CaptionColor = Colors.Muted;
         if (Entry.Profile is { } Instance)
         {
-            var (Text, Tone) = RunningState(Instance);
+            var (Text, Tone) = RunningStateDict.GetValueOrDefault(Instance.Id, ("未启动", eTone.Neutral));
             Caption = (Tone == eTone.Neutral ? "○ " : "● ") + Text;
             CaptionColor = Tone == eTone.Neutral ? Colors.Muted : Colors.Tone(Tone).Fore;
         }

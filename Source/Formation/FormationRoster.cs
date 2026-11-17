@@ -27,10 +27,60 @@ public sealed class FormationRoster : Control, IThemedControl
         BackColor = Color.Transparent;
     }
 
-    internal void Build(FormationRun Run, ManagerSettings Settings, bool CanAddOutsider)
+    internal (bool Changed, bool LayoutChanged) RefreshSeats(FormationRun Run, ManagerSettings Settings, bool CanAddOutsider, AppTheme? Theme = null)
     {
+        var PreviousMembers = Members;
         Members = Run.MemberList;
-        SuspendLayout();
+        if (GroupList.Count == 0 || !PreviousMembers.Select(Member => (Member.Id, Member.Role)).SequenceEqual(Members.Select(Member => (Member.Id, Member.Role))))
+        {
+            SuspendLayout();
+            try
+            {
+                Tips.RemoveAll();
+                foreach (Control Button in Controls.Cast<Control>().ToArray()) Button.Dispose();
+                GroupList.Clear();
+                Build(Run, Settings, CanAddOutsider);
+                Theme?.Apply(this);
+            }
+            finally { ResumeLayout(true); }
+            Invalidate();
+            return (true, true);
+        }
+        bool Changed = false;
+        for (int Index = 0; Index < Members.Count; Index++)
+        {
+            var Member = Members[Index];
+            var Button = (FormationAvatarButton)Controls["FormationRosterSeat" + Member.Id]!;
+            var Status = FormationCard.StatusFor(Run, Member);
+            string Name = Member.DisplayName.Length == 0 ? SeatProviders.RoleTitle(Member.Role) + (Button.SeatNumber.Length == 0 ? "1" : Button.SeatNumber) : Member.DisplayName;
+            string Description = SeatProviders.Describe(Settings, Member) + Environment.NewLine + "状态 " + Status.Text;
+            if (Button.AccessibleName != Name) { Button.AccessibleName = Name; Changed = true; }
+            if (Button.AccessibleDescription != Description)
+            {
+                Button.AccessibleDescription = Description;
+                Tips.SetToolTip(Button, Description);
+                Changed = true;
+            }
+            if (Button.StatusTone != Status.Tone)
+            {
+                Button.StatusTone = Status.Tone;
+                Button.Invalidate();
+                Changed = true;
+            }
+            if (PreviousMembers[Index].InstanceId == Member.InstanceId) continue;
+            Button.SetAvatar(true, Member.InstanceId, Settings);
+            Changed = true;
+        }
+        if (Controls["FormationRosterEmpty" + eFormationRole.Outsider] is FormationAvatarButton Outsider && Outsider.TabStop != CanAddOutsider)
+        {
+            SetOutsider(Outsider, CanAddOutsider);
+            Changed = true;
+        }
+        return (Changed, false);
+    }
+
+    private void Build(FormationRun Run, ManagerSettings Settings, bool CanAddOutsider)
+    {
         foreach (var Role in SeatProviders.RoleOrder)
         {
             var SeatList = Members.Where(Item => Item.Role == Role).ToList();
@@ -49,7 +99,8 @@ public sealed class FormationRoster : Control, IThemedControl
                     AccessibleDescription = SeatProviders.Describe(Settings, Member) + Environment.NewLine + "状态 " + Status.Text
                 };
                 Button.SetAvatar(true, Member.InstanceId, Settings);
-                Button.Click += (_, _) => SeatClicked?.Invoke(Member);
+                string MemberId = Member.Id;
+                Button.Click += (_, _) => SeatClicked?.Invoke(Members.Single(Item => Item.Id == MemberId));
                 Tips.SetToolTip(Button, Button.AccessibleDescription);
                 ButtonList.Add(Button);
             }
@@ -59,13 +110,13 @@ public sealed class FormationRoster : Control, IThemedControl
                 string title = canAdd ? "补充外援" : Role == eFormationRole.Reviewer ? "未配置审核者 由统筹验收" : "未配置" + SeatProviders.RoleTitle(Role);
                 var Button = new FormationAvatarButton(36, true)
                 {
-                    Name = "FormationRosterEmpty" + Role, Tone = SeatProviders.RoleTone(Role), Enabled = canAdd, TabStop = canAdd,
+                    Name = "FormationRosterEmpty" + Role, Tone = SeatProviders.RoleTone(Role), Enabled = false, TabStop = false,
                     AccessibleName = title
                 };
-                if (canAdd)
+                if (Role == eFormationRole.Outsider)
                 {
                     Button.Click += (_, _) => OutsiderRequested?.Invoke();
-                    Tips.SetToolTip(Button, title);
+                    SetOutsider(Button, canAdd);
                 }
                 ButtonList.Add(Button);
             }
@@ -73,7 +124,14 @@ public sealed class FormationRoster : Control, IThemedControl
             GroupList.Add(new(Role, SeatProviders.RoleTitle(Role) + " ×" + SeatList.Count, ButtonList));
             Controls.AddRange(ButtonList.ToArray());
         }
-        ResumeLayout(false);
+    }
+
+    private void SetOutsider(FormationAvatarButton Button, bool Enabled)
+    {
+        Button.Enabled = Enabled;
+        Button.TabStop = Enabled;
+        Button.AccessibleName = Enabled ? "补充外援" : "未配置" + SeatProviders.RoleTitle(eFormationRole.Outsider);
+        Tips.SetToolTip(Button, Enabled ? Button.AccessibleName : null);
     }
 
     public void ApplyTheme(AppTheme Theme)

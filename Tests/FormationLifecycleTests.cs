@@ -70,7 +70,11 @@ internal static class FormationLifecycleTests
             Native.Items["worker"].Busy = false;
             Native.Items["worker"].CanDelete = false;
             Plan = await Preview(Service, Run.Id, "delete");
-            Require(!Plan.CanApply, "unsupported permanent delete blocks the whole batch before changes");
+            Require(Plan.CanApply && Plan.TargetList.Single(Item => Item.Conversation.SessionId == "worker") is
+                { DeleteConversation: false, DesiredArchived: true }, "delete uses native archive when permanent delete is unavailable");
+            Native.Items["worker"].CanArchive = false;
+            Require(!(await Preview(Service, Run.Id, "delete")).CanApply, "missing both native capabilities blocks removal");
+            Native.Items["worker"].CanArchive = true;
             Native.Items["worker"].CanDelete = true;
             Plan = await Preview(Service, Run.Id, "delete");
             await Reject(() => Call(Service, "delete", new { run_id = Run.Id, operation_id = "no-confirm", plan_token = Plan.Token }), "permanent delete needs explicit confirmation");
@@ -107,6 +111,27 @@ internal static class FormationLifecycleTests
             Restore = await Preview(UnknownService, UnknownRun.Id, "unarchive");
             await Apply(UnknownService, Restore, "restore-unknown");
             Require(!UnknownNative.Items["main"].Archived && UnknownNative.Calls.Count(Item => Item == "archive:main") == 1, "uncertain applied call is reconciled without duplicate call and undo ownership survives");
+
+            var MixedStore = new FormationStore(Path.Combine(Root, "stop-and-delete"));
+            var MixedRun = Create(MixedStore, "stop-and-delete");
+            var MixedNative = new Fake();
+            MixedNative.Add("main", false);
+            MixedNative.Add("worker", false);
+            MixedNative.Items["worker"].CanDelete = false;
+            MixedNative.Items["worker"].Busy = true;
+            MixedNative.Items["main"].Busy = true;
+            var MixedService = new FormationService(MixedStore, new ManagerSettings(), Conversations: MixedNative);
+            Plan = await Preview(MixedService, MixedRun.Id, "delete");
+            Require(Plan.CanApply && MixedNative.Calls.Count == 0, "active sessions allow a read-only delete preview");
+            MixedNative.FailStop = "worker";
+            await Reject(() => Apply(MixedService, Plan, "mixed-delete"), "stop failure keeps the formation and prevents destructive calls");
+            Require(MixedStore.List().Count == 1 && MixedNative.Calls.SequenceEqual(new[] { "stop:main" }), "all active sessions must stop before any delete or archive");
+            Plan = await Preview(MixedService, MixedRun.Id, "delete");
+            var MixedResult = JsonSerializer.SerializeToElement(await Apply(MixedService, Plan, "mixed-delete"));
+            Require(MixedStore.List().Count == 0 && !MixedNative.Items["main"].Exists && MixedNative.Items["worker"] is
+                { Exists: true, Archived: true, Busy: false }, "delete removes the formation after verified native delete and archive");
+            Require(MixedNative.Calls.SequenceEqual(new[] { "stop:main", "stop:worker", "delete:main", "archive:worker" }) &&
+                MixedResult.GetProperty("archived_conversation_count").GetInt32() == 1, "retry stops only the remaining session and reports the archive");
             Console.WriteLine("PASS formation lifecycle " + Count + " assertions");
         }
         finally
@@ -144,9 +169,10 @@ internal static class FormationLifecycleTests
         public List<string> Calls { get; } = new();
         public string FailBefore { get; set; } = "";
         public string FailAfter { get; set; } = "";
+        public string FailStop { get; set; } = "";
         public void Add(string Id, bool Archived, string Parent = "") => Items[Id] = new()
         {
-            InstanceId = "test", SessionId = Id, Title = Id, Archived = Archived, CanArchive = true, CanDelete = true,
+            InstanceId = "test", SessionId = Id, Title = Id, Archived = Archived, CanArchive = true, CanDelete = true, CanStop = true,
             AncestorIdList = Parent.Length == 0 ? new() : new() { Parent }, Detail = "unsupported fixture"
         };
         public Task<List<FormationConversation>> ReadAsync(IReadOnlyList<FormationConversation> Targets, CancellationToken Cancellation)
@@ -160,6 +186,17 @@ internal static class FormationLifecycleTests
             var IdHashList = Targets.Select(Item => Item.SessionId).ToHashSet();
             return Task.FromResult(Items.Values.Where(Item => IdHashList.Contains(Item.SessionId) || Item.AncestorIdList.Any(IdHashList.Contains))
                 .Select(Item => JsonSerializer.Deserialize<FormationConversation>(JsonSerializer.Serialize(Item))!).ToList());
+        }
+        public Task StopAsync(FormationConversation Chat, CancellationToken Cancellation)
+        {
+            if (FailStop == Chat.SessionId)
+            {
+                FailStop = "";
+                throw new IOException("fixture stop failed " + Chat.SessionId);
+            }
+            Calls.Add("stop:" + Chat.SessionId);
+            Items[Chat.SessionId].Busy = false;
+            return Task.CompletedTask;
         }
         public Task SetArchivedAsync(FormationConversation Chat, bool Archived, CancellationToken Cancellation)
         {

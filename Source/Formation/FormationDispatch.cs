@@ -28,6 +28,7 @@ public sealed partial class FormationService
             Plan = Store.Update(Database =>
             {
                 var Run = FormationStore.RequireRun(Database, RunId);
+                RequireLifecycleEditable(Run);
                 var Member = Actor(Database, Run, Caller);
                 RequireCoordinator(Member);
                 var TaskItem = RequireTask(Run, TaskId);
@@ -235,15 +236,20 @@ public sealed partial class FormationService
             ["worker_limits"] = new { subagent_max = Target.SubagentMax, session_max = 0, cross_agent_max = 0 },
             ["workspace"] = new { access = Work.Workspace.Access, write_paths = Work.Workspace.WritePathList }
         };
+        SetFormationSessionArguments(RequestDict, Target);
+        if (Attempt.Model.Length != 0) RequestDict.Add("model", Attempt.Model);
+        if (Attempt.Effort.Length != 0) RequestDict.Add("thinking", Attempt.Effort);
+        return JsonSerializer.SerializeToElement(RequestDict);
+    }
+
+    private static void SetFormationSessionArguments(Dictionary<string, object> RequestDict, FormationMember Target)
+    {
         bool CreateSession = Target.SessionId.Length == 0;
         RequestDict.Add(CreateSession ? "create_title" : "session", CreateSession ? Target.DisplayName : Target.SessionId);
         if (Target.Project.Length != 0) RequestDict.Add("project", Target.Project);
         if (Target.Cwd.Length != 0 && SeatProviders.For(Target.InstanceId).UsesCwd &&
             (CreateSession || Target.InstanceId != AntigravityRelayRunner.InstanceId))
             RequestDict.Add("cwd", Target.Cwd);
-        if (Attempt.Model.Length != 0) RequestDict.Add("model", Attempt.Model);
-        if (Attempt.Effort.Length != 0) RequestDict.Add("thinking", Attempt.Effort);
-        return JsonSerializer.SerializeToElement(RequestDict);
     }
 
     private object Reconcile(JsonElement Arguments, FormationCaller Caller) =>

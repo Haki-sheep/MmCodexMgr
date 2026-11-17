@@ -17,17 +17,26 @@ public sealed class FormationPage : UserControl
     private readonly bool PreviewOnly;
     private readonly FormationHero Hero = new() { Dock = DockStyle.Top };
     private readonly StudioChip ModeChip = new();
+    private readonly StudioButton RemovedToggle = new() { Text = "显示已移除", Name = "FormationShowRemoved", Visible = false };
     private readonly Label Status = new() { AutoSize = true, Tag = eThemeRole.Muted, Font = StudioFonts.Caption, Margin = new Padding(4, 8, 0, 0) };
     private readonly WheelScrollPanel CardScroll = new() { Dock = DockStyle.Fill, AutoScroll = true, Margin = Padding.Empty };
-    private readonly FlowLayoutPanel CardFlow = new() { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = true, Margin = Padding.Empty };
+    private readonly CardPanel CardFlow = new() { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = true, Margin = Padding.Empty };
     private readonly CancellationTokenSource Lifetime = new();
     private List<FormationRun> RunList = new();
     private List<FormationTemplate> TemplateList = new();
     private bool Busy;
+    private bool ShowRemoved;
     /// <summary> 服务事件合并为一次 UI 更新 </summary>
     private int RefreshQueued;
     private bool RefreshPending;
-    private readonly Dictionary<string, string> CardSignatureDict = new();
+    private bool RefreshAgain;
+    private bool HasSnapshot;
+    private Task? RefreshTask;
+
+    private sealed class CardPanel : FlowLayoutPanel
+    {
+        public CardPanel() => DoubleBuffered = true;
+    }
 
     public bool CanWrite => Service is not null && Store is not null && !PreviewOnly;
     public IReadOnlyList<FormationCard> Cards => CardFlow.Controls.OfType<FormationCard>().ToList();
@@ -58,9 +67,11 @@ public sealed class FormationPage : UserControl
         var CreateButton = new StudioButton { Text = "＋ 新建编队", Kind = eButtonKind.Primary, Name = "FormationCreate", Enabled = CanWrite };
         CreateButton.Click += async (_, _) => await RunAsync(CreateAsync);
         var RefreshButton = new StudioButton { Text = "刷新", Name = "FormationRefresh" };
-        RefreshButton.Click += (_, _) => Reload();
+        RefreshButton.Click += async (_, _) => await ReloadAsync();
         Hero.Actions.Controls.Add(CreateButton);
         Hero.Actions.Controls.Add(RefreshButton);
+        RemovedToggle.Click += async (_, _) => { ShowRemoved = !ShowRemoved; await ReloadAsync(); };
+        Hero.Actions.Controls.Add(RemovedToggle);
         Root.Controls.Add(Hero, 0, 0);
         var StatusRow = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = new Padding(0, 14, 0, 10) };
         ModeChip.Text = Service is null || Store is null ? "编队服务未连接 · 只读" : PreviewOnly ? "预览模式 · 只读" : "已连接编队服务";
@@ -73,7 +84,17 @@ public sealed class FormationPage : UserControl
         Root.Controls.Add(CardScroll, 0, 2);
         Controls.Add(Root);
         if (Service is not null) Service.Changed += OnServiceChanged;
-        Reload();
+        if (Store is null) RenderCards();
+        else if (PreviewOnly)
+        {
+            var (Runs, Templates) = Store.Snapshot();
+            ApplySnapshot(Runs, Templates);
+        }
+        else
+        {
+            RefreshPending = true;
+            SetStatus("正在读取编队…", eTone.Neutral);
+        }
         ResumeLayout(false);
         PerformAutoScale();
         PerformLayout();
@@ -83,55 +104,90 @@ public sealed class FormationPage : UserControl
     /// <summary>
     /// 从持久化存储重读编队与模板 失败时保留错误原因
     /// </summary>
-    public void Reload()
+    public Task ReloadAsync()
     {
-        try
+        if (Store is null || IsDisposed || Disposing) return Task.CompletedTask;
+        RefreshPending = false;
+        if (RefreshTask is { IsCompleted: false })
         {
-            var Snapshot = Store?.Snapshot();
-            RunList = Snapshot?.Runs ?? new();
-            TemplateList = Snapshot?.Templates ?? new();
-            RefreshPending = false;
-            if (Store is not null && !Busy) SetStatus(RunList.Count == 0 ? "还没有编队" : $"进行中 {RunList.Count(Item => Item.Status == eFormationStatus.InProgress)}  ·  阻塞中 {RunList.Count(Item => Item.Status == eFormationStatus.Blocked)}  ·  已归档 {RunList.Count(Item => Item.Status == eFormationStatus.Archived)}", eTone.Neutral);
+            RefreshAgain = true;
+            return RefreshTask;
         }
-        catch (Exception Error)
+        return RefreshTask = ReloadCoreAsync(Store);
+    }
+
+    private async Task ReloadCoreAsync(FormationStore Source)
+    {
+        do
         {
-            Program.LogError(Error);
-            RunList = new();
-            SetStatus("读取编队失败 " + Error.Message, eTone.Danger);
+            RefreshAgain = false;
+            try
+            {
+                var (AllRuns, Templates) = await Task.Run(Source.Snapshot);
+                if (IsDisposed || Disposing) return;
+                ApplySnapshot(AllRuns, Templates);
+            }
+            catch (Exception Error)
+            {
+                Program.LogError(Error);
+                if (IsDisposed || Disposing) return;
+                SetStatus("读取编队失败 " + Error.Message, eTone.Danger);
+            }
         }
+        while (RefreshAgain);
+    }
+
+    private void ApplySnapshot(List<FormationRun> AllRuns, List<FormationTemplate> Templates)
+    {
+        bool HasRemoved = AllRuns.Any(Item => Item.RemovedFromView);
+        RemovedToggle.Visible = HasRemoved;
+        if (!HasRemoved) ShowRemoved = false;
+        RemovedToggle.Text = ShowRemoved ? "隐藏已移除" : "显示已移除";
+        RunList = ShowRemoved ? AllRuns : AllRuns.Where(Item => !Item.RemovedFromView).ToList();
+        TemplateList = Templates;
         RenderCards();
+        HasSnapshot = true;
+        if (!Busy) SetStatus(RunList.Count == 0 ? "还没有编队" : $"进行中 {RunList.Count(Item => Item.Status == eFormationStatus.InProgress)}  ·  阻塞中 {RunList.Count(Item => Item.Status == eFormationStatus.Blocked)}  ·  已归档 {RunList.Count(Item => Item.Status == eFormationStatus.Archived)}", eTone.Neutral);
     }
 
     private void OnServiceChanged()
     {
         if (IsDisposed || !IsHandleCreated) return;
         if (Interlocked.Exchange(ref RefreshQueued, 1) != 0) return;
-        try { BeginInvoke(() => { Interlocked.Exchange(ref RefreshQueued, 0); if (Visible) Reload(); else RefreshPending = true; }); }
+        try
+        {
+            BeginInvoke(() =>
+            {
+                Interlocked.Exchange(ref RefreshQueued, 0);
+                if (Visible) _ = ReloadAsync();
+                else RefreshPending = true;
+            });
+        }
         catch (InvalidOperationException) when (IsDisposed || !IsHandleCreated) { Interlocked.Exchange(ref RefreshQueued, 0); }
     }
 
     protected override void OnVisibleChanged(EventArgs Event)
     {
         base.OnVisibleChanged(Event);
-        if (Visible && RefreshPending) Reload();
+        if (Visible && IsHandleCreated && RefreshPending) _ = ReloadAsync();
+    }
+
+    protected override void OnLoad(EventArgs Event)
+    {
+        base.OnLoad(Event);
+        if (Visible && RefreshPending) _ = ReloadAsync();
     }
 
     private void RenderCards()
     {
-        int Scroll = CardScroll.VerticalScroll.Value;
+        var ExistingDict = Cards.ToDictionary(Card => Card.Run.Id);
+        var RunIdHashList = RunList.Select(Run => Run.Id).ToHashSet();
+        bool LayoutChanged = false;
+        int Scroll = -CardScroll.AutoScrollPosition.Y;
         CardFlow.SuspendLayout();
         try
         {
-            var ExistingDict = CardFlow.Controls.OfType<FormationCard>().ToDictionary(Card => Card.Run.Id);
-            foreach (Control Old in CardFlow.Controls.Cast<Control>().ToList())
-            {
-                if (Old is FormationCard Existing && RunList.Any(Run => Run.Id == Existing.Run.Id)) continue;
-                if (Old.Name == "FormationEmpty" && RunList.Count == 0) continue;
-                CardFlow.Controls.Remove(Old);
-                Old.Dispose();
-            }
-            foreach (string Id in CardSignatureDict.Keys.Where(Id => RunList.All(Run => Run.Id != Id)).ToList()) CardSignatureDict.Remove(Id);
-            if (RunList.Count == 0 && CardFlow.Controls.Count == 0)
+            if (RunList.Count == 0 && CardFlow.Controls["FormationEmpty"] is null)
             {
                 var Empty = StudioCard.Create(Store is null ? "编队服务尚未连接" : "还没有编队",
                     Store is null ? "当前窗口没有接入编队存储 无法读取或创建编队  ·  其他页面不受影响"
@@ -140,24 +196,41 @@ public sealed class FormationPage : UserControl
                 Empty.AutoSize = false;
                 Empty.Name = "FormationEmpty";
                 CardFlow.Controls.Add(Empty);
+                Theme.Apply(Empty);
+                LayoutChanged = true;
             }
             for (int Index = 0; Index < RunList.Count; Index++)
             {
                 var Run = RunList[Index];
-                string Signature = JsonSerializer.Serialize(Run, WireOptions);
-                if (CardSignatureDict.GetValueOrDefault(Run.Id) == Signature) continue;
-                if (ExistingDict.TryGetValue(Run.Id, out var Old)) { CardFlow.Controls.Remove(Old); Old.Dispose(); }
-                var Card = new FormationCard(Run, Settings, CanWrite, OnCardRequest);
-                CardFlow.Controls.Add(Card);
-                CardFlow.Controls.SetChildIndex(Card, Index);
-                Theme.Apply(Card);
-                CardSignatureDict[Run.Id] = Signature;
+                if (ExistingDict.TryGetValue(Run.Id, out var Card))
+                {
+                    LayoutChanged |= Card.RefreshRun(Run, Theme);
+                }
+                else
+                {
+                    Card = new FormationCard(Run, Settings, CanWrite, OnCardRequest);
+                    CardFlow.Controls.Add(Card);
+                    Theme.Apply(Card);
+                    if (HasSnapshot) Card.AnimateUpdate();
+                    LayoutChanged = true;
+                }
+                if (CardFlow.Controls.GetChildIndex(Card) != Index)
+                {
+                    CardFlow.Controls.SetChildIndex(Card, Index);
+                    LayoutChanged = true;
+                }
             }
-            if (RunList.Count == 0) Theme.Apply(CardFlow);
+            foreach (Control Old in CardFlow.Controls.Cast<Control>().ToList())
+            {
+                if (Old is FormationCard Card ? RunIdHashList.Contains(Card.Run.Id) : RunList.Count == 0) continue;
+                Old.Dispose();
+                LayoutChanged = true;
+            }
         }
         finally { CardFlow.ResumeLayout(false); }
+        if (!LayoutChanged) return;
         ArrangeCards();
-        if (Scroll > 0) CardScroll.AutoScrollPosition = new Point(0, Scroll);
+        if (-CardScroll.AutoScrollPosition.Y != Scroll) CardScroll.AutoScrollPosition = new Point(0, Scroll);
     }
 
     private void ArrangeCards()
@@ -201,10 +274,10 @@ public sealed class FormationPage : UserControl
             FormationCard.SeatAction => () => EditSeatAsync(Run, Member!),
             FormationCard.OutsiderAction => () => EditSeatAsync(Run, null),
             FormationCard.OpenAction => () => ExecuteAsync("open", new { run_id = Run.Id }, "已打开统筹会话"),
-            FormationCard.ArchiveAction or FormationCard.UnarchiveAction or FormationCard.DeleteAction => () => LifecycleAsync(Run, Action),
+            FormationCard.ArchiveAction or FormationService.ArchiveRemove or FormationCard.UnarchiveAction or FormationCard.DeleteAction => () => LifecycleAsync(Run, Action),
             _ => () => ShowDetailAsync(Run.Id)
         };
-        // 卡片会在刷新时重建 延后到点击事件结束后执行以免释放正在处理点击的控件
+        // 操作可能移除卡片或按钮 等点击事件结束后执行
         BeginInvoke((MethodInvoker)(() => _ = RunAsync(Execute)));
     }
 
@@ -220,7 +293,7 @@ public sealed class FormationPage : UserControl
         try { await ExecuteAsync("activate", new { run_id = RunId, operation_id = NewId() }, "统筹启动包已送达 " + Dialog.Request.Theme); }
         catch (Exception Error)
         {
-            Reload();
+            await ReloadAsync();
             throw new InvalidOperationException("编队已创建 但统筹启动未完成 请在卡片上核实后重试\n" + Error.Message, Error);
         }
         await ExecuteAsync("open", new { run_id = RunId }, "已打开统筹会话 初始问题已交给统筹");
@@ -236,7 +309,13 @@ public sealed class FormationPage : UserControl
         {
             run_id = Run.Id, operation_id = Plan.ResumeOperationId.Length == 0 ? NewId() : Plan.ResumeOperationId,
             plan_token = Plan.Token, confirm_delete = Action == "delete"
-        }, Action == "delete" ? "编队及关联会话已删除" : Action == "archive" ? "编队已归档" : "已取消归档 自动调度保持暂停");
+        }, Action switch
+        {
+            FormationCard.DeleteAction => "关联会话已处理 编队已删除",
+            FormationService.ArchiveRemove => "已完成归档",
+            FormationCard.ArchiveAction => "编队已归档",
+            _ => "已取消归档 自动调度保持暂停"
+        });
     }
 
     private async Task<List<FormationTemplate>> SaveTemplateAsync(FormationTemplate Template)
@@ -287,13 +366,14 @@ public sealed class FormationPage : UserControl
         await ExecuteAsync("member", new { run_id = Run.Id, member_id = MemberId, mode = "configure", operation_id = NewId(), member = Result }, (Member is null ? "已补充外援 " : "已更新席位 ") + SeatName(Result));
     }
 
-    private Task ShowDetailAsync(string RunId)
+    private async Task ShowDetailAsync(string RunId)
     {
         if (Store is null) throw new InvalidOperationException("编队服务尚未连接");
-        using var Dialog = new FormationDetailDialog(RunId, Store, Settings, Theme, CanWrite, ExecuteAsync);
+        var Run = await Task.Run(() => Store.Get(RunId));
+        if (IsDisposed || Disposing) return;
+        using var Dialog = new FormationDetailDialog(Run, Store, Settings, Theme, CanWrite, ExecuteAsync);
         Dialog.ShowThemed(FindForm(), Theme);
-        Reload();
-        return Task.CompletedTask;
+        await ReloadAsync();
     }
 
     /// <summary>
@@ -309,7 +389,7 @@ public sealed class FormationPage : UserControl
         {
             var Result = await Task.Run(() => Service!.ExecuteAsync(Action, Element, FormationCaller.Operator(), Lifetime.Token));
             Busy = false;
-            Reload();
+            await ReloadAsync();
             SetStatus(Success, eTone.Success);
             return Result;
         }
@@ -329,7 +409,7 @@ public sealed class FormationPage : UserControl
         catch (Exception Error)
         {
             Program.LogError(Error);
-            Reload();
+            await ReloadAsync();
             SetStatus(Error.Message.ReplaceLineEndings(" "), eTone.Danger);
             if (!IsDisposed) MessageBox.Show(FindForm(), Error.Message, "编队操作未完成", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }

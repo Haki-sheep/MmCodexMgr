@@ -6,6 +6,8 @@ namespace CodexInstanceManager;
 
 internal sealed class AgentTaskbarButton : Form
 {
+    private const int ActivateApplicationMessage = 0x001c;
+    private const int MinimizeWindow = 6;
     private static readonly uint ButtonCreatedMessage = RegisterWindowMessage("TaskbarButtonCreated");
     private static readonly uint TaskbarCreatedMessage = RegisterWindowMessage("TaskbarCreated");
     private static readonly Guid TaskbarClassId = new("56FDF344-FD6D-11D0-958A-006097C9A090");
@@ -93,21 +95,33 @@ internal sealed class AgentTaskbarButton : Form
         Close();
     }
 
-    protected override void OnActivated(EventArgs Event)
-    {
-        base.OnActivated(Event);
-        if (!Ending && IsTargetCurrent())
-        {
-            try { InstanceWindowService.ShowMainWindow(Request.ProcessId, Target); }
-            catch (Exception Error) { Program.LogError(Error); }
-        }
-    }
-
     protected override void WndProc(ref Message Message)
     {
         if (Message.Msg == TaskbarCreatedMessage) { Registered = false; RemovedOriginal = false; }
         if (Message.Msg == ButtonCreatedMessage && !Registered && !Ending) BeginInvoke(Attach);
+        if (Message.Msg == ActivateApplicationMessage && Message.WParam != IntPtr.Zero && Registered && !Ending)
+        {
+            uint TargetThread = GetWindowThreadProcessId(Target, out uint ProcessId);
+            if (ProcessId == Request.ProcessId)
+            {
+                bool FromMinimizedTarget = Message.LParam.ToInt64() == TargetThread && IsIconic(Target);
+                BeginInvoke(() => FollowActivation(FromMinimizedTarget));
+            }
+        }
         base.WndProc(ref Message);
+    }
+
+    private void FollowActivation(bool FromMinimizedTarget)
+    {
+        if (Ending || !Registered || GetForegroundWindow() != Handle || !IsTargetCurrent()) return;
+        if (FromMinimizedTarget)
+        {
+            // 原窗口让出焦点时把代理也缩进任务栏 避免下次点击落在已经激活的代理上
+            ShowWindow(Handle, MinimizeWindow);
+            return;
+        }
+        try { InstanceWindowService.ShowMainWindow(Request.ProcessId, Target); }
+        catch (Exception Error) { Program.LogError(Error); }
     }
 
     private void Attach()
@@ -177,5 +191,8 @@ internal sealed class AgentTaskbarButton : Form
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)] private static extern int SetCurrentProcessExplicitAppUserModelID(string AppId);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern uint RegisterWindowMessage(string Name);
     [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr Window, out uint ProcessId);
+    [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] private static extern bool IsIconic(IntPtr Window);
+    [DllImport("user32.dll")] private static extern bool ShowWindow(IntPtr Window, int Command);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern bool PostMessage(IntPtr Window, uint Message, IntPtr WParam, IntPtr LParam);
 }

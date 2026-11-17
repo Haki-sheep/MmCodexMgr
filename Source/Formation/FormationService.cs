@@ -69,7 +69,7 @@ public sealed partial class FormationService
     private async Task<object> ExecuteOperationAsync(string Action, JsonElement Arguments, FormationCaller Caller, CancellationToken Cancellation)
     {
         if (Arguments.ValueKind != JsonValueKind.Object) throw new InvalidOperationException("编队请求必须是 JSON 对象");
-        if (Action is not ("list" or "show" or "task-show" or "templates" or "open" or "create" or "template-save" or "lifecycle-preview" or "archive" or "unarchive" or "delete"))
+        if (Action is not ("list" or "show" or "task-show" or "templates" or "open" or "create" or "template-save" or "lifecycle-preview" or "archive" or ArchiveRemove or "unarchive" or "delete"))
             RequireLifecycleEditable(Store.Get(Text(Arguments, "run_id")));
         switch (Action)
         {
@@ -131,7 +131,7 @@ public sealed partial class FormationService
             case "lifecycle-preview":
                 RequireOperator(Caller);
                 return await LifecyclePlanAsync(Text(Arguments, "run_id"), Text(Arguments, "action"), Cancellation);
-            case "archive" or "unarchive" or "delete":
+            case "archive" or ArchiveRemove or "unarchive" or "delete":
                 RequireOperator(Caller);
                 return await LifecycleAsync(Action, Arguments, Cancellation);
             case "dispatch":
@@ -224,6 +224,8 @@ public sealed partial class FormationService
                 var Target = Input<FormationMember>(Arguments, "member");
                 var Member = Run.MemberList.SingleOrDefault(Item => Item.Id == MemberId);
                 Target.Id = MemberId;
+                if (Member?.Role is eFormationRole.Learner or eFormationRole.Coordinator && LearnerIsDispatching(Run))
+                    throw new InvalidOperationException("学习席位仍在投递或整理 暂不能修改学习者或统筹配置");
                 if (Target.DisplayName.Length == 0) Target.DisplayName = Member?.DisplayName ?? $"{Run.Theme} {Run.CreatedAt:MM-dd} 外援";
                 FormationStore.RequireText(Target.DisplayName, "席位显示名", 120);
                 if (Member is null && (Target.Role != eFormationRole.Outsider || Run.MemberList.Count(Item => Item.Role == eFormationRole.Outsider) >= 2))
@@ -284,6 +286,8 @@ public sealed partial class FormationService
                 var Run = FormationStore.RequireRun(Database, RunId);
                 var Member = RequireMember(Run, MemberId);
                 if (Member.DispatchMode == eFormationDispatchMode.Native) throw new InvalidOperationException("原生子代理席位不绑定独立会话");
+                if (Member.Role is eFormationRole.Learner or eFormationRole.Coordinator && LearnerIsDispatching(Run))
+                    throw new InvalidOperationException("学习席位仍在投递或整理 暂不能更换学习者或统筹会话");
                 string SessionId = Text(Arguments, "session_id");
                 if (Run.TaskList.SelectMany(TaskItem => TaskItem.AttemptList).Any(Attempt => IsReserved(Attempt) && (Attempt.MemberId == Member.Id || Member.Role == eFormationRole.Coordinator)))
                     throw new InvalidOperationException("该席位仍有执行或待停任务 无法切换会话");

@@ -5,6 +5,9 @@ namespace CodexInstanceManager;
 
 public sealed class NavigationPage : Panel
 {
+    private Size LastShownSize;
+    private int LastShownDpi;
+
     public NavigationPage(string Title, string Glyph = "")
     {
         DoubleBuffered = true;
@@ -21,13 +24,19 @@ public sealed class NavigationPage : Panel
 
     internal void SetPageVisible(bool Value)
     {
+        bool NeedsLayout = Value && (LastShownSize != ClientSize || LastShownDpi != DeviceDpi);
         var ContainerList = new List<Control>();
         CollectContainers(this, ContainerList);
         foreach (var Container in ContainerList) Container.SuspendLayout();
         try { Visible = Value; }
         finally
         {
-            for (int Index = ContainerList.Count - 1; Index >= 0; Index--) ContainerList[Index].ResumeLayout(true);
+            for (int Index = ContainerList.Count - 1; Index >= 0; Index--) ContainerList[Index].ResumeLayout(NeedsLayout);
+        }
+        if (Value && IsHandleCreated)
+        {
+            LastShownSize = ClientSize;
+            LastShownDpi = DeviceDpi;
         }
     }
 
@@ -95,9 +104,9 @@ public sealed class ThemeTabControl : UserControl, IThemedControl
             finally
             {
                 ResumeLayout(true);
-                Current?.Invalidate(true);
             }
-            Invalidate(new Rectangle(0, 0, SidebarWidth, Height));
+            if (Previous is not null) Invalidate(TabBounds(TabPages.IndexOf(Previous)));
+            Invalidate(TabBounds(TabPages.IndexOf(Current!)));
         }
     }
 
@@ -228,15 +237,16 @@ public sealed class ThemeTabControl : UserControl, IThemedControl
         for (int Item = 0; Item < TabPages.Count; Item++) if (TabBounds(Item).Contains(Event.Location)) Index = Item;
         Cursor = Index >= 0 ? Cursors.Hand : Cursors.Default;
         if (Index == HoverIndex) return;
+        if (HoverIndex >= 0) Invalidate(TabBounds(HoverIndex));
         HoverIndex = Index;
-        Invalidate(new Rectangle(0, 0, SidebarWidth, Height));
+        if (Index >= 0) Invalidate(TabBounds(Index));
     }
 
     protected override void OnMouseLeave(EventArgs Event)
     {
         base.OnMouseLeave(Event);
+        if (HoverIndex >= 0) Invalidate(TabBounds(HoverIndex));
         HoverIndex = -1;
-        Invalidate(new Rectangle(0, 0, SidebarWidth, Height));
     }
 
     protected override void OnMouseDown(MouseEventArgs Event)

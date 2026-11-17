@@ -43,6 +43,7 @@ public sealed partial class FormationConversationLifecycle
             Target.AncestorIdList = Ancestors(Target.SessionId, ParentDict);
             Target.CanArchive = ToolList.Any(Item => Item.EndsWith("set_thread_archived", StringComparison.Ordinal));
             Target.CanDelete = ToolList.Any(Item => Item.EndsWith("delete_thread", StringComparison.Ordinal));
+            Target.CanStop = Online;
             Target.Detail = Online ? "Codex 桌面未提供相应的原生会话操作" : "请先启动对应 Codex 实例后重试";
             if (!Target.Exists) continue;
             Target.Title = Row.Title.Length == 0 ? Target.SessionId : Row.Title;

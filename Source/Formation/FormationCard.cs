@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Drawing.Drawing2D;
 
 namespace CodexInstanceManager;
@@ -20,35 +21,108 @@ public sealed class FormationCard : StudioCard
     public const string UnarchiveAction = "unarchive";
     public const string DeleteAction = "delete";
     private sealed record Notice(string Text, eTone Tone);
+    private sealed record CardAction(string Text, string Id, eButtonKind Kind, bool Enabled);
+    private sealed record CardHeader(string Title, eFormationStatus Status, Notice? Activation, string? Template, DateTimeOffset CreatedAt, int MaxParallel, int Passed, int Total, int Seats);
 
-    public FormationRun Run { get; }
+    public FormationRun Run { get; private set; }
     public FormationRoster Board { get; } = new();
+    private readonly ManagerSettings Settings;
+    private readonly bool CanWrite;
     private readonly FlowLayoutPanel LifecycleActions = new() { WrapContents = true, AutoSize = false, Margin = Padding.Empty };
     private readonly FlowLayoutPanel Footer = new() { WrapContents = true, AutoSize = false, Margin = Padding.Empty };
-    private readonly List<Notice> NoticeList = new();
     private readonly Action<FormationCard, string, FormationMember?> Request;
+    private CardHeader Header;
+    private List<Notice> NoticeList = new();
+    private List<CardAction> PreviousLifecycleList = new();
+    private List<CardAction> PreviousFooterList = new();
+    private System.Windows.Forms.Timer? UpdateAnimation;
+    private long UpdateStarted;
+    private int UpdateAlpha;
+    private const int UpdateDurationMs = 200;
 
     public FormationCard(FormationRun Run, ManagerSettings Settings, bool CanWrite, Action<FormationCard, string, FormationMember?> Request)
     {
         this.Run = Run;
+        this.Settings = Settings;
+        this.CanWrite = CanWrite;
         this.Request = Request;
+        Header = ReadHeader(Run);
+        NoticeList = ReadNotices();
         Padding = new Padding(LogicalToDeviceUnits(20), LogicalToDeviceUnits(16), LogicalToDeviceUnits(20), LogicalToDeviceUnits(16));
         Stripe = StatusTone(Run);
-        Board.Build(Run, Settings, CanWrite && !Run.Archived && Run.LifecycleOperation is not { Completed: false } && Run.State != eFormationState.Completed);
+        Board.RefreshSeats(Run, Settings, CanWrite && IsOpen);
         Board.SeatClicked += Member => Request(this, SeatAction, Member);
         Board.OutsiderRequested += () => Request(this, OutsiderAction, null);
         Controls.Add(Board);
         Controls.Add(Footer);
         Controls.Add(LifecycleActions);
-        BuildLifecycleActions(CanWrite);
-        BuildNotices();
-        BuildFooter(CanWrite);
+        RefreshActions(LifecycleActions, LifecycleActionList(), ref PreviousLifecycleList, null);
+        RefreshActions(Footer, FooterActionList(), ref PreviousFooterList, null);
     }
 
     public bool HasPendingHandoff => Run.HandoffList.Any(Item => !Item.Transferred);
 
-    private void BuildNotices()
+    private bool IsOpen => !Run.Archived && Run.LifecycleOperation is not { Completed: false } && Run.State != eFormationState.Completed;
+
+    #region Refresh
+    internal bool RefreshRun(FormationRun Value, AppTheme Theme)
     {
+        Run = Value;
+        var NextHeader = ReadHeader(Run);
+        var NextNotices = ReadNotices();
+        bool NoticesChanged = !NoticeList.SequenceEqual(NextNotices);
+        bool HeightChanged = NoticeList.Count != NextNotices.Count;
+        bool HeaderChanged = Header != NextHeader;
+        if (Header.Status != NextHeader.Status) Stripe = StatusTone(Run);
+        Header = NextHeader;
+        if (NoticesChanged) NoticeList = NextNotices;
+        bool ActionsChanged = RefreshActions(LifecycleActions, LifecycleActionList(), ref PreviousLifecycleList, Theme);
+        ActionsChanged |= RefreshActions(Footer, FooterActionList(), ref PreviousFooterList, Theme);
+        var Seats = Board.RefreshSeats(Run, Settings, CanWrite && IsOpen, Theme);
+        bool LayoutChanged = HeightChanged || ActionsChanged || Seats.LayoutChanged;
+        if (LayoutChanged) PerformLayout();
+        if (HeaderChanged || NoticesChanged || ActionsChanged || Seats.Changed) AnimateUpdate();
+        return LayoutChanged;
+    }
+
+    internal void AnimateUpdate()
+    {
+        if (Visible && SystemInformation.IsMenuAnimationEnabled)
+        {
+            if (UpdateAnimation is null)
+            {
+                UpdateAnimation = new() { Interval = 16 };
+                UpdateAnimation.Tick += (_, _) =>
+                {
+                    double Progress = Math.Min(1, Stopwatch.GetElapsedTime(UpdateStarted).TotalMilliseconds / UpdateDurationMs);
+                    double Intensity = Math.Sin(Math.PI * Progress);
+                    UpdateAlpha = Visible ? (int)(40 * Intensity * Intensity) : 0;
+                    if (!Visible || Progress == 1) UpdateAnimation.Stop();
+                    Invalidate(HeaderBounds);
+                };
+            }
+            UpdateStarted = Stopwatch.GetTimestamp();
+            UpdateAnimation.Start();
+        }
+        Invalidate();
+    }
+
+    private static CardHeader ReadHeader(FormationRun Run)
+    {
+        Notice? Activation = Run.Archived || Run.State == eFormationState.Completed ? null : Run.ActivationState switch
+        {
+            eFormationDeliveryState.Delivered => new("统筹已启动", eTone.Success),
+            eFormationDeliveryState.Dispatching => new("启动包投递中", eTone.Info),
+            eFormationDeliveryState.DeliveryUnknown => new("启动包投递未知", eTone.Danger),
+            _ => new("统筹待启动", eTone.Neutral)
+        };
+        return new(Run.Theme, Run.Status, Activation, Run.TemplateId is null ? null : "模板 v" + Run.TemplateVersion, Run.CreatedAt,
+            Run.MaxParallel, Run.TaskList.Count(Item => Item.State == eFormationTaskState.Passed), Run.TaskList.Count, Run.MemberList.Count);
+    }
+
+    private List<Notice> ReadNotices()
+    {
+        var NoticeList = new List<Notice>();
         if (Run.SetupOnly) NoticeList.Add(new("席位已配置  ·  请打开统筹会话说明任务", eTone.Accent));
         foreach (var Handoff in Run.HandoffList.Where(Item => !Item.Transferred))
         {
@@ -64,15 +138,15 @@ public sealed class FormationCard : StudioCard
         if (Unknown > 0) NoticeList.Add(new($"{Unknown} 条统筹通知投递未确认", eTone.Warning));
         if (Run.LifecycleOperation is { Completed: false } Pending)
             NoticeList.Add(new("会话操作尚未完成  ·  " + Pending.Error, eTone.Warning));
+        return NoticeList;
     }
 
-    private void BuildFooter(bool CanWrite)
+    private IEnumerable<CardAction> FooterActionList()
     {
-        bool Open = !Run.Archived && Run.LifecycleOperation is not { Completed: false } && Run.State != eFormationState.Completed;
         var Coordinator = Run.MemberList.Single(Item => Item.Role == eFormationRole.Coordinator);
         if (Coordinator.SessionId.Length != 0)
-            AddButton("打开统筹会话", OpenAction, Run.Status == eFormationStatus.Blocked ? eButtonKind.Primary : eButtonKind.Secondary, CanWrite);
-        if (Open && Run.ActivationState != eFormationDeliveryState.Delivered)
+            yield return new("打开统筹会话", OpenAction, Header.Status == eFormationStatus.Blocked ? eButtonKind.Primary : eButtonKind.Secondary, CanWrite);
+        if (IsOpen && Run.ActivationState != eFormationDeliveryState.Delivered)
         {
             string Text = Run.ActivationState switch
             {
@@ -80,42 +154,64 @@ public sealed class FormationCard : StudioCard
                 eFormationDeliveryState.Dispatching => "启动包投递中",
                 _ => "启动统筹"
             };
-            AddButton(Text, ActivateAction, eButtonKind.Primary, CanWrite && Run.State == eFormationState.Active && Run.ActivationState != eFormationDeliveryState.Dispatching);
+            yield return new(Text, ActivateAction, eButtonKind.Primary, CanWrite && Run.State == eFormationState.Active && Run.ActivationState != eFormationDeliveryState.Dispatching);
         }
-        if (Open && Run.State == eFormationState.Active) AddButton("暂停调度", PauseAction, eButtonKind.Ghost, CanWrite);
-        if (Open && Run.State == eFormationState.Paused) AddButton("恢复调度", ResumeAction, eButtonKind.Secondary, CanWrite);
-        if (HasPendingHandoff) AddButton("处理交接", HandoffAction, eButtonKind.Danger, true);
-        AddButton("查看详情", DetailAction, eButtonKind.Ghost, true);
-
+        if (IsOpen && Run.State == eFormationState.Active) yield return new("暂停调度", PauseAction, eButtonKind.Ghost, CanWrite);
+        if (IsOpen && Run.State == eFormationState.Paused) yield return new("恢复调度", ResumeAction, eButtonKind.Secondary, CanWrite);
+        if (HasPendingHandoff) yield return new("处理交接", HandoffAction, eButtonKind.Danger, true);
+        yield return new("查看详情", DetailAction, eButtonKind.Ghost, true);
     }
 
     public static string StatusText(FormationRun Run) => Run.Status switch { eFormationStatus.Archived => "已归档", eFormationStatus.Blocked => "阻塞中", _ => "进行中" };
     public static eTone StatusTone(FormationRun Run) => Run.Status switch { eFormationStatus.Archived => eTone.Success, eFormationStatus.Blocked => eTone.Warning, _ => eTone.Accent };
 
-    private void AddButton(string Text, string Action, eButtonKind Kind, bool Enabled)
+    private bool RefreshActions(FlowLayoutPanel Panel, IEnumerable<CardAction> Actions, ref List<CardAction> Previous, AppTheme? Theme)
     {
-        var Button = new StudioButton { Text = Text, Kind = Kind, Enabled = Enabled, Name = Action };
-        Button.Click += (_, _) => Request(this, Action, null);
-        Footer.Controls.Add(Button);
+        var ActionList = Actions.ToList();
+        if (Previous.SequenceEqual(ActionList)) return false;
+        Panel.SuspendLayout();
+        try
+        {
+            foreach (Control Button in Panel.Controls.Cast<Control>().ToArray())
+                if (!ActionList.Any(Action => Action.Id == Button.Name)) Button.Dispose();
+            for (int Index = 0; Index < ActionList.Count; Index++)
+            {
+                var Action = ActionList[Index];
+                if (Panel.Controls[Action.Id] is not StudioButton Button)
+                {
+                    Button = new StudioButton { Name = Action.Id, Text = Action.Text, Kind = Action.Kind, Enabled = Action.Enabled };
+                    Button.Click += (_, _) => Request(this, Action.Id, null);
+                    Panel.Controls.Add(Button);
+                    Theme?.Apply(Button);
+                }
+                else
+                {
+                    if (Button.Text != Action.Text) Button.Text = Action.Text;
+                    if (Button.Kind != Action.Kind) Button.Kind = Action.Kind;
+                    Button.Enabled = Action.Enabled;
+                }
+                if (Panel.Controls.GetChildIndex(Button) != Index) Panel.Controls.SetChildIndex(Button, Index);
+            }
+            Previous = ActionList;
+        }
+        finally { Panel.ResumeLayout(true); }
+        return true;
     }
 
-    private void BuildLifecycleActions(bool CanWrite)
+    private IEnumerable<CardAction> LifecycleActionList()
     {
         string Archive = Run.Archived ? UnarchiveAction : ArchiveAction;
         string ArchiveText = Run.Archived ? "取消归档" : "归档";
         if (Run.LifecycleOperation is { Completed: false } Pending)
         {
             Archive = Pending.Action;
-            ArchiveText = "重试" + (Archive == DeleteAction ? "删除" : Archive == UnarchiveAction ? "取消归档" : "归档");
+            ArchiveText = "重试" + FormationLifecycleDialog.ActionTitle(Archive);
         }
-        var ArchiveButton = new StudioButton { Text = ArchiveText, Name = Archive, Enabled = CanWrite };
-        ArchiveButton.Click += (_, _) => Request(this, Archive, null);
-        LifecycleActions.Controls.Add(ArchiveButton);
-        if (Archive == DeleteAction) return;
-        var DeleteButton = new StudioButton { Text = "彻底删除", Name = DeleteAction, Kind = eButtonKind.Danger, Enabled = CanWrite && Run.LifecycleOperation is not { Completed: false } };
-        DeleteButton.Click += (_, _) => Request(this, DeleteAction, null);
-        LifecycleActions.Controls.Add(DeleteButton);
+        yield return new(ArchiveText, Archive, eButtonKind.Secondary, CanWrite);
+        if (Archive == DeleteAction) yield break;
+        yield return new("删除", DeleteAction, eButtonKind.Danger, CanWrite && Run.LifecycleOperation is not { Completed: false });
     }
+    #endregion
 
     public StudioButton? ActionButton(string Action) => Footer.Controls.Cast<Control>().Concat(LifecycleActions.Controls.Cast<Control>()).OfType<StudioButton>().SingleOrDefault(Item => Item.Name == Action);
 
@@ -134,6 +230,19 @@ public sealed class FormationCard : StudioCard
         if (Handoff is not null) return Handoff.Transferred ? new("已移交", eTone.Neutral) : new("已冻结", eTone.Danger);
         if (Run.HandoffList.Any(Item => !Item.Transferred && Item.ToMemberId == Member.Id)) return new("待接替", eTone.Warning);
         if (Run.Archived) return new("已归档", eTone.Success);
+        if (Member.Role == eFormationRole.Learner)
+        {
+            var Preparation = FormationService.LearnerNotification(Run, FormationService.LearnerPrepare);
+            var Summary = FormationService.LearnerNotification(Run, FormationService.LearnerSummary);
+            if (Preparation?.State == eFormationDeliveryState.DeliveryUnknown || Summary?.State == eFormationDeliveryState.DeliveryUnknown)
+                return new("学习待核对", eTone.Danger);
+            if (Summary?.State == eFormationDeliveryState.Delivered) return new("已整理", eTone.Success);
+            if (Summary?.State == eFormationDeliveryState.Dispatching) return new("整理中", eTone.Info);
+            if (Preparation?.State == eFormationDeliveryState.Dispatching) return new("准备会话中", eTone.Info);
+            if (Run.State != eFormationState.Paused)
+                return Member.SessionId.Length == 0 ? new("待新建会话", eTone.Neutral)
+                    : Run.State == eFormationState.Completed ? new("待整理", eTone.Warning) : new("待验收", eTone.Neutral);
+        }
         if (Run.State == eFormationState.Completed) return new("已交付", eTone.Success);
         if (Run.State == eFormationState.Paused) return new("已暂停", eTone.Warning);
         if (Member.Role == eFormationRole.Coordinator)
@@ -166,10 +275,11 @@ public sealed class FormationCard : StudioCard
     private int NoticeGap => (int)(8 * DpiScale);
     private int FooterGap => (int)(9 * DpiScale);
 
-    private int LifecycleHeight => LifecycleActions.GetPreferredSize(new Size(Math.Max(1, Width - Padding.Horizontal), 0)).Height;
-    private int NoticeTop => Padding.Top + HeaderHeight + LifecycleHeight + FooterGap;
+    private int LifecycleHeight(int Width) => LifecycleActions.GetPreferredSize(new Size(Math.Max(1, Width - Padding.Horizontal), 0)).Height;
+    private Rectangle HeaderBounds => new(Padding.Left, Padding.Top, Math.Max(0, Width - Padding.Horizontal), HeaderHeight);
+    private int NoticeTop(int Width) => Padding.Top + HeaderHeight + LifecycleHeight(Width) + FooterGap;
 
-    private int BoardTop => NoticeTop + NoticeList.Count * (NoticeHeight + NoticeGap) + (int)(6 * DpiScale);
+    private int BoardTop(int Width) => NoticeTop(Width) + NoticeList.Count * (NoticeHeight + NoticeGap) + (int)(6 * DpiScale);
 
     /// <summary>
     /// 根据给定宽度计算卡片完整高度
@@ -178,16 +288,16 @@ public sealed class FormationCard : StudioCard
     {
         int Inner = Math.Max(1, Width - Padding.Horizontal);
         int FooterHeight = Footer.GetPreferredSize(new Size(Inner, 0)).Height;
-        return BoardTop + Board.MeasureHeight(Inner) + FooterGap + FooterHeight + Padding.Bottom;
+        return BoardTop(Width) + Board.MeasureHeight(Inner) + FooterGap + FooterHeight + Padding.Bottom;
     }
 
     protected override void OnLayout(LayoutEventArgs Event)
     {
         base.OnLayout(Event);
         int Inner = Math.Max(1, Width - Padding.Horizontal);
-        LifecycleActions.Bounds = new Rectangle(Padding.Left, Padding.Top + HeaderHeight, Inner, LifecycleHeight);
+        LifecycleActions.Bounds = new Rectangle(Padding.Left, Padding.Top + HeaderHeight, Inner, LifecycleHeight(Width));
         int BoardHeight = Board.MeasureHeight(Inner);
-        Board.Bounds = new Rectangle(Padding.Left, BoardTop, Inner, BoardHeight);
+        Board.Bounds = new Rectangle(Padding.Left, BoardTop(Width), Inner, BoardHeight);
         int FooterHeight = Footer.GetPreferredSize(new Size(Inner, 0)).Height;
         Footer.Bounds = new Rectangle(Padding.Left, Board.Bottom + FooterGap, Inner, FooterHeight);
     }
@@ -202,17 +312,17 @@ public sealed class FormationCard : StudioCard
         int Left = Padding.Left;
         int Right = Width - Padding.Right;
         var StateTone = StatusTone(Run);
-        string StateText = StatusText(Run);
-        var ChipList = new List<(string Text, eTone Tone)> { (StateText, StateTone) };
-        if (!Run.Archived && Run.State != eFormationState.Completed)
-            ChipList.Add(Run.ActivationState switch
-            {
-                eFormationDeliveryState.Delivered => ("统筹已启动", eTone.Success),
-                eFormationDeliveryState.Dispatching => ("启动包投递中", eTone.Info),
-                eFormationDeliveryState.DeliveryUnknown => ("启动包投递未知", eTone.Danger),
-                _ => ("统筹待启动", eTone.Neutral)
-            });
-        if (Run.TemplateId is not null) ChipList.Add(("模板 v" + Run.TemplateVersion, eTone.Violet));
+        if (UpdateAlpha > 0 && Right > Left)
+        {
+            var Bounds = HeaderBounds;
+            Bounds.Height -= (int)(5 * Scale);
+            using var Shape = StudioGeometry.Rounded(Bounds, 8 * Scale);
+            using var Highlight = new SolidBrush(Color.FromArgb(UpdateAlpha, Colors.Tone(StateTone).Fore));
+            Canvas.FillPath(Highlight, Shape);
+        }
+        var ChipList = new List<Notice> { new(StatusText(Run), StateTone) };
+        if (Header.Activation is { } Activation) ChipList.Add(Activation);
+        if (Header.Template is { } Template) ChipList.Add(new(Template, eTone.Violet));
         int ChipRight = Right;
         int ChipTop = Padding.Top + (int)(2 * Scale);
         for (int Index = ChipList.Count - 1; Index >= 0; Index--)
@@ -223,11 +333,10 @@ public sealed class FormationCard : StudioCard
             StudioPaint.Chip(Canvas, ChipList[Index].Text, StudioFonts.Small, new Point(ChipRight, ChipTop), ChipList[Index].Tone, Colors, Scale);
             ChipRight -= (int)(6 * Scale);
         }
-        TextRenderer.DrawText(Canvas, Run.Theme, StudioFonts.Section, new Rectangle(Left + (int)(4 * Scale), Padding.Top, Math.Max(0, ChipRight - Left - (int)(8 * Scale)), (int)(26 * Scale)), Colors.Text, TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | Scoped);
-        int Passed = Run.TaskList.Count(Item => Item.State == eFormationTaskState.Passed);
-        string Meta = $"并发 {Run.MaxParallel}  ·  任务 {Passed}/{Run.TaskList.Count} 通过  ·  {Run.MemberList.Count} 席  ·  创建于 {Run.CreatedAt.ToLocalTime():MM-dd HH:mm}";
+        TextRenderer.DrawText(Canvas, Header.Title, StudioFonts.Section, new Rectangle(Left + (int)(4 * Scale), Padding.Top, Math.Max(0, ChipRight - Left - (int)(8 * Scale)), (int)(26 * Scale)), Colors.Text, TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | Scoped);
+        string Meta = $"并发 {Header.MaxParallel}  ·  任务 {Header.Passed}/{Header.Total} 通过  ·  {Header.Seats} 席  ·  创建于 {Header.CreatedAt.ToLocalTime():MM-dd HH:mm}";
         TextRenderer.DrawText(Canvas, Meta, StudioFonts.Caption, new Rectangle(Left + (int)(4 * Scale), Padding.Top + (int)(30 * Scale), Right - Left, (int)(20 * Scale)), Colors.Muted, TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | Scoped);
-        int Top = NoticeTop;
+        int Top = NoticeTop(Width);
         foreach (var Notice in NoticeList)
         {
             var Bounds = new Rectangle(Left, Top, Right - Left, NoticeHeight);
@@ -238,5 +347,11 @@ public sealed class FormationCard : StudioCard
             TextRenderer.DrawText(Canvas, Notice.Text, StudioFonts.Caption, new Rectangle(Bounds.Left + (int)(12 * Scale), Bounds.Top, Bounds.Width - (int)(20 * Scale), Bounds.Height), Fore, TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | Scoped);
             Top += NoticeHeight + NoticeGap;
         }
+    }
+
+    protected override void Dispose(bool Disposing)
+    {
+        if (Disposing) UpdateAnimation?.Dispose();
+        base.Dispose(Disposing);
     }
 }

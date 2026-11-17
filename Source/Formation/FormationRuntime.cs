@@ -85,6 +85,14 @@ public sealed partial class FormationService
                 }
             }
         }
+        if (Agents is not null && Relay is not null)
+        {
+            foreach (var Run in Store.List())
+            {
+                Cancellation.ThrowIfCancellationRequested();
+                await ProcessLearnerAsync(Run, Cancellation);
+            }
+        }
         if (Notify is null) return;
         foreach (var Run in Store.List())
         {
@@ -230,7 +238,7 @@ public sealed partial class FormationService
     {
         var RunList = Store.List();
         if (!RunList.Any(Run => Run.ActivationState == eFormationDeliveryState.Dispatching && !ActivationDict.ContainsKey(Run.Id) ||
-            Run.NotificationList.Any(Item => Item.State == eFormationDeliveryState.Dispatching))) return;
+            Run.NotificationList.Any(Item => Item.State == eFormationDeliveryState.Dispatching && Item.RelayRequestKey.Length == 0))) return;
         Store.Update(Database =>
         {
             foreach (var Run in Database.RunList)
@@ -241,7 +249,7 @@ public sealed partial class FormationService
                     Run.ActivationDetail = "管理器停止时启动包投递未确认";
                     FormationStore.AddEvent(Run, "manager", "activation_uncertain", Run.ActivationDetail);
                 }
-                foreach (var Notification in Run.NotificationList.Where(Item => Item.State == eFormationDeliveryState.Dispatching))
+                foreach (var Notification in Run.NotificationList.Where(Item => Item.State == eFormationDeliveryState.Dispatching && Item.RelayRequestKey.Length == 0))
                 {
                     Notification.State = eFormationDeliveryState.DeliveryUnknown;
                     Notification.Detail = "管理器停止时通知投递未确认";
@@ -261,6 +269,7 @@ public sealed partial class FormationService
         try
         {
             var Initial = Store.Get(RunId);
+            RequireLifecycleEditable(Initial);
             if (Initial.ActivationState == eFormationDeliveryState.Delivered) return Initial;
             var Member = Initial.MemberList.Single(Item => Item.Role == eFormationRole.Coordinator);
             if (Initial.State != eFormationState.Active) throw new InvalidOperationException("只有启动中的编队可发送启动包");
@@ -306,6 +315,9 @@ public sealed partial class FormationService
             var Run = FormationStore.RequireRun(Database, RunId);
             Run.ActivationState = State;
             Run.ActivationDetail = Detail;
+            if (State == eFormationDeliveryState.Delivered && Agents is not null &&
+                Run.MemberList.Any(Item => Item.Role == eFormationRole.Learner) && LearnerNotification(Run, LearnerPrepare) is null)
+                Run.NotificationList.Add(new() { Id = LearnerPrepare });
             FormationStore.AddEvent(Run, "manager", State == eFormationDeliveryState.Delivered ? "activation_delivered" : "activation_uncertain", Detail);
             return Run;
         });

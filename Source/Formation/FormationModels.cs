@@ -70,6 +70,7 @@ public sealed class FormationRun
     public int MaxParallel { get; set; }
     public eFormationState State { get; set; } = eFormationState.Active;
     public bool Archived { get; set; }
+    public bool RemovedFromView { get; set; }
     public FormationLifecycleOperation? LifecycleOperation { get; set; }
     public List<FormationLifecycleTarget> ArchiveSnapshot { get; set; } = new();
     public eFormationStatus Status => LifecycleOperation is { Completed: false } ? eFormationStatus.Blocked : Archived ? eFormationStatus.Archived
@@ -152,6 +153,7 @@ public sealed class FormationNotification
     public string Id { get; set; } = "";
     public eFormationDeliveryState State { get; set; }
     public string Detail { get; set; } = "";
+    public string RelayRequestKey { get; set; } = "";
 }
 
 public sealed record FormationStopEvidence(string AttemptId, string Source, string Details, DateTimeOffset At);

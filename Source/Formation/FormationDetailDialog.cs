@@ -13,18 +13,19 @@ public sealed class FormationDetailDialog : StudioDialog
     private readonly Func<string, object, string, Task<object>> Execute;
     private readonly WheelScrollPanel DetailScroll = new() { Dock = DockStyle.Fill, AutoScroll = true };
     private FormationRun Run;
+    private int RefreshVersion;
 
-    public FormationDetailDialog(string RunId, FormationStore Store, ManagerSettings Settings, AppTheme Appearance, bool CanWrite, Func<string, object, string, Task<object>> Execute)
+    public FormationDetailDialog(FormationRun Run, FormationStore Store, ManagerSettings Settings, AppTheme Appearance, bool CanWrite, Func<string, object, string, Task<object>> Execute)
         : base("编队详情", new Size(1000, 760))
     {
-        this.RunId = RunId;
+        this.RunId = Run.Id;
         this.Store = Store;
         this.Settings = Settings;
         this.Appearance = Appearance;
         this.CanWrite = CanWrite;
         this.Execute = Execute;
         MaximizeBox = true;
-        Run = Store.Get(RunId);
+        this.Run = Run;
         Content.RowCount = 1;
         Content.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         Content.Controls.Add(DetailScroll);
@@ -37,18 +38,24 @@ public sealed class FormationDetailDialog : StudioDialog
     {
         int Position = -DetailScroll.AutoScrollPosition.Y;
         var Old = DetailScroll.Controls.Cast<Control>().ToList();
-        DetailScroll.Controls.Clear();
-        foreach (var Item in Old) Item.Dispose();
         Text = "编队详情 · " + Run.Theme;
         var Column = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, ColumnCount = 1, Padding = new Padding(0, 0, 6, 0) };
         Column.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        Column.SuspendLayout();
         Column.Controls.Add(BuildHeader());
         Column.Controls.Add(BuildSeats());
         foreach (var Handoff in Run.HandoffList.OrderBy(Item => Item.Transferred)) Column.Controls.Add(BuildHandoff(Handoff));
         Column.Controls.Add(BuildTasks());
-        DetailScroll.Controls.Add(Column);
-        Appearance.Apply(Column);
-        DetailScroll.AutoScrollPosition = new Point(0, Position);
+        DetailScroll.SuspendLayout();
+        try
+        {
+            DetailScroll.Controls.Add(Column);
+            Appearance.Apply(Column);
+            foreach (var Item in Old) Item.Dispose();
+            Column.ResumeLayout(true);
+        }
+        finally { DetailScroll.ResumeLayout(true); }
+        if (-DetailScroll.AutoScrollPosition.Y != Position) DetailScroll.AutoScrollPosition = new Point(0, Position);
     }
 
     private Control BuildHeader()
@@ -186,24 +193,29 @@ public sealed class FormationDetailDialog : StudioDialog
             catch (Exception Error)
             {
                 Program.LogError(Error);
-                MessageBox.Show(this, Error.Message, "编队操作未完成", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                if (!IsDisposed) MessageBox.Show(this, Error.Message, "编队操作未完成", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
-            if (!IsDisposed) BeginInvoke((MethodInvoker)Reload);
+            if (!IsDisposed) BeginInvoke(async () => await ReloadAsync());
         };
         return Created;
     }
 
-    private void Reload()
+    private async Task ReloadAsync()
     {
         if (IsDisposed) return;
-        try { Run = Store.Get(RunId); }
+        int Version = ++RefreshVersion;
+        try
+        {
+            var Updated = await Task.Run(() => Store.Get(RunId));
+            if (IsDisposed || Version != RefreshVersion) return;
+            Run = Updated;
+            Rebuild();
+        }
         catch (Exception Error)
         {
             Program.LogError(Error);
-            MessageBox.Show(this, Error.Message, "读取编队失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            return;
+            if (!IsDisposed && Version == RefreshVersion) MessageBox.Show(this, Error.Message, "读取编队失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
-        Rebuild();
     }
 
     private string MemberName(string Id)
