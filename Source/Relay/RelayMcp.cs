@@ -46,6 +46,10 @@ public static class RelayMcp
             var Response = Request.Command == "relay_report" ? await RelayOutbox.DeliverAsync(Request, Cancellation, PipeName, OutboxRoot) : await RelayHost.RequestAsync(Request, Cancellation, PipeName);
             return new { content = new[] { new { type = "text", text = Response.GetRawText() } }, isError = false };
         }
+        catch (RelayRequestException Error) when (Error.Kind == RelayRequestException.ResponseTooLarge)
+        {
+            return new { content = new[] { new { type = "text", text = JsonSerializer.Serialize(Error.ErrorPayload()) } }, isError = true };
+        }
         catch (Exception Error)
         {
             return new { content = new[] { new { type = "text", text = "联调调用失败 " + Error.Message + " 请确认管理器正在运行 保留 request_id 重试 不要用新标识重复派发" } }, isError = true };

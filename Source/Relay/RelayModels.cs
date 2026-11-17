@@ -117,6 +117,7 @@ public static class RelayLimits
     public const int MaxTreeDepth = 32;
     public const int MaxTextLength = 16000;
     public const int MaxFrameBytes = 256 * 1024;
+    public const int MaxResponseBytes = 4 * 1024 * 1024;
     public const int MaxDesktopFrameBytes = 8 * 1024 * 1024;
     public const int ConnectTimeoutMilliseconds = 4000;
     public const int RequestTimeoutSeconds = 45;
@@ -126,6 +127,13 @@ public static class RelayLimits
     internal const string LegacyMcpName = "mm_codex_mgr";
     internal static IReadOnlyList<string> CodexThinkingList { get; } = new[] { "none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra" };
     public const string DispatchWaitInstruction = "优先处理已到达且当前可核对的回传 继续推进其他已授权且依赖已满足的工作 准备等待前用 agent_inbox 或 CLI inbox 核对一次 当前无可推进事项且仍在等回传时才结束本轮等待事件 不轮询";
+
+    public static string Excerpt(string Value, int Length)
+    {
+        if (Value.Length <= Length) return Value;
+        if (char.IsHighSurrogate(Value[Length - 1]) && char.IsLowSurrogate(Value[Length])) Length--;
+        return Value[..Length] + "…";
+    }
     public static string Root => Path.Combine(ManagerPaths.Root, "relay");
     public static string PipeName => "MmCodexMgr-Relay-" + Environment.UserName;
 

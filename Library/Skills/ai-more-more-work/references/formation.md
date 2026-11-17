@@ -32,7 +32,7 @@ Codex 与 Antigravity 支持原生删除，DeepSeek Harness 在删除编队时�
 
 1. 由用户在编队界面创建并准备编队。统筹须绑定真实 Codex 会话，CLI 可指定已有会话，界面默认由管理器新建。启动消息提供编队 ID 及该角色的调用凭据。空编队须等待用户在会话中说明需求，再用 `context` 保存已确认内容；携带需求创建的 CLI 编队按启动包继续。投递状态不明时先由用户核对原会话。
 2. 统筹调用 CLI 时保持宿主的 `CODEX_HOME` 和 `CODEX_THREAD_ID`，在调用的 PowerShell 子进程设置启动消息提供的 `MMCODEX_FORMATION_MEMBER_TOKEN`。凭据仅用于本编队调用，禁止写入文件、项目配置、长期环境或回报。
-3. 用 `formation show` 读取编队与席位，JSON 提供 `run_id`。按需用 `formation task-show` 读取单项任务，JSON 提供 `run_id` 和 `task_id`。
+3. 用 `formation show` 读取编队状态、席位、最新需求和一页任务摘要，JSON 提供 `run_id`。用 `formation task-show` 读取单项任务和最近记录摘要，JSON 提供 `run_id` 和 `task_id`。
 4. 用 `formation task` 登记任务，提供 `run_id`、`operation_id`、`title`、`instructions`、`acceptance`、`executor_id`、`workspace`。省略 `reviewer_id` 时使用已经配置的原生审核，显式空值由统筹验收，独立审核填写席位 ID。只读填写 `{"access":"read_only"}`，写入填写 `{"access":"write","write_paths":["实际绝对路径"]}`。
 5. 用 `formation dispatch` 派发，JSON 提供 `run_id`、`task_id`、`operation_id`，执行用 `kind=execute`。启动包逐席列出模型、拟推理强度、子代理上限和席位 ID，同角色多席按序编号。独立 Codex 派发按模型公布的档位选最近值，等距选较低档。档位未知或执行端沿用会话配置时使用默认。每个写请求使用稳定的 `operation_id`，同一请求重试保持 ID 和内容。
 6. 独立执行方按 Relay 回报，原生轮次由统筹回传。没有审核席位的任务由统筹用 `formation review` 提交 `run_id`、`task_id`、`attempt_id`、`submission_id`、`operation_id`、`passed` 和 `feedback`。全部任务通过后用 `formation complete` 提交 `run_id`、`operation_id` 与交付 `summary`。
@@ -43,6 +43,12 @@ Codex 与 Antigravity 支持原生删除，DeepSeek Harness 在删除编队时�
 & '<Skill目录>/scripts/aimoremorework.ps1' formation task-show --json-file '<请求JSON的绝对路径>'
 & '<Skill目录>/scripts/aimoremorework.ps1' formation dispatch --json-file '<另一请求JSON的绝对路径>'
 ```
+
+`formation list` 返回 `run_list` 和 `total`，`formation show` 返回 `task_list` 和 `task_count`。每页 20 项，用返回的 `next_offset` 继续读。返回编队的写入命令也使用编队摘要，历史可按编队 ID 查询。
+
+三种查询均支持在请求 JSON 里增加 `"view":"full"` 读取完整记录，完整响应最多 4 MiB。超过此容量时按页或按记录读。`show` 支持 `revision_list`、`event_list`、`handoff_list`、`notification_list`、`archive_snapshot`、`lifecycle_operation`、`activation_detail` 和 `final_summary`。`task-show` 支持 `attempt_list`、`submission_list`、`review_list` 和 `processing_detail`。把字段名填入 `section`，从 `offset:0` 开始，每次返回该记录和下一条 `next_offset`。例如 `{"run_id":"编队ID","task_id":"任务ID","section":"submission_list","offset":0}`。
+
+收到 `error_kind=response_too_large` 且 `operation_completed=true` 时，管理器已经处理命令。先用 ID 或分段查询核对状态，有必要重试写入时保留原 `operation_id` 和原参数。
 
 ## 原生审核与外援
 

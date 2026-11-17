@@ -192,6 +192,11 @@ public static class AgentCli
             await Writer.WriteLineAsync(Result.GetRawText());
             return 0;
         }
+        catch (RelayRequestException Failure)
+        {
+            await Error.WriteLineAsync(JsonSerializer.Serialize(Failure.ErrorPayload()));
+            return 1;
+        }
         catch (Exception Failure)
         {
             await Error.WriteLineAsync(JsonSerializer.Serialize(new { error = Failure.Message }));

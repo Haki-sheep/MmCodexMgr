@@ -636,6 +636,14 @@ public sealed partial class FormationService
 
     internal static JsonElement Output(object Value) => JsonSerializer.SerializeToElement(Value, WireOptions);
 
+    internal static object FormatCommandResult(string Action, object Result)
+    {
+        if (Result is FormationRun Run) return FormationQuery.DescribeRun(Run);
+        if (Action is "create" or "context" or "pause" or "resume" or "complete" && Result is JsonElement Receipt)
+            return FormationQuery.DescribeRun(Receipt.Deserialize<FormationRun>(WireOptions) ?? throw new InvalidDataException("编队操作回执为空"));
+        return Result;
+    }
+
     private static string Text(JsonElement Element, string Name) => FormationStore.RequireText(OptionalText(Element, Name), Name, 16000);
 
     private static string OptionalText(JsonElement Element, string Name) => Element.TryGetProperty(Name, out var Value) ? Value.GetString() ?? "" : "";

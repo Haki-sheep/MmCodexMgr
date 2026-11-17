@@ -175,7 +175,7 @@ public sealed partial class FormationService
                 var Submission = Item.SubmissionList[^1];
                 yield return new("acceptance/" + Item.Id + "/" + Submission.Id,
                     $"编队 {Run.Id} 任务 {Item.Title} ({Item.Id}) 待统筹验收。使用 formation review，执行轮次 {Submission.AttemptId}，提交 {Submission.Id}。\n" +
-                    SubmissionSummary(Submission) + "\n详情用 formation task-show 查看本任务。");
+                    SubmissionSummary(Submission) + "\n详情用 formation task-show 读取 submission_list。");
             }
             if (Item.State == eFormationTaskState.Passed)
             {
@@ -184,7 +184,7 @@ public sealed partial class FormationService
                 string Review = Decision.Feedback.Length == 0 ? "" : "\n审核反馈 " + Excerpt(Decision.Feedback, 320);
                 yield return new("passed/" + Item.Id + "/" + Decision.SubmissionId,
                     $"编队 {Run.Id} 任务 {Item.Title} ({Item.Id}) 已通过。\n" + SubmissionSummary(Submission) + Review +
-                    "\n详情用 formation task-show。全部任务通过后用 formation complete 提交编队总结。");
+                    "\n详情用 formation task-show 读取 submission_list 和 review_list。全部任务通过后用 formation complete 提交编队总结。");
             }
         }
     }
@@ -193,11 +193,11 @@ public sealed partial class FormationService
     {
         var PathList = Submission.ArtifactList.Where(Item => Item.Path.Length <= 512).Take(3).Select(Item => Item.Path).ToList();
         string Artifacts = PathList.Count == 0 ? "" : "\n产物\n" + string.Join("\n", PathList);
-        string Remaining = PathList.Count < Submission.ArtifactList.Count ? "\n更多产物见 formation task-show。" : "";
+        string Remaining = PathList.Count < Submission.ArtifactList.Count ? "\n更多产物见 formation task-show 的 submission_list。" : "";
         return "以下为待核对的执行回报。\n结果摘要 " + Excerpt(Submission.Summary, 640) + Artifacts + Remaining;
     }
 
-    private static string Excerpt(string Value, int Max) => Value.Length <= Max ? Value : Value[..Max] + "…";
+    private static string Excerpt(string Value, int Max) => RelayLimits.Excerpt(Value, Max);
 
     private async Task NotifyOnceAsync(string RunId, FormationNotice Notice)
     {

@@ -1,9 +1,14 @@
 using System.IO.Pipes;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace CodexInstanceManager;
 
-public sealed record RelayRequest(string InstanceId, string ThreadId, string Command, JsonElement Arguments);
+public sealed record RelayRequest(string InstanceId, string ThreadId, string Command, JsonElement Arguments)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool AcceptLargeResponse { get; init; }
+}
 
 public sealed class RelayHost : IDisposable
 {
@@ -34,7 +39,7 @@ public sealed class RelayHost : IDisposable
         using var Client = new NamedPipeClientStream(".", PipeName ?? RelayLimits.PipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
         await Client.ConnectAsync(RelayLimits.ConnectTimeoutMilliseconds, Timeout.Token);
         await RelayWire.WriteAsync(Client, Request, RelayLimits.MaxFrameBytes, Timeout.Token);
-        var Response = await RelayWire.ReadAsync(Client, RelayLimits.MaxFrameBytes, Timeout.Token);
+        var Response = await RelayWire.ReadAsync(Client, ResponseLimit(Request), Timeout.Token);
         if (Response.TryGetProperty("error", out var Error)) throw new RelayRequestException(Response.TryGetProperty("error_kind", out var Kind) ? Kind.GetString()! : "rejected", Error.GetString()!);
         return Response.GetProperty("result").Clone();
     }
@@ -55,8 +60,23 @@ public sealed class RelayHost : IDisposable
                     var Request = Message.Deserialize<RelayRequest>() ?? throw new InvalidDataException("联调请求为空");
                     object Result;
                     try { Result = await ExecuteAsync(Request); }
-                    catch (Exception Error) { Program.LogError(Error); Result = new { error = Error.Message, error_kind = Error is IOException or TimeoutException or OperationCanceledException ? "delivery_uncertain" : "rejected" }; await RelayWire.WriteAsync(Server, Result, RelayLimits.MaxFrameBytes, RequestTimeout.Token); continue; }
-                    await RelayWire.WriteAsync(Server, new { result = Result }, RelayLimits.MaxFrameBytes, RequestTimeout.Token);
+                    catch (Exception Error)
+                    {
+                        Program.LogError(Error);
+                        string Kind = Error is IOException or TimeoutException or OperationCanceledException ? "delivery_uncertain" : "rejected";
+                        await RelayWire.WriteAsync(Server, new { error = RelayLimits.Excerpt(Error.Message, 4000), error_kind = Kind }, RelayLimits.MaxFrameBytes, RequestTimeout.Token);
+                        continue;
+                    }
+                    int Limit = ResponseLimit(Request);
+                    if (!await RelayWire.TryWriteAsync(Server, new { result = Result }, Limit, RequestTimeout.Token))
+                    {
+                        await RelayWire.WriteAsync(Server, new
+                        {
+                            error = $"{Request.Command} 已执行 响应超过 {Limit / 1024} KiB 请按 ID 查询或分段读取 写入操作勿换标识重试",
+                            error_kind = RelayRequestException.ResponseTooLarge,
+                            operation_completed = true
+                        }, RelayLimits.MaxFrameBytes, RequestTimeout.Token);
+                    }
                 }
                 catch (OperationCanceledException) when (!Lifetime.IsCancellationRequested) { Program.LogError(new TimeoutException("联调客户端请求超时")); }
                 catch (IOException Error) { Program.LogError(Error); }
@@ -67,6 +87,8 @@ public sealed class RelayHost : IDisposable
         catch (OperationCanceledException) when (Lifetime.IsCancellationRequested) { }
         catch (Exception Error) { Program.LogError(Error); Failed?.Invoke(Error); }
     }
+
+    private static int ResponseLimit(RelayRequest Request) => Request.AcceptLargeResponse ? RelayLimits.MaxResponseBytes : RelayLimits.MaxFrameBytes;
 
     private async Task<object> ExecuteAsync(RelayRequest Request)
     {

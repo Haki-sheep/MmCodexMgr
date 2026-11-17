@@ -6,8 +6,11 @@ namespace CodexInstanceManager;
 
 public sealed class RelayRequestException : InvalidOperationException
 {
+    public const string ResponseTooLarge = "response_too_large";
     public string Kind { get; }
     public RelayRequestException(string Kind, string Message) : base(Message) => this.Kind = Kind;
+
+    public object ErrorPayload() => new { error = Message, error_kind = Kind, operation_completed = Kind == ResponseTooLarge ? true : (bool?)null };
 }
 
 public static class RelayOutbox
@@ -28,6 +31,11 @@ public static class RelayOutbox
             string? Retained = PreserveRejected(PathValue);
             if (Retained is null) throw;
             throw new RelayRequestException(Error.Kind, Error.Message + " 原回报已保留供核对 " + Retained);
+        }
+        catch (RelayRequestException Error) when (Error.Kind == RelayRequestException.ResponseTooLarge)
+        {
+            File.Delete(PathValue);
+            throw;
         }
         catch (Exception Error) when (Error is IOException or TimeoutException or OperationCanceledException or RelayRequestException)
         {

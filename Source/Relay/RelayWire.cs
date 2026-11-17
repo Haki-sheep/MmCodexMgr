@@ -8,13 +8,19 @@ public static class RelayWire
 {
     public static async Task WriteAsync(Stream Stream, object Message, int Limit, CancellationToken Cancellation)
     {
+        if (!await TryWriteAsync(Stream, Message, Limit, Cancellation)) throw new InvalidDataException("通信消息超过容量限制");
+    }
+
+    public static async Task<bool> TryWriteAsync(Stream Stream, object Message, int Limit, CancellationToken Cancellation)
+    {
         byte[] DataList = JsonSerializer.SerializeToUtf8Bytes(Message);
-        if (DataList.Length > Limit) throw new InvalidDataException("通信消息超过容量限制");
+        if (DataList.Length > Limit) return false;
         byte[] HeaderList = new byte[sizeof(int)];
         BinaryPrimitives.WriteInt32LittleEndian(HeaderList, DataList.Length);
         await Stream.WriteAsync(HeaderList, Cancellation);
         await Stream.WriteAsync(DataList, Cancellation);
         await Stream.FlushAsync(Cancellation);
+        return true;
     }
 
     public static async Task<JsonElement> ReadAsync(Stream Stream, int Limit, CancellationToken Cancellation)

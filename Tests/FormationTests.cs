@@ -10,6 +10,106 @@ internal static class FormationTests
         await VerifySetupAsync();
         await VerifyNativeAsync();
         await VerifyLearnerAsync();
+        await VerifyLargeResponsesAsync();
+    }
+
+    private static async Task VerifyLargeResponsesAsync()
+    {
+        string Root = Path.Combine(Path.GetTempPath(), "MmFormationResponse-" + Guid.NewGuid().ToString("N"));
+        string? PreviousCredential = Environment.GetEnvironmentVariable("MMCODEX_FORMATION_OPERATOR_TOKEN");
+        try
+        {
+            var Settings = new ManagerSettings { InstanceList = Profiles() };
+            var Store = new FormationStore(Root);
+            FormationRun Create(string Theme) => Store.Create(new()
+            {
+                Theme = Theme, Requirement = "验证长编队响应",
+                MemberList = Settings.InstanceList.Take(2).Select(Profile => new FormationMember
+                {
+                    Id = Profile.Id, InstanceId = Profile.Id, Role = Profile.Id == "main" ? eFormationRole.Coordinator : eFormationRole.Executor
+                }).ToList()
+            });
+            var Run = Create("长任务历史");
+            var HugeRun = Create("长需求历史");
+            string Instructions = new('工', 2600);
+            Run.TaskList = Enumerable.Range(0, 23).Select(Index => new FormationTask
+            {
+                Id = "task-" + Index, Title = "任务 " + Index, Instructions = Instructions, Acceptance = "验收", ExecutorId = "worker1"
+            }).ToList();
+            string Summary = new('结', RelayLimits.MaxTextLength);
+            Run.TaskList[0].SubmissionList.Add(new("submission", "attempt", 1, 1, Summary, new(), DateTimeOffset.UtcNow));
+            string Context = new('文', 4000);
+            HugeRun.RevisionList.AddRange(Enumerable.Range(2, 180).Select(Version =>
+                new FormationRevision(Version, 1, Context, HugeRun.RevisionList[0].Requirement, DateTimeOffset.UtcNow)));
+            HugeRun.ContextVersion = HugeRun.RevisionList.Count;
+            File.WriteAllBytes(Path.Combine(Root, "formations.json"), JsonSerializer.SerializeToUtf8Bytes(new { RunList = new[] { Run, HugeRun } }));
+
+            var Service = new FormationService(Store, Settings);
+            using var Coordinator = new RelayCoordinator(new RelayStore(Path.Combine(Root, "relay")), new FakeBridge());
+            string PipeName = "MmFormationResponses-" + Guid.NewGuid().ToString("N");
+            using var Host = new RelayHost(Coordinator, PipeName, Formation: Service);
+            string Credential = Service.IssueOperatorCredential();
+            Environment.SetEnvironmentVariable("MMCODEX_FORMATION_OPERATOR_TOKEN", Credential);
+            string RequestPath = Path.Combine(Root, "request.json");
+
+            async Task<(int ExitCode, JsonElement Data, int Bytes)> Call(string Action, object Arguments)
+            {
+                File.WriteAllBytes(RequestPath, JsonSerializer.SerializeToUtf8Bytes(Arguments));
+                using var Output = new MemoryStream();
+                using var Error = new StringWriter();
+                int ExitCode = await FormationCli.RunAsync(new[] { "formation", Action, "--operator", "true", "--json-file", RequestPath },
+                    Output, Error, CancellationToken.None, PipeName, () => Settings);
+                using var Response = ExitCode == 0 ? JsonDocument.Parse(Output.ToArray()) : JsonDocument.Parse(Error.ToString());
+                return (ExitCode, Response.RootElement.Clone(), (int)Output.Length);
+            }
+
+            var List = await Call("list", new { });
+            Require(List.ExitCode == 0 && List.Data.GetProperty("total").GetInt32() == 2, "编队列表使用摘要而非完整历史");
+            var Page = await Call("show", new { run_id = Run.Id });
+            Require(Page.ExitCode == 0 && Page.Bytes < RelayLimits.MaxFrameBytes && Page.Data.GetProperty("task_list").GetArrayLength() == 20,
+                "首屏只回传任务摘要");
+            var LastPage = await Call("show", new { run_id = Run.Id, offset = Page.Data.GetProperty("next_offset").GetInt32() });
+            Require(LastPage.Data.GetProperty("task_list").GetArrayLength() == 3 && LastPage.Data.GetProperty("next_offset").ValueKind == JsonValueKind.Null,
+                "编队任务可翻页到末尾");
+            var Full = await Call("show", new { run_id = Run.Id, view = "full" });
+            Require(Full.ExitCode == 0 && Full.Bytes > RelayLimits.MaxFrameBytes && Full.Data.GetProperty("task_list")[22].GetProperty("instructions").GetString() == Instructions,
+                "新版 CLI 通过真实命名管道读取超过 256 KiB 的完整编队");
+
+            var TaskView = await Call("task-show", new { run_id = Run.Id, task_id = "task-0" });
+            Require(TaskView.ExitCode == 0 && TaskView.Data.GetProperty("latest_submission").GetProperty("summary").GetString()!.Length < Summary.Length,
+                "任务摘要压缩回传正文");
+            var Submission = await Call("task-show", new { run_id = Run.Id, task_id = "task-0", section = "submission_list" });
+            Require(Submission.ExitCode == 0 && Submission.Data.GetProperty("items")[0].GetProperty("summary").GetString() == Summary,
+                "任务历史仍保留完整回传");
+
+            var LegacyArguments = JsonSerializer.SerializeToElement(new { @operator = true, credential = Credential, arguments = new { run_id = Run.Id, view = "full" } });
+            try
+            {
+                await RelayHost.RequestAsync(new("", "", "formation_show", LegacyArguments), CancellationToken.None, PipeName);
+                throw new InvalidOperationException("旧管道客户端应收到响应超限错误");
+            }
+            catch (RelayRequestException Error) when (Error.Kind == "response_too_large") { }
+
+            var Overflow = await Call("show", new { run_id = HugeRun.Id, view = "full" });
+            Require(Overflow.ExitCode == 1 && Overflow.Data.GetProperty("error_kind").GetString() == "response_too_large" &&
+                Overflow.Data.GetProperty("operation_completed").GetBoolean(), "超出 4 MiB 时 CLI 收到结构化错误");
+            var Revision = await Call("show", new { run_id = HugeRun.Id, section = "revision_list", offset = 179 });
+            Require(Revision.ExitCode == 0 && Revision.Data.GetProperty("items")[0].GetProperty("context").GetString() == Context &&
+                Revision.Data.GetProperty("next_offset").GetInt32() == 180, "完整响应超限后仍能逐条读取原数据");
+
+            var Change = new { run_id = Run.Id, operation_id = "context-once", context = "新上下文", requirement = Run.RevisionList[0].Requirement };
+            var First = await Call("context", Change);
+            var Retry = await Call("context", Change);
+            Require(First.ExitCode == 0 && Retry.ExitCode == 0 && First.Bytes < RelayLimits.MaxFrameBytes &&
+                First.Data.GetRawText() == Retry.Data.GetRawText() && Store.Get(Run.Id).ContextVersion == 2, "长编队写入返回摘要且同一操作只生效一次");
+            Console.WriteLine($"PASS formation named-pipe response full={Full.Bytes:N0} B summary={Page.Bytes:N0} B overflow and replay");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("MMCODEX_FORMATION_OPERATOR_TOKEN", PreviousCredential);
+            if (!ManagerPaths.IsUnder(Root, Path.GetTempPath())) throw new IOException("测试清理路径越界");
+            if (Directory.Exists(Root)) Directory.Delete(Root, true);
+        }
     }
 
     private static async Task VerifyLearnerAsync()

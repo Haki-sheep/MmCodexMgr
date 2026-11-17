@@ -11,7 +11,9 @@ public static class FormationCli
         人工调用使用 --operator true 自动读取当前 Windows 用户的本机凭据 可用 MMCODEX_FORMATION_OPERATOR_TOKEN 显式覆盖
         角色调用使用当前 CODEX_HOME CODEX_THREAD_ID 及 MMCODEX_FORMATION_MEMBER_TOKEN
         独立会话使用 Relay 回传 原生轮次由真实统筹用宿主工具执行并回传 reconcile 核对原轮次
-        show      run_id
+        list      [offset] 返回编队摘要页
+        show      run_id [offset] 返回编队和任务摘要页
+                  list/show/task-show 可用 view=full 取完整记录 show/task-show 可用 section 与 offset 逐条读取历史
         create    operation_id formation={theme,requirement,preset:"basic"|"reviewed",instance_id,model,effort} 省略执行配置沿用主实例
                   也可用 template_id 或 member_list 完整配置席位 不会自动启动任务
                   setup_only:true 仅配置编队 需求留空 主题可省略 执行者最多四席 外援最多两席
@@ -19,7 +21,7 @@ public static class FormationCli
                   席位 dispatch_mode=Session|Native 审核/外援可用 Native follow_coordinator=true 时继承统筹模型与拟推理强度
                   各席位可设 subagent_max=1..4 不含本体 原生叶子与不支持委派的执行端实际为 0
         context   run_id operation_id requirement [context] 统筹或人工保存已确认需求
-        task-show run_id task_id
+        task-show run_id task_id 返回任务和最近记录摘要
         task      run_id operation_id title instructions acceptance executor_id [reviewer_id] workspace={access:"read_only"} 或 {access:"write",write_paths:[绝对路径]}
         dispatch  run_id operation_id task_id [kind=execute|review]
                   原生轮次人工仅预留 同一 operation_id 由真实统筹领取一次
@@ -88,9 +90,18 @@ public static class FormationCli
                 Arguments = Document.RootElement.Clone();
             }
             var Envelope = JsonSerializer.SerializeToElement(new { @operator = Operator, credential = Credential, arguments = Arguments });
-            var Result = await RelayHost.RequestAsync(new(InstanceId, ThreadId, "formation_" + Action, Envelope), Cancellation, PipeName);
+            bool AcceptLarge = Action is "list" or "show" or "task-show" &&
+                Arguments.ValueKind == JsonValueKind.Object && (Arguments.TryGetProperty("view", out var View) &&
+                    View.ValueKind == JsonValueKind.String && View.GetString() == "full" || Arguments.TryGetProperty("section", out _));
+            var Request = new RelayRequest(InstanceId, ThreadId, "formation_" + Action, Envelope) { AcceptLargeResponse = AcceptLarge };
+            var Result = await RelayHost.RequestAsync(Request, Cancellation, PipeName);
             await Writer.WriteLineAsync(Result.GetRawText());
             return 0;
+        }
+        catch (RelayRequestException Failure)
+        {
+            await Error.WriteLineAsync(JsonSerializer.Serialize(Failure.ErrorPayload()));
+            return 1;
         }
         catch (Exception Failure)
         {
@@ -117,7 +128,10 @@ public static class FormationCli
             if (Request.InstanceId.Length == 0 || Request.ThreadId.Length == 0) throw new InvalidOperationException("编队角色缺少真实会话身份");
             Caller = FormationCaller.Agent(Request.InstanceId, Request.ThreadId, Credential);
         }
-        var Result = await Service.ExecuteAsync(Request.Command[Prefix.Length..], Envelope.GetProperty("arguments"), Caller, Cancellation);
-        return FormationService.Output(Result);
+        string Action = Request.Command[Prefix.Length..];
+        var Arguments = Envelope.GetProperty("arguments");
+        var Query = Action is "list" or "show" or "task-show" ? FormationQuery.Parse(Action, Arguments) : null;
+        var Result = await Service.ExecuteAsync(Action, Arguments, Caller, Cancellation);
+        return FormationService.Output(Query is null ? FormationService.FormatCommandResult(Action, Result) : Query.Format(Result));
     }
 }
