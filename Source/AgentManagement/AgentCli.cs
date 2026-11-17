@@ -8,7 +8,7 @@ public sealed record AgentCliInvocation(string Command, Dictionary<string, strin
 public static class AgentCli
 {
     public const string Help = """
-        Mm AgentWork Mgr CLI (mmcodex)
+        AIMoreMoreWork CLI (AIMoreMoreWork.Cli.exe)
         instances
         projects --instance <实例编号|ID|名称>
         sessions --instance <实例> [--project <项目ID|名称|绝对路径>] [--session <对话ID|完整名称>] [--offset 0]

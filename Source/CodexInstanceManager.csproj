@@ -7,8 +7,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\mm-agentwork-icon.ico</ApplicationIcon>
-    <Product>Mm AgentWork Mgr</Product>
-    <AssemblyTitle>Mm AgentWork Mgr</AssemblyTitle>
+    <Product>AIMoreMoreWork</Product>
+    <AssemblyTitle>AIMoreMoreWork</AssemblyTitle>
     <AssemblyName>CodexInstanceManager</AssemblyName>
     <RootNamespace>CodexInstanceManager</RootNamespace>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>

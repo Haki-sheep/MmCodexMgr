@@ -1,6 +1,6 @@
 # 编队协作
 
-适用于用户明确要求编队或通过管理器创建了编队的任务。按当前部署的 `mmcodex formation help` 核对参数，以下命令由正在运行的 Mm AgentWork Mgr 处理。
+适用于用户明确要求编队或通过管理器创建了编队的任务。按当前部署的 `AIMoreMoreWork.Cli.exe formation help` 核对参数，以下命令由正在运行的 AIMoreMoreWork 处理。
 
 ## 创建与管理
 
@@ -40,8 +40,8 @@ CLI 的空编队请求为 `{"operation_id":"稳定标识","formation":{"setup_on
 命令通过 Skill 的脚本进入。下列示例假设当前进程已设置本编队角色凭据，并将相应请求 JSON 写入临时文件。
 
 ```powershell
-& '<Skill目录>/scripts/mmcodex.ps1' formation task-show --json-file '<请求JSON的绝对路径>'
-& '<Skill目录>/scripts/mmcodex.ps1' formation dispatch --json-file '<另一请求JSON的绝对路径>'
+& '<Skill目录>/scripts/aimoremorework.ps1' formation task-show --json-file '<请求JSON的绝对路径>'
+& '<Skill目录>/scripts/aimoremorework.ps1' formation dispatch --json-file '<另一请求JSON的绝对路径>'
 ```
 
 ## 原生审核与外援

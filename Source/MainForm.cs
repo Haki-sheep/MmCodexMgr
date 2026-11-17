@@ -2,7 +2,7 @@ namespace CodexInstanceManager;
 
 public sealed class MainForm : Form
 {
-    public const string AppTitle = "Mm AgentWork Mgr";
+    public const string AppTitle = "AIMoreMoreWork";
     private readonly ManagerSettings Settings;
     private readonly bool PreviewOnly;
     private readonly AppTheme Theme;

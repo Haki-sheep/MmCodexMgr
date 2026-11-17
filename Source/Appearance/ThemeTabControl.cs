@@ -64,8 +64,8 @@ public sealed class ThemeTabControl : UserControl, IThemedControl
     private readonly StudioButton ThemeToggle = new() { Name = AppTheme.ToggleButtonName, AutoSize = false };
     public AppTheme Theme { get; set; } = new(false);
     public bool ShowBrand { get; set; } = true;
-    public string BrandTitle { get; set; } = "Mm AgentWork";
-    public string BrandCaption { get; set; } = "Mgr · 多 Agent 工作台";
+    public string BrandTitle { get; set; } = "AIMoreMoreWork";
+    public string BrandCaption { get; set; } = "多 Agent 工作台";
     public event EventHandler? SelectedIndexChanged;
     public event EventHandler? ThemeToggleRequested;
     public NavigationPage? SelectedTab

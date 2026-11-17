@@ -141,7 +141,7 @@ public static class Program
         if (Start)
         {
             string CliPath = AgentCliDeployment.LoadPath();
-            if (!File.Exists(CliPath)) throw new FileNotFoundException("编队启动需要同目录的 mmcodex CLI", CliPath);
+            if (!File.Exists(CliPath)) throw new FileNotFoundException("编队启动需要同目录的 AIMoreMoreWork CLI", CliPath);
             await DesktopRelayBridge.EnsureAvailableAsync(Profile, Cancellation);
         }
         string Thinking = FormationModelOptions.ResolveEffort(Profile, Controller.Model, Controller.Effort, UseInstanceDefault: false);

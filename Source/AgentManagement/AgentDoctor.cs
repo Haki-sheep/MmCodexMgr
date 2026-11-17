@@ -43,7 +43,9 @@ public static class AgentDoctor
         {
             RelayToolInstaller.RequireInstalled(Instance);
             var Config = Toml.ToModel(File.ReadAllText(Path.Combine(Instance.HomePath, "config.toml")));
-            var Definition = (TomlTable)((TomlTable)Config["mcp_servers"])[RelayLimits.McpName];
+            var Servers = (TomlTable)Config["mcp_servers"];
+            if (!Servers.TryGetValue(RelayLimits.McpName, out var Installed)) throw new InvalidOperationException("仍在使用旧 MCP 名称 请重新安装 " + RelayLimits.McpName);
+            var Definition = (TomlTable)Installed;
             string Command = (string)Definition["command"];
             CheckList.Add(new("MCP 注册", ManagerPaths.Same(Command, CliPath), ManagerPaths.Same(Command, CliPath) ? "已指向当前 CLI" : "请重新安装 当前命令 " + Command));
         }

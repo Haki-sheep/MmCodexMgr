@@ -4,13 +4,14 @@ namespace CodexInstanceManager;
 
 public static class SkillNames
 {
-    public const string Collaboration = "mm-more-more-fucker";
+    public const string Collaboration = "ai-more-more-work";
+    internal static IReadOnlyList<string> LegacyCollaborationList { get; } = ["moremore-work", "mm-more-more-fucker"];
     /// <summary> 自维护技能的历史标识映射 </summary>
     public static readonly IReadOnlyDictionary<string, string> LegacyNameDict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
         ["blender-unity-character"] = "mm-blender-fucker", ["fakeunity-cli"] = "mm-fake-unity-fucker",
         ["miemie-ui-runtime"] = "mm-mie-mie-ui-fucker", ["mm-money-fucker"] = "mm-money-fucker",
-        ["mm-performance-analysis"] = "mm-performance-fucker", ["moremore-work"] = Collaboration,
+        ["mm-performance-analysis"] = "mm-performance-fucker", ["moremore-work"] = Collaboration, ["mm-more-more-fucker"] = Collaboration,
         ["ShaderAssetFucker"] = "mm-shader-asset-fucker",
         ["MmCodingFucker"] = "mm-coding-fucker", ["MmPlanFucker"] = "mm-plan-fucker"
     };

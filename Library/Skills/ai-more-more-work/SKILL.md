@@ -1,9 +1,9 @@
 ---
-name: mm-more-more-fucker
-description: 使用 Mm AgentWork Mgr 组织 Codex 原生子代理 同实例会话 跨实例协作和编队管理 支持 Cursor Claude Code DeepSeek Harness 与 Antigravity 联调 用于实际分工 派发与验收 不用于仅解释协作概念或比较上下文用量
+name: ai-more-more-work
+description: 使用 AIMoreMoreWork 组织 Codex 原生子代理 同实例会话 跨实例协作和编队管理 支持 Cursor Claude Code DeepSeek Harness 与 Antigravity 联调 用于实际分工 派发与验收 不用于仅解释协作概念或比较上下文用量
 ---
 
-# mm-more-more-fucker
+# ai-more-more-work
 
 先分析并整理用户任务 再在授权范围内执行协作 不是只按数字创建 Agent 主会话与执行会话都可以是不归属项目的独立会话 不要求实例当前打开某个工程
 
@@ -61,11 +61,11 @@ description: 使用 Mm AgentWork Mgr 组织 Codex 原生子代理 同实例会�
 
 ## Session 与跨实例操作
 
-Mm AgentWork Mgr 的“实例管理”页集中配置 Codex 实例及外部执行端。会话查找使用 MCP `agent_sessions` 或 CLI `sessions`。任务状态、分支和回传分别用 `agent_task` / `status --task-id <ID>`、`agent_tree` / `tree --task-id <ID>`、`agent_inbox` / `inbox`。
+AIMoreMoreWork 的“实例管理”页集中配置 Codex 实例及外部执行端。会话查找使用 MCP `agent_sessions` 或 CLI `sessions`。任务状态、分支和回传分别用 `agent_task` / `status --task-id <ID>`、`agent_tree` / `tree --task-id <ID>`、`agent_inbox` / `inbox`。
 
-优先使用 `mm_codex_mgr` MCP 的 `agent_instances` `agent_projects` `agent_sessions` `agent_start` `agent_task` `agent_tree` 等工具 直接传结构化参数 MCP 与 CLI 共用同一管理器服务和预算规则 同一操作只调用一个入口 不重复派发
+优先使用 `AIMoreMoreWork` MCP 的 `agent_instances` `agent_projects` `agent_sessions` `agent_start` `agent_task` `agent_tree` 等工具 直接传结构化参数 MCP 与 CLI 共用同一管理器服务和预算规则 同一操作只调用一个入口 不重复派发
 
-当前会话未加载这些 MCP 工具时 使用 [scripts/mmcodex.ps1](scripts/mmcodex.ps1) 调用 CLI 首次使用 版本变化或参数未知时执行 `help` 已核对的同版本签名可复用 参数和默认值以 CLI 为准 管理器需要运行 Codex 目标实例未运行时 查询项目 新建与派发前会自动启动并等待桥接就绪 首次使用的目标实例仍需完成登录并至少创建过一个会话以提供真实调用上下文 不伪造会话身份 已有会话可用 `open` 自动启动实例并打开 安装或桥接异常时可单次执行 `doctor --instance <实例>` 定位 CLI MCP Skill 和桌面桥接的具体问题 不启动模型
+当前会话未加载这些 MCP 工具时 使用 [scripts/aimoremorework.ps1](scripts/aimoremorework.ps1) 调用 CLI 首次使用 版本变化或参数未知时执行 `help` 已核对的同版本签名可复用 参数和默认值以 CLI 为准 管理器需要运行 Codex 目标实例未运行时 查询项目 新建与派发前会自动启动并等待桥接就绪 首次使用的目标实例仍需完成登录并至少创建过一个会话以提供真实调用上下文 不伪造会话身份 已有会话可用 `open` 自动启动实例并打开 安装或桥接异常时可单次执行 `doctor --instance <实例>` 定位 CLI MCP Skill 和桌面桥接的具体问题 不启动模型
 
 自然语言映射：
 
@@ -83,7 +83,7 @@ CLI 从 `CODEX_HOME` 和 `CODEX_THREAD_ID` 读取实际调用方身份。Codex �
 将 UTF-8 JSON 写入临时文件 避免命令行嵌套转义 然后执行：
 
 ```powershell
-& '<Skill目录>/scripts/mmcodex.ps1' start --json-file '<请求文件绝对路径>'
+& '<Skill目录>/scripts/aimoremorework.ps1' start --json-file '<请求文件绝对路径>'
 ```
 
 新建执行会话的请求示例 按实际任务替换内容 `request_id` 在调用前确定并保留：
@@ -111,7 +111,7 @@ CLI 从 `CODEX_HOME` 和 `CODEX_THREAD_ID` 读取实际调用方身份。Codex �
 
 ## 编队协作
 
-用户指定编队时，在 Mm AgentWork Mgr 选择席位和职业配置。创建后由用户在真实统筹会话说明需求，统筹用 `formation context` 保存后再登记和派发。原生审核或外援只在 `formation dispatch` 返回 `can_spawn:true` 时由统筹调用宿主工具创建，收到真实 Agent ID 后绑定并回传。独立会话仍支持 Relay。编队归档与彻底删除先调用 `formation lifecycle-preview` 核对实际会话范围 已归档项跳过 失败保留进度 原生不支持则明确阻止 参数、预算、归档恢复与接管流程见 [references/formation.md](references/formation.md)。
+用户指定编队时，在 AIMoreMoreWork 选择席位和职业配置。创建后由用户在真实统筹会话说明需求，统筹用 `formation context` 保存后再登记和派发。原生审核或外援只在 `formation dispatch` 返回 `can_spawn:true` 时由统筹调用宿主工具创建，收到真实 Agent ID 后绑定并回传。独立会话仍支持 Relay。编队归档与彻底删除先调用 `formation lifecycle-preview` 核对实际会话范围 已归档项跳过 失败保留进度 原生不支持则明确阻止 参数、预算、归档恢复与接管流程见 [references/formation.md](references/formation.md)。
 
 ## DeepSeek Harness 桌面联调
 
@@ -268,7 +268,7 @@ CLI 用 `library-scan-skills` 查看本机目标。按实际返回的目标运�
 
 CLI 的 `library-skills` 与 `library-scan-rules` 无需启动管理器。`library-preview-skills` 与 `library-preview-rules` 将单项预览保存到指定的新 JSON 文件，核对后使用 `library-apply --plan-file` 应用。预览后文件变化或计划被修改时会拒绝执行。
 
-分发包的 CLI 位置信息由每台电脑配置。`scripts/mmcodex.ps1` 依次查找本机 Skill 的 `cli_path`、历史 CLI 定位配置、脚本的上级目录和 PATH。找不到时使用 `mmcodex.exe` 的实际绝对路径，或更新本机定位。
+分发包的 CLI 位置信息由每台电脑配置。`scripts/aimoremorework.ps1` 依次查找本机 Skill 的 `cli_path`、历史 CLI 定位配置、脚本的上级目录和 PATH。找不到时使用 `AIMoreMoreWork.Cli.exe` 的实际绝对路径，或更新本机定位。
 
 ## 联调记录清理
 

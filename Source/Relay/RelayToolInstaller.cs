@@ -10,11 +10,11 @@ public static class RelayToolInstaller
     {
         var Config = Toml.ToModel(File.ReadAllText(Path.Combine(Instance.HomePath, "config.toml")));
         if (!Config.TryGetValue("mcp_servers", out object? Servers) || Servers is not TomlTable ServerDict ||
-            !ServerDict.TryGetValue(RelayLimits.McpName, out object? Server) || Server is not TomlTable Definition ||
+            !(ServerDict.TryGetValue(RelayLimits.McpName, out object? Server) || ServerDict.TryGetValue(RelayLimits.LegacyMcpName, out Server)) || Server is not TomlTable Definition ||
             !Definition.TryGetValue("command", out object? Command) || Command is not string FilePath || !File.Exists(FilePath) ||
             !Definition.TryGetValue("args", out object? Arguments) || Arguments is not TomlArray ArgumentList || !ValidArguments(ArgumentList, Instance.Id) ||
             Definition.TryGetValue("enabled", out object? Enabled) && Enabled is false)
-            throw new InvalidOperationException("实例尚未安装有效联调工具 " + Instance.Name + " 请运行同目录 mmcodex.exe install --instance " + Instance.Id + " 并重启该实例");
+            throw new InvalidOperationException("实例尚未安装有效联调工具 " + Instance.Name + " 请运行同目录 " + AgentCliDeployment.FileName + " install --instance " + Instance.Id + " 并重新加载 MCP");
     }
 
     private static bool ValidArguments(TomlArray Arguments, string InstanceId) =>
@@ -31,21 +31,27 @@ public static class RelayToolInstaller
     {
         if (!File.Exists(ExecutablePath)) throw new FileNotFoundException("管理器程序不存在", ExecutablePath);
         string ConfigPath = Path.Combine(Instance.HomePath, "config.toml");
+        GlobalRules.EnsureWritablePath(ConfigPath);
         string Original = File.ReadAllText(ConfigPath);
+        var Existing = Toml.ToModel(Original);
+        var Definition = new TomlTable();
+        if (Existing.TryGetValue("mcp_servers", out object? Servers) && Servers is TomlTable ServerDict &&
+            (ServerDict.TryGetValue(RelayLimits.McpName, out object? Server) || ServerDict.TryGetValue(RelayLimits.LegacyMcpName, out Server)) &&
+            Server is TomlTable Previous)
+            foreach (var Item in Previous) Definition[Item.Key] = Item.Value;
+        Definition["command"] = ExecutablePath;
+        Definition["args"] = Arguments;
+        if (!Definition.ContainsKey("startup_timeout_sec")) Definition["startup_timeout_sec"] = 10;
         var Model = new TomlTable
         {
             ["mcp_servers"] = new TomlTable
             {
-                [RelayLimits.McpName] = new TomlTable
-                {
-                    ["command"] = ExecutablePath,
-                    ["args"] = Arguments,
-                    ["startup_timeout_sec"] = 10
-                }
+                [RelayLimits.McpName] = Definition
             }
         };
-        string Result = ConfigSync.MergeConfig(Toml.FromModel(Model), Original, new HashSet<string> { "mcp_servers" }, Instance.HomePath, Instance.HomePath);
+        string Result = ConfigSync.MergeConfig(Toml.FromModel(Model), Original, new HashSet<string> { "mcp_servers" }, Instance.HomePath, Instance.HomePath, RelayLimits.LegacyMcpName);
         string BackupPath = Path.Combine(BackupRoot ?? ManagerPaths.BackupRoot, "relay-tools", Instance.Id + "-" + Guid.NewGuid().ToString("N") + ".toml");
+        GlobalRules.EnsureWritablePath(BackupPath);
         Directory.CreateDirectory(Path.GetDirectoryName(BackupPath)!);
         File.WriteAllText(BackupPath, Original, new UTF8Encoding(false));
         if (File.ReadAllText(ConfigPath) != Original) throw new IOException("实例配置已变化 请重新安装联调工具");

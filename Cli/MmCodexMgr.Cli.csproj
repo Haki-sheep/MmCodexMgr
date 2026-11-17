@@ -4,7 +4,9 @@
     <TargetFramework>net8.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <AssemblyName>mmcodex</AssemblyName>
+    <AssemblyName>AIMoreMoreWork.Cli</AssemblyName>
+    <Product>AIMoreMoreWork</Product>
+    <AssemblyTitle>AIMoreMoreWork CLI</AssemblyTitle>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../Source/CodexInstanceManager.csproj" />

@@ -10,7 +10,7 @@ public sealed class ManagerSettingsPage : UserControl
     /// <summary> 注册表更新失败时恢复实际状态 </summary>
     private bool Restoring;
     /// <summary> 当前用户的开机自启开关 </summary>
-    private readonly CheckBox AutoStartInput = new() { Name = "ManagerAutoStart", Text = "开机自动启动 Mm AgentWork Mgr", AutoSize = true };
+    private readonly CheckBox AutoStartInput = new() { Name = "ManagerAutoStart", Text = "开机自动启动 AIMoreMoreWork", AutoSize = true };
     /// <summary> 开关应用后的实际结果 </summary>
     private readonly Label StatusLabel = new() { AutoSize = true, Tag = eThemeRole.Muted, Font = StudioFonts.Caption };
     private readonly StudioButton LightButton = new() { Text = "☀  浅色" };
@@ -59,7 +59,7 @@ public sealed class ManagerSettingsPage : UserControl
         StartupBody.Controls.Add(StatusLabel);
         Column.Controls.Add(StartupCard);
 
-        var About = StudioCard.Create("关于", "Mm AgentWork Mgr  ·  版本 " + (Assembly.GetEntryAssembly()?.GetName().Version?.ToString(3) ?? "未知") + "  ·  沿用原实例配置与数据目录", out var AboutBody);
+        var About = StudioCard.Create("关于", "AIMoreMoreWork  ·  版本 " + (Assembly.GetEntryAssembly()?.GetName().Version?.ToString(3) ?? "未知") + "  ·  沿用原实例配置与数据目录", out var AboutBody);
         AboutBody.Controls.Add(new Label { Text = ManagerPaths.Root, AutoSize = false, AutoEllipsis = true, Dock = DockStyle.Fill, Height = 24, Font = StudioFonts.Mono, Margin = new Padding(0, 0, 0, 6) });
         var AboutActions = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Margin = Padding.Empty };
         AboutActions.Controls.Add(MainForm.MakeButton("打开数据目录", (_, _) => OpenDataFolder()));

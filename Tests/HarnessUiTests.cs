@@ -26,7 +26,7 @@ internal static class HarnessUiTests
                 var Navigation = Form.Controls.OfType<ThemeTabControl>().Single();
                 Require(Navigation.TabPages.Select(Item => Item.Text).SequenceEqual(new[] { "编队", "Agent 管理", "Rule + Skill", "设置" }), "navigation exposes exactly 编队 / Agent 管理 / Rule + Skill / 设置", ref Count);
                 Require(Navigation.SelectedTab == Navigation.TabPages[0] && Descendants(Navigation.TabPages[0]).OfType<FormationPage>().Single().Visible, "home page is the formation page", ref Count);
-                Require(Form.Text == MainForm.AppTitle && MainForm.AppTitle == "Mm AgentWork Mgr", "window shows the product name", ref Count);
+                Require(Form.Text == MainForm.AppTitle && MainForm.AppTitle == "AIMoreMoreWork", "window shows the product name", ref Count);
                 Require(!Descendants(Form).Any(Item => Item.GetType().Name is "RelayPage" or "CollaborationPage" or "CodexSessionsPage" or "RelayChannelEditor"), "task board view collaboration tabs and channel editor are not part of the shell", ref Count);
                 Require(!Descendants(Form).OfType<DataGridView>().Any(), "formation and agent pages render cards rather than session or task tables", ref Count);
 

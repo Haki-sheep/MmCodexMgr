@@ -245,28 +245,35 @@ internal static class AgentManagementTests
         Directory.CreateDirectory(SkillPath);
         string ConfigPath = Path.Combine(Instance.HomePath, "config.toml");
         string SkillConfigPath = Path.Combine(SkillPath, "config.json");
-        File.WriteAllText(ConfigPath, "model='keep-model'\n[mcp_servers.existing]\ncommand='keep-command'\n");
+        File.WriteAllText(ConfigPath, "model='keep-model'\n[mcp_servers.existing]\ncommand='keep-command'\n[mcp_servers.mm_codex_mgr]\ncommand='legacy-cli'\nstartup_timeout_sec=23\n");
         File.WriteAllText(Path.Combine(SkillPath, "SKILL.md"), "fixture skill");
         File.WriteAllText(SkillConfigPath, "{\"cli_path\":\"old-cli.exe\",\"keep_setting\":true}");
         string LegacySkillPath = Path.Combine(Instance.HomePath, "skills", "moremore-work");
         Directory.CreateDirectory(LegacySkillPath);
         File.WriteAllText(Path.Combine(LegacySkillPath, "SKILL.md"), "legacy fixture");
+        string PriorSkillPath = Path.Combine(Instance.HomePath, "skills", "mm-more-more-fucker");
+        Directory.CreateDirectory(PriorSkillPath);
+        File.WriteAllText(Path.Combine(PriorSkillPath, "SKILL.md"), "previous package");
         string OriginalDirectory = Path.Combine(Root, "original manager");
         string MovedDirectory = Path.Combine(Root, "迁移后的管理器");
         Directory.CreateDirectory(OriginalDirectory);
         Directory.CreateDirectory(MovedDirectory);
-        string OriginalCli = Path.Combine(OriginalDirectory, "mmcodex.exe");
-        string MovedCli = Path.Combine(MovedDirectory, "mmcodex.exe");
+        string OriginalCli = Path.Combine(OriginalDirectory, "AIMoreMoreWork.Cli.exe");
+        string MovedCli = Path.Combine(MovedDirectory, "AIMoreMoreWork.Cli.exe");
         File.Copy(Environment.ProcessPath!, OriginalCli);
         File.Copy(OriginalCli, MovedCli);
         var Installation = JsonSerializer.SerializeToElement(AgentCliDeployment.Install(Instance, OriginalCli, null, Path.Combine(Root, "install-backup")));
         Require(!Directory.Exists(LegacySkillPath) && File.Exists(Path.Combine(Installation.GetProperty("legacy_skill_backup").GetString()!, "SKILL.md")), "new collaboration install moves legacy alias into backup");
+        Require(!Directory.Exists(PriorSkillPath) && File.Exists(Path.Combine(Path.GetDirectoryName(Installation.GetProperty("legacy_skill_backup").GetString()!)!, "mm-more-more-fucker", "SKILL.md")),
+            "new collaboration install backs up both earlier skill names");
         string PreviousConfig = File.ReadAllText(ConfigPath);
         var Result = JsonSerializer.SerializeToElement(AgentCliDeployment.Install(Instance, MovedCli, null, Path.Combine(Root, "install-backup")));
         using var SkillConfig = JsonDocument.Parse(File.ReadAllText(SkillConfigPath));
         var Config = Tomlyn.Toml.ToModel(File.ReadAllText(ConfigPath));
         var Servers = (Tomlyn.Model.TomlTable)Config["mcp_servers"];
         var Definition = (Tomlyn.Model.TomlTable)Servers[RelayLimits.McpName];
+        Require(RelayLimits.McpName == "AIMoreMoreWork" && !Servers.ContainsKey("mm_codex_mgr") && (long)Definition["startup_timeout_sec"] == 23,
+            "MCP rename replaces the old key and preserves registration settings");
         Require((string)Definition["command"] == MovedCli && SkillConfig.RootElement.GetProperty("cli_path").GetString() == MovedCli, "reinstalling a relocated CLI updates both MCP and existing Skill paths");
         var Arguments = (Tomlyn.Model.TomlArray)Definition["args"];
         Require(Arguments.Cast<string>().SequenceEqual(new[] { "mcp", "--instance", Instance.Id }), "relocation retains the target instance identity");

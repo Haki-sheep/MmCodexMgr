@@ -115,7 +115,7 @@ internal static class LibraryTests
         Package(Source, "UpperCase", "UpperCase", "invalid identifier");
         Reject<InvalidDataException>(() => SkillDistribution.Preview(Source, Cursor), "unsupported identifier casing is surfaced rather than silently renamed");
         Require(AgentCli.Parse(new[] { "library-preview-agent-skills", "--agent", "dsh", "--source", "library", "--plan-file", Path.Combine(Root, "plan.json") }).Command == "library-preview-agent-skills", "CLI exposes distribution preview");
-        Require(SkillNames.Collaboration == "mm-more-more-fucker", "installer and doctor use the renamed collaboration identity");
+        Require(SkillNames.Collaboration == "ai-more-more-work", "installer and doctor use the renamed collaboration identity");
         Require(SkillDistribution.Scan(Home, Path.Combine(Home, "custom-dsh"), Path.Combine(Home, "custom-agents")).Single(Item => Item.Agent == "shared").PathValue == Path.Combine(Home, "custom-agents", "skills"), "custom shared root is respected");
     }
 
@@ -175,7 +175,7 @@ internal static class LibraryTests
         string SecondaryRule = Path.Combine(Secondary, "AGENTS.override.md");
         string SkillSource = Path.Combine(Primary, "skills");
         string SecondarySkills = Path.Combine(Secondary, "skills");
-        Package(SkillSource, "mm-more-more-fucker", "mm-more-more-fucker", "new");
+        Package(SkillSource, "ai-more-more-work", "ai-more-more-work", "new");
         Package(SecondarySkills, "moremore-work", "moremore-work", "old");
         Package(SecondarySkills, "private", "private", "private");
         Package(SecondarySkills, ".system", "built-in", "system");
@@ -208,7 +208,7 @@ internal static class LibraryTests
         Require(Result.TargetList.Count(Item => Item.Status == "duplicate") == 2, "duplicate Codex roots write each destination only once");
         Require(File.ReadAllText(SecondaryRule) == "batch rule" && File.ReadAllText(Path.Combine(Secondary, "AGENTS.md")) == "inactive rule", "batch updates only the effective Codex rule");
         Require(File.ReadAllText(Path.Combine(Secondary, "auth.json")) == "auth", "batch leaves account data untouched");
-        Require(File.ReadAllText(Path.Combine(SecondarySkills, "mm-more-more-fucker", "data.txt")) == "new" && File.ReadAllText(Path.Combine(SecondarySkills, "private", "data.txt")) == "private" && File.ReadAllText(Path.Combine(SecondarySkills, ".system", "data.txt")) == "system", "batch preserves unrelated skills and .system");
+        Require(File.ReadAllText(Path.Combine(SecondarySkills, "ai-more-more-work", "data.txt")) == "new" && File.ReadAllText(Path.Combine(SecondarySkills, "private", "data.txt")) == "private" && File.ReadAllText(Path.Combine(SecondarySkills, ".system", "data.txt")) == "system", "batch preserves unrelated skills and .system");
         var SkillResult = Result.TargetList.Single(Item => Item.PathValue == SecondarySkills && Item.Status == "applied");
         Require(File.ReadAllText(Path.Combine(SkillResult.BackupPath!, "moremore-work", "data.txt")) == "old", "batch reports the original skill backup");
         var RuleResult = Result.TargetList.Single(Item => Item.PathValue == SecondaryRule && Item.Status == "applied");

@@ -19,7 +19,7 @@ public static class FormationOperatorCredential
     public static string Load(string? FilePath = null)
     {
         string Target = FilePath ?? CredentialPath;
-        if (!File.Exists(Target)) throw new InvalidOperationException("本机编队凭据尚未建立 请启动新版 Mm AgentWork Mgr");
+        if (!File.Exists(Target)) throw new InvalidOperationException("本机编队凭据尚未建立 请启动新版 AIMoreMoreWork");
         byte[] PlainList = ProtectedData.Unprotect(File.ReadAllBytes(Target), null, DataProtectionScope.CurrentUser);
         try { return Encoding.UTF8.GetString(PlainList); }
         finally { CryptographicOperations.ZeroMemory(PlainList); }

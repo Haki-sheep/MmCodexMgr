@@ -58,7 +58,7 @@ public static class ConfigSync
         return Plan;
     }
 
-    public static string MergeConfig(string SourceText, string DestinationText, HashSet<string> RootList, string SourceRoot, string DestinationRoot)
+    public static string MergeConfig(string SourceText, string DestinationText, HashSet<string> RootList, string SourceRoot, string DestinationRoot, string? RemovedMcpServer = null)
     {
         var SourceModel = Toml.ToModel(SourceText);
         var DestinationModel = Toml.ToModel(DestinationText);
@@ -73,7 +73,8 @@ public static class ConfigSync
             if (Root != "skills" && Incoming is TomlTable IncomingTable && DestinationModel.TryGetValue(Root, out object? Current) && Current is TomlTable CurrentTable)
             {
                 var MergedTable = new TomlTable();
-                foreach (var Item in CurrentTable) MergedTable[Item.Key] = Item.Value;
+                foreach (var Item in CurrentTable)
+                    if (Root != "mcp_servers" || Item.Key != RemovedMcpServer) MergedTable[Item.Key] = Item.Value;
                 foreach (var Item in IncomingTable) MergedTable[Item.Key] = RemapPaths(Item.Value, SourceRoot, DestinationRoot);
                 SelectedModel[Root] = MergedTable;
             }

@@ -78,7 +78,7 @@ public sealed class RelayHost : IDisposable
         switch (Request.Command)
         {
             case "relay_channel":
-                return Coordinator.Channel ?? throw new InvalidOperationException("未配置旧式联调通道 请使用 agent_start 或 mmcodex start 指定执行实例与会话");
+                return Coordinator.Channel ?? throw new InvalidOperationException("未配置旧式联调通道 请使用 agent_start 或 AIMoreMoreWork.Cli.exe start 指定执行实例与会话");
             case "relay_dispatch":
             {
                 var Item = await Coordinator.DispatchAsync(Request.InstanceId, Request.ThreadId, Request.InstanceId + "/" + Request.ThreadId + "/" + Arguments.GetProperty("request_id").GetString(), Arguments.GetProperty("title").GetString()!, Arguments.GetProperty("instructions").GetString()!, Arguments.GetProperty("acceptance").GetString()!);

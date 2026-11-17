@@ -190,7 +190,7 @@ public sealed class AntigravityRelayRunner
     }
 
     private static string BuildPrompt(RelayTask Item) => $$"""
-        [MmCodexMgr Antigravity 联调任务]
+        [AIMoreMoreWork Antigravity 联调任务]
         任务 ID {{Item.Id}}
         任务 {{Item.Title}}
         执行要求 {{Item.Instructions}}
@@ -198,7 +198,7 @@ public sealed class AntigravityRelayRunner
         工作区 {{Item.Workspace.Access}}
         允许写入路径
         {{string.Join("\n", Item.Workspace.WritePathList)}}
-        只读任务禁止写入文件 本轮直接完成 遵守仓库规范 不创建下级代理或会话 不调用 mmcodex 回报
+        只读任务禁止写入文件 本轮直接完成 遵守仓库规范 不创建下级代理或会话 不调用 AIMoreMoreWork CLI 回报
         最终回复只输出合法 JSON 不加 Markdown 围栏
         {"outcome":"completed|needs_decision|failed","summary":"实际结果与验证证据","artifacts":["产物绝对路径"]}
         没有产物使用空数组 无法完成时如实回报 由管理器保存并回传

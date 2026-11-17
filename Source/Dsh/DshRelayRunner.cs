@@ -108,5 +108,5 @@ public sealed class DshRelayRunner : IDisposable
 
     public static RelayWorkerReport ParseReport(string Text) => RelayWorkerReport.Parse(Text, "DSH");
 
-    public static string BuildPrompt(RelayTask Item) => $"[MmCodexMgr DSH 联调任务]\n任务 ID {Item.Id}\n任务 {Item.Title}\n执行要求\n{Item.Instructions}\n验收标准\n{Item.Acceptance}\n工作目录 {Item.Channel.WorkingDirectory}\n工作区 {Item.Workspace.Access}\n允许写入路径\n{string.Join("\n", Item.Workspace.WritePathList)}\n只读任务禁止修改文件 遵守工程规则 不扩大范围 本轮直接完成任务 不创建子代理或其他会话 不调用 mmcodex report progress accept 不使用 Codex 会话身份\n最终回复仅为合法 JSON 不加 Markdown 围栏 {{\"outcome\":\"completed|needs_decision|failed\",\"summary\":\"实际结果与验证证据\",\"artifacts\":[\"产物绝对路径\"]}} 无产物用空数组 无法完成必须如实报告 管理器负责读取并回传结果 主会话负责验收";
+    public static string BuildPrompt(RelayTask Item) => $"[AIMoreMoreWork DSH 联调任务]\n任务 ID {Item.Id}\n任务 {Item.Title}\n执行要求\n{Item.Instructions}\n验收标准\n{Item.Acceptance}\n工作目录 {Item.Channel.WorkingDirectory}\n工作区 {Item.Workspace.Access}\n允许写入路径\n{string.Join("\n", Item.Workspace.WritePathList)}\n只读任务禁止修改文件 遵守工程规则 不扩大范围 本轮直接完成任务 不创建子代理或其他会话 不调用 AIMoreMoreWork.Cli.exe report progress accept 不使用 Codex 会话身份\n最终回复仅为合法 JSON 不加 Markdown 围栏 {{\"outcome\":\"completed|needs_decision|failed\",\"summary\":\"实际结果与验证证据\",\"artifacts\":[\"产物绝对路径\"]}} 无产物用空数组 无法完成必须如实报告 管理器负责读取并回传结果 主会话负责验收";
 }

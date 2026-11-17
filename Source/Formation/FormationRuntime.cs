@@ -317,8 +317,8 @@ public sealed partial class FormationService
         string Preparation = Run.SetupOnly
             ? "当前仅完成编队配置，尚无业务需求。简短说明编队已就绪，然后等待用户在本会话提出任务。不要自行编造需求、登记或派发任务。收到并确认需求后，先用 formation context 保存 requirement 和可选 context，再制定计划和派发。\n"
             : $"以下是用户创建编队时提交的初始需求。范围明确时，本轮登记任务并派发给配置的执行者，首次派发时新建该席位的独立会话。\n需求\n{Revision.Requirement}\n上下文\n{Revision.Context}\n";
-        return $"[Mm AgentWork Mgr 编队启动]\n你是此编队的统筹。编队 ID {Run.Id}，主题 {Run.Theme}。\n" + Preparation + FormatSeatPlan(Run) +
-            "通过 mmcodex formation show 读取席位与现有任务，task-show 查看指定任务，通过 task 登记新任务，dispatch 启动执行。按需指定审核席位，工具会自动回收结果、派发审核和返工。" +
+        return $"[AIMoreMoreWork 编队启动]\n你是此编队的统筹。编队 ID {Run.Id}，主题 {Run.Theme}。\n" + Preparation + FormatSeatPlan(Run) +
+            "通过 AIMoreMoreWork.Cli.exe formation show 读取席位与现有任务，task-show 查看指定任务，通过 task 登记新任务，dispatch 启动执行。按需指定审核席位，工具会自动回收结果、派发审核和返工。" +
             "无审核席位的提交由你按原验收标准使用 review 处理。任务全部通过后用 complete 提交交付总结。需要外援时等待管理器的人工作业停止核对。\n" +
             $"你的原生子代理预算为 {Run.MemberList.Single(Item => Item.Role == eFormationRole.Coordinator).SubagentMax}，仍受宿主额度约束。原生审核与外援只在 formation dispatch 返回 can_spawn=true 时启动一次。" +
             "使用宿主真正的 spawn_agent，使用返回的 task_name、prompt 和 model；参考 preferred_effort 和 effort，按该宿主对模型开放的档位选择实际强度。额度或工具不足时据实报告。" +

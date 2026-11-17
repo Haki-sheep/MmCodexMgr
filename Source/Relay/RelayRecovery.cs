@@ -108,7 +108,7 @@ public sealed partial class RelayCoordinator
             if (Idle)
             {
                 var ChildList = Store.UnfinishedChildIds(Item.Id);
-                string Prompt = $"[MmCodexMgr 原任务恢复]\n任务 ID 和执行会话保持不变 本消息继续用户已授权的原任务\n先核对会话历史 已生成产物和仍在运行的脚本 从尚未完成的位置继续 不要重复已完成操作\n未结束下级任务 ID {string.Join(" ", ChildList)}\n已有下级仍由原任务追踪 不得重新创建或重复派发 对应写入范围仍由下级独占 先验收下级再整合\n\n{BuildWorkerPrompt(Item)}";
+                string Prompt = $"[AIMoreMoreWork 原任务恢复]\n任务 ID 和执行会话保持不变 本消息继续用户已授权的原任务\n先核对会话历史 已生成产物和仍在运行的脚本 从尚未完成的位置继续 不要重复已完成操作\n未结束下级任务 ID {string.Join(" ", ChildList)}\n已有下级仍由原任务追踪 不得重新创建或重复派发 对应写入范围仍由下级独占 先验收下级再整合\n\n{BuildWorkerPrompt(Item)}";
                 Change(Item, eRelayState.DispatchUncertain, "正在向原执行会话投递续跑消息 若管理器中途退出必须核对送达情况");
                 await Bridge.SendToRunningAsync(Item.Channel.WorkerInstance, Item.Channel.WorkerThreadId, Prompt, Item.Channel.WorkerModel, Item.Channel.WorkerThinking, Timeout.Token);
                 Item.ProgressStage = "";
