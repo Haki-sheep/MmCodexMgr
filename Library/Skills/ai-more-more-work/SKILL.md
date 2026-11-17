@@ -197,7 +197,7 @@ CLI 和 MCP 能力以当前 `help` 与工具目录为准 后台 API 不提供桌
 
 Session 派发成功后 优先处理已到达且当前可核对的回传 继续推进其他已授权且依赖已满足的工作 当前无可推进事项且仍在等回传时 才结束本轮等待事件 结束本轮不代表整体任务结束 管理器收到执行会话的 `report` 后唤醒原主会话 由原主会话继续验收与调度 不循环调用 status read_thread 或 sleep 原生 Subagent 使用宿主提供的完成事件
 
-主会话收到任一回传通知 恢复会话或准备结束本轮等待时 用 `agent_inbox` 或 CLI `inbox` 从第一页核对当前主会话的待处理回传 多条通知按任务 ID 去重 `next_after` 非空时传入 MCP `after` 或 CLI `--after` 继续读取本批次 通过 `agent_task` 或 `status --task-id <ID>` 读取完整结果 已保存但通知未确认的结果也在收件箱中 核对通过后调用 MCP `relay_accept` 或 CLI `accept` 一并关闭对应待处理项 不需要先重发通知 不循环刷新收件箱 等待下一次事件时再次从第一页核对
+主会话收到任一回传通知 恢复会话或准备结束本轮等待时 用 `agent_inbox` 或 CLI `inbox` 从第一页核对当前主会话的待处理回传 多条通知按任务 ID 去重 `next_after` 非空时传入 MCP `after` 或 CLI `--after` 继续读取本批次 通知只带任务 ID 结果摘要与产物数量 通过 `agent_task` 或 `status --task-id <ID>` 读取完整结果与产物 已保存但通知未确认的结果也在收件箱中 核对通过后调用 MCP `relay_accept` 或 CLI `accept` 一并关闭对应待处理项 不需要先重发通知 不循环刷新收件箱 等待下一次事件时再次从第一页核对
 
 执行 Agent 真正开始工作时主动调用 `relay_progress` 或 CLI `progress --json-file <文件>` 参数含 `task_id` `stage=started` `message` 重要阶段完成时上报 `stage=progress` 暂时阻塞时上报 `stage=blocked` 不发送定时心跳 进度只更新管理器 不唤醒主会话 不能代替最终回报 未收到 started 时界面只表示等待开始确认
 

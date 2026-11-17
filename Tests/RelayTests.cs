@@ -298,16 +298,26 @@ internal static class RelayTests
         await Coordinator.ConfigureAsync(CreateChannel(Root));
         string PipeName = "MmCodexMgr-Test-" + Guid.NewGuid().ToString("N");
         using var Host = new RelayHost(Coordinator, PipeName);
-        var Dispatch = await CallMcpAsync("main", "main-thread", "relay_dispatch", new { request_id = "wire-1", title = "协议回环", instructions = "执行固定操作", acceptance = "结果验证" }, PipeName);
+        string Acceptance = new('验', RelayLimits.MaxTextLength);
+        var Dispatch = await CallMcpAsync("main", "main-thread", "relay_dispatch", new { request_id = "wire-1", title = "协议回环", instructions = "执行固定操作", acceptance = Acceptance }, PipeName);
         string TaskId = Dispatch.GetProperty("task_id").GetString()!;
         Require(Store.Get(TaskId).State == eRelayState.Running, "MCP metadata crosses actual named-pipe host and dispatches task");
         var Returned = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         Coordinator.Changed += () => { if (Store.Get(TaskId).State == eRelayState.Returned) Returned.TrySetResult(); };
+        string Summary = new string('结', 639) + "😺" + new string('果', RelayLimits.MaxTextLength - 641);
+        var ArtifactList = new[] { Path.Combine(Root, "完整产物.txt") };
+        var Report = new { task_id = TaskId, outcome = "completed", summary = Summary, artifacts = ArtifactList };
         var Reports = await Task.WhenAll(
-            CallMcpAsync("worker", "worker-thread", "relay_report", new { task_id = TaskId, outcome = "completed", summary = "完成", artifacts = Array.Empty<string>() }, PipeName),
-            CallMcpAsync("worker", "worker-thread", "relay_report", new { task_id = TaskId, outcome = "completed", summary = "完成", artifacts = Array.Empty<string>() }, PipeName));
+            CallMcpAsync("worker", "worker-thread", "relay_report", Report, PipeName),
+            CallMcpAsync("worker", "worker-thread", "relay_report", Report, PipeName));
         await Returned.Task.WaitAsync(TimeSpan.FromSeconds(5));
         Require(Reports.Length == 2 && Bridge.SentList.Count == 2, "concurrent callbacks through separate pipe clients cause one main wakeup");
+        string Prompt = Bridge.SentList[1].Prompt;
+        Require(Prompt.Length < 2000 && Prompt.Contains(new string('结', 639) + "…") && Prompt.Contains("agent_task task_id=" + TaskId) &&
+            !Prompt.Contains(ArtifactList[0]) && !Prompt.Contains(Acceptance[..100]), "long return wakes main with a compact UTF-16-safe preview and result lookup");
+        var Saved = Store.Get(TaskId);
+        Require(Saved.Result == Summary && Saved.ArtifactList.SequenceEqual(ArtifactList) && Saved.Acceptance == Acceptance,
+            "long callback and original acceptance are retained in the ledger");
         await CallMcpAsync("main", "main-thread", "relay_accept", new { task_id = TaskId }, PipeName);
         Require(Store.Get(TaskId).State == eRelayState.Accepted, "full MCP dispatch-report-accept roundtrip persists final acceptance");
     }
