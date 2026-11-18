@@ -1,4 +1,0 @@
-interface:
-  display_name: "问题诊断与阶段复盘"
-  short_description: "按问题症状查询跨项目经验 在大模块完成后集中反馈 新增变体并纠正错误方法"
-  default_prompt: "使用 $mm-agent-retrospective-fucker 按当前问题查询诊断索引 并在本次大模块收尾时复盘 新增缺失经验 补充变体或修正错误方法"

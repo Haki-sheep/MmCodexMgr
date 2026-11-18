@@ -1,7 +1,0 @@
-{
-  "name": "MmPerformance.Editor",
-  "rootNamespace": "MmPerformance",
-  "references": ["MmPerformance.Runtime"],
-  "includePlatforms": ["Editor"],
-  "autoReferenced": true
-}

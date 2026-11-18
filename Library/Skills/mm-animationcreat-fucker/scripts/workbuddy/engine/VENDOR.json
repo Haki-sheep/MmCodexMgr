@@ -1,8 +1,0 @@
-{
-  "source": "dsh-drawai (src/)",
-  "commit": "2f3d6a80a3f4477904c74d5b1f28a68efa6051d3",
-  "builtAt": "2026-11-14T18:05:31.193Z",
-  "files": 524,
-  "bytes": 7098005,
-  "note": "Distilled from DrawAI 0.4.6 with the upstream Workbuddy builder. Its stale Chromium patch is already present upstream. The Codex distribution resolves dependencies outside the skill and uses system TEMP for the render worker."
-}

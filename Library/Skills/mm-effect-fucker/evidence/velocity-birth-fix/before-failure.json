@@ -1,8 +1,0 @@
-{
-  "ok": false,
-  "completedChecks": [
-    "vendored source hashes",
-    "trail keeps its middle and tail alpha while softening its head and sides"
-  ],
-  "error": "AssertionError [ERR_ASSERTION]: {\"width\":10,\"height\":59}\n    at file:///C:/Users/fmz/Desktop/AiWrok/Skill/mm-effect-fucker/scripts/selftest.mjs:38:12\n    at async withBrowser (file:///C:/Users/fmz/Desktop/AiWrok/Skill/mm-effect-fucker/scripts/browser.mjs:81:12)\n    at async file:///C:/Users/fmz/Desktop/AiWrok/Skill/mm-effect-fucker/scripts/selftest.mjs:20:3"
-}

@@ -1,4 +1,0 @@
-interface:
-  display_name: "代码动画制作"
-  short_description: "编写分镜与代码动效 预览节奏并渲染可编辑工程和 MP4"
-  default_prompt: "使用 $mm-animationcreat-fucker 把我的主题做成一段可编辑的动效视频。"

@@ -1,1 +1,0 @@
-{"name":"MmPerformanceAudit.Editor","references":["MmPerformance.Editor","MmPerformance.Runtime","PerfAgent.Editor"],"includePlatforms":["Editor"],"autoReferenced":true}

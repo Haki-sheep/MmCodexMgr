@@ -3,7 +3,7 @@
 .vs/
 *.user
 *.suo
-!Library/**
+/Library/*
+!/Library/Skills/
 /Library/Skills/*
-!/Library/Skills/mm-*/
-!/Library/Skills/mm-*/**
+!/Library/Skills/ai-more-more-work/
