@@ -50,6 +50,14 @@ public sealed class FormationStore
         return Saved;
     }
 
+    internal static void DeleteTemplate(FormationDatabase Database, string TemplateId, int Version)
+    {
+        var Template = Database.TemplateList.SingleOrDefault(Item => Item.Id == TemplateId)
+            ?? throw new InvalidOperationException("编队模板不存在 " + TemplateId);
+        if (Version != Template.Version) throw new InvalidOperationException("编队模板版本已更新 请重新读取");
+        Database.TemplateList.Remove(Template);
+    }
+
     internal static FormationRun Create(FormationDatabase Database, FormationCreate Request)
     {
         if (Request.SetupOnly && Request.Theme.Length == 0) Request.Theme = $"编队 {DateTime.Now:MM-dd HH:mm}";

@@ -13,6 +13,8 @@ public sealed class FormationCreateDialog : StudioDialog
     private readonly List<string> ModelHints;
     /// <summary> 持久保存当前席位为模板 </summary>
     private readonly Func<FormationTemplate, Task<List<FormationTemplate>>> SaveTemplate;
+    /// <summary> 删除已选模板并读取最新列表 </summary>
+    private readonly Func<FormationTemplate, Task<List<FormationTemplate>>> DeleteTemplate;
     private readonly Func<string, CancellationToken, Task<IReadOnlyList<AgentProject>>>? LoadWorkspaceProjects;
     /// <summary> 固定角色的席位与推理强度 </summary>
     private readonly Dictionary<eFormationRole, FormationRoleSelector> RoleDict = new();
@@ -35,13 +37,15 @@ public sealed class FormationCreateDialog : StudioDialog
     public bool ActivateAfterCreate => true;
 
     public FormationCreateDialog(ManagerSettings Settings, AppTheme Appearance, IEnumerable<FormationTemplate> Templates, List<string> ModelHints,
-        Func<FormationTemplate, Task<List<FormationTemplate>>> SaveTemplate, Func<string, CancellationToken, Task<IReadOnlyList<AgentProject>>>? LoadWorkspaceProjects = null)
+        Func<FormationTemplate, Task<List<FormationTemplate>>> SaveTemplate, Func<FormationTemplate, Task<List<FormationTemplate>>> DeleteTemplate,
+        Func<string, CancellationToken, Task<IReadOnlyList<AgentProject>>>? LoadWorkspaceProjects = null)
         : base("新建编队", new Size(790, 560))
     {
         this.Settings = Settings;
         this.Appearance = Appearance;
         this.ModelHints = ModelHints;
         this.SaveTemplate = SaveTemplate;
+        this.DeleteTemplate = DeleteTemplate;
         this.LoadWorkspaceProjects = LoadWorkspaceProjects;
         TemplateList = Templates.ToList();
         FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -90,6 +94,8 @@ public sealed class FormationCreateDialog : StudioDialog
     }
 
     private FormationMember? Coordinator => RoleDict[eFormationRole.Coordinator].Selections.SingleOrDefault()?.Member;
+
+    #region 席位与模板操作
 
     private void EditSeat(FormationRoleSelector Selector, int Index)
     {
@@ -177,8 +183,11 @@ public sealed class FormationCreateDialog : StudioDialog
 
     private void LoadTemplate()
     {
-        using var Dialog = new FormationTemplatePickerDialog(TemplateList);
-        if (Dialog.ShowThemed(this, Appearance) != DialogResult.OK) return;
+        using var Dialog = new FormationTemplatePickerDialog(TemplateList, Appearance, DeleteTemplate);
+        var eResult = Dialog.ShowThemed(this, Appearance);
+        TemplateList = Dialog.TemplateList;
+        RefreshActions();
+        if (eResult != DialogResult.OK) return;
         var MemberList = Dialog.Selection.MemberList;
         if (MemberList.GroupBy(Item => Item.Role).Any(Group => !RoleDict.TryGetValue(Group.Key, out var Selector) || Group.Count() > Selector.Capacity))
         {
@@ -227,31 +236,7 @@ public sealed class FormationCreateDialog : StudioDialog
         }
     }
 
-    private sealed class FormationTemplatePickerDialog : StudioDialog
-    {
-        /// <summary> 模板候选 </summary>
-        private readonly ThemeComboBox Templates = new() { Dock = DockStyle.Top, DropDownStyle = ComboBoxStyle.DropDownList, FormattingEnabled = true };
-
-        public FormationTemplate Selection => (FormationTemplate)Templates.SelectedItem!;
-
-        public FormationTemplatePickerDialog(List<FormationTemplate> TemplateList)
-            : base("使用模板", new Size(460, 164))
-        {
-            FormBorderStyle = FormBorderStyle.FixedDialog;
-            Content.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            Content.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            Content.Controls.Add(new Label { Text = "载入模板会替换当前已选席位。", AutoSize = true, Margin = new Padding(0, 0, 0, 10), Tag = eThemeRole.Muted });
-            Templates.Format += (_, Event) =>
-            {
-                if (Event.ListItem is FormationTemplate Template) Event.Value = $"{Template.Name}  v{Template.Version}  ·  {Template.MemberList.Count} 席";
-            };
-            Templates.Items.AddRange(TemplateList.Cast<object>().ToArray());
-            Templates.SelectedIndex = 0;
-            Content.Controls.Add(Templates);
-            AcceptButton = AddAction("载入", eButtonKind.Primary, (_, _) => DialogResult = DialogResult.OK);
-            CancelButton = AddAction("取消", eButtonKind.Secondary, (_, _) => DialogResult = DialogResult.Cancel);
-        }
-    }
+    #endregion
 }
 
 /// <summary>

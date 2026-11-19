@@ -69,7 +69,7 @@ public sealed partial class FormationService
     private async Task<object> ExecuteOperationAsync(string Action, JsonElement Arguments, FormationCaller Caller, CancellationToken Cancellation)
     {
         if (Arguments.ValueKind != JsonValueKind.Object) throw new InvalidOperationException("编队请求必须是 JSON 对象");
-        if (Action is not ("list" or "show" or "task-show" or "templates" or "open" or "create" or "template-save" or "lifecycle-preview" or "archive" or ArchiveRemove or "unarchive" or "delete"))
+        if (Action is not ("list" or "show" or "task-show" or "templates" or "open" or "create" or "template-save" or "template-delete" or "lifecycle-preview" or "archive" or ArchiveRemove or "unarchive" or "delete"))
             RequireLifecycleEditable(Store.Get(Text(Arguments, "run_id")));
         switch (Action)
         {
@@ -113,6 +113,17 @@ public sealed partial class FormationService
                     var Controller = Template.MemberList.SingleOrDefault(Item => Item.Role == eFormationRole.Coordinator);
                     foreach (var Member in Template.MemberList) ValidateMember(Member, Controller);
                     return FormationStore.SaveTemplate(Database, Template);
+                });
+            case "template-delete":
+                RequireOperator(Caller);
+                string TemplateId = Text(Arguments, "template_id");
+                if (!Arguments.TryGetProperty("version", out var VersionValue) || VersionValue.ValueKind != JsonValueKind.Number ||
+                    !VersionValue.TryGetInt32(out int Version) || Version < 1)
+                    throw new InvalidOperationException("删除模板需要有效的 version");
+                return Write(Action, Arguments, Caller, Database =>
+                {
+                    FormationStore.DeleteTemplate(Database, TemplateId, Version);
+                    return new { template_id = TemplateId, deleted = true };
                 });
             case "member":
                 RequireOperator(Caller);

@@ -284,7 +284,7 @@ public sealed class FormationPage : UserControl
     private async Task CreateAsync()
     {
         RequireWrite();
-        using var Dialog = new FormationCreateDialog(Settings, Theme, TemplateList, ModelHints(), SaveTemplateAsync);
+        using var Dialog = new FormationCreateDialog(Settings, Theme, TemplateList, ModelHints(), SaveTemplateAsync, DeleteTemplateAsync);
         if (Dialog.ShowThemed(FindForm(), Theme) != DialogResult.OK) return;
         var Result = await ExecuteAsync("create", new { operation_id = NewId(), formation = Dialog.Request }, "已创建编队 " + Dialog.Request.Theme);
         string RunId = (Result is FormationRun Created ? Created.Id : JsonSerializer.SerializeToElement(Result, WireOptions).GetProperty("id").GetString())
@@ -321,6 +321,12 @@ public sealed class FormationPage : UserControl
     private async Task<List<FormationTemplate>> SaveTemplateAsync(FormationTemplate Template)
     {
         await ExecuteAsync("template-save", new { operation_id = NewId(), template = Template }, "已保存模板 " + Template.Name);
+        return TemplateList;
+    }
+
+    private async Task<List<FormationTemplate>> DeleteTemplateAsync(FormationTemplate Template)
+    {
+        await ExecuteAsync("template-delete", new { operation_id = NewId(), template_id = Template.Id, version = Template.Version }, "已删除模板 " + Template.Name);
         return TemplateList;
     }
 

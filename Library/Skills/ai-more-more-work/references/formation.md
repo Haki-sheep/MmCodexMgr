@@ -14,6 +14,8 @@ CLI 的空编队请求为 `{"operation_id":"稳定标识","formation":{"setup_on
 
 `create` 的 JSON 包含 `operation_id` 和 `formation`。最简 formation 为 `{"theme":"测试编队","requirement":"交付目标","preset":"basic"}`；`basic` 是统筹加一执行，`reviewed` 是统筹加两执行加一审核。可加 `instance_id`、`model`、`effort` 批量配置，也可使用原有 `template_id` 或 `member_list` 精确指定。创建只登记席位；`activate` 才创建并启动统筹。用户已授权测试编队时可以绑定当前真实会话为统筹，由当前会话直接通过 CLI 登记、派发和验收，避免向自己重复发送启动包。
 
+在「新建编队 → 使用模板」选中模板后，点击「删除模板」并确认。已用该模板创建的编队保留原有席位。人工也可先用 `formation templates` 查询模板，再调用 `formation template-delete`，请求包含 `template_id`、`version` 和 `operation_id`。
+
 界面和 CLI 的 `status` 为 `InProgress` 进行中、`Blocked` 阻塞中、`Archived` 已归档。暂停、任务阻塞、投递未知、待交接、结案待归档或会话操作未完成都显示阻塞中；底层 `state` 保留调度状态，`complete` 仅结案，不会自动归档。阻塞编队仍显示卡片。卡片及 `formation open` 可打开已绑定统筹，包括已归档会话，不发送工作消息。
 
 卡片上方提供归档、取消归档和删除。详情不展示需求上下文、交付总结或最近事件，完整记录仍可通过 CLI `show` / `task-show` 查询。

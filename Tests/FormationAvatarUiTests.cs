@@ -48,7 +48,8 @@ internal static class FormationAvatarUiTests
         Task<IReadOnlyList<AgentProject>> LoadProjects(string AgentId, CancellationToken Cancellation) =>
             Task.FromResult<IReadOnlyList<AgentProject>>(new[] { new AgentProject(AgentId + "-workspace", AgentId + " 试验工作区", Secondary, false) });
         using var Form = new FormationCreateDialog(Settings, Theme, Array.Empty<FormationTemplate>(), new() { "model-a", "model-b" },
-            _ => throw new InvalidOperationException("测试未发送模板保存请求"), LoadProjects)
+            _ => throw new InvalidOperationException("测试未发送模板保存请求"),
+            _ => throw new InvalidOperationException("测试未发送模板删除请求"), LoadProjects)
         {
             StartPosition = FormStartPosition.CenterScreen,
             TopMost = true

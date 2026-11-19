@@ -57,8 +57,9 @@ internal static class FormationUiTests
             new() { Role = eFormationRole.Reviewer, InstanceId = ClaudeRelayRunner.InstanceId },
             new() { Role = eFormationRole.Outsider, InstanceId = DshRelayRunner.InstanceId }
         };
-        Execute(Service, "create", new { operation_id = "ui-create", formation = new FormationCreate { Theme = "界面编队", Requirement = "验证卡片绑定真实编队", MaxParallel = 2, MemberList = MemberList } });
         Execute(Service, "template-save", new { operation_id = "ui-template", template = new FormationTemplate { Name = "一统筹两执行", MaxParallel = 2, MemberList = MemberList } });
+        var Template = Store.ListTemplates().Single();
+        Execute(Service, "create", new { operation_id = "ui-create", formation = new FormationCreate { Theme = "界面编队", Requirement = "验证卡片绑定真实编队", TemplateId = Template.Id } });
         var Run = Store.List().Single();
         VerifyCompactCard(Settings, Dark);
 
@@ -185,7 +186,50 @@ internal static class FormationUiTests
             Toggle.PerformClick();
             Wait(() => Writable.Cards.Count == 1, "hide removed formations");
             Require(Writable.Cards.Count == 1, "removed cards can be hidden again");
+            VerifyDeleteTemplate(Host, Writable, Store, Run.Id, Template);
         }
+    }
+
+    private static void VerifyDeleteTemplate(Form Host, FormationPage Page, FormationStore Store, string RunId, FormationTemplate Template)
+    {
+        string RunBefore = JsonSerializer.Serialize(Store.Get(RunId));
+        var CreateButton = Descendants(Page).OfType<Button>().Single(Item => Item.Name == "FormationCreate");
+        InspectDialog(Host, CreateButton.PerformClick, "新建编队", Editor =>
+        {
+            var TemplatesButton = Descendants(Editor).OfType<Button>().Single(Item => Item.Text == "使用模板");
+            InspectDialog(Editor, TemplatesButton.PerformClick, "使用模板", Picker =>
+            {
+                var DeleteButton = Descendants(Picker).OfType<Button>().Single(Item => Item.Text == "删除模板");
+                var LoadButton = Descendants(Picker).OfType<Button>().Single(Item => Item.Text == "载入");
+                InspectDialog(Picker, DeleteButton.PerformClick, "确认删除模板", Confirm =>
+                    ((Button)Confirm.CancelButton!).PerformClick());
+                Require(Store.ListTemplates().Single().Id == Template.Id, "cancelling template deletion leaves it available");
+
+                InspectDialog(Picker, DeleteButton.PerformClick, "确认删除模板", Confirm =>
+                {
+                    Require(Descendants(Confirm).Any(Item => Item.Text.Contains(Template.Name)), "confirmation names the selected template");
+                    Descendants(Confirm).OfType<Button>().Single(Item => Item.Text == "删除").PerformClick();
+                });
+                Wait(() => Picker.Enabled && !DeleteButton.Enabled, "template list refresh after deletion");
+                Require(!LoadButton.Enabled && Store.ListTemplates().Count == 0, "deleting the last template disables both actions and persists the removal");
+            });
+            Require(!TemplatesButton.Enabled, "new formation dialog refreshes template availability after closing the picker");
+        });
+        Require(JsonSerializer.Serialize(Store.Get(RunId)) == RunBefore, "deleting a referenced template preserves its existing formation and seats");
+    }
+
+    private static void InspectDialog(Form Owner, Action Open, string Title, Action<Form> Inspect)
+    {
+        System.Runtime.ExceptionServices.ExceptionDispatchInfo? Error = null;
+        Owner.BeginInvoke(() =>
+        {
+            var Dialog = Application.OpenForms.Cast<Form>().Single(Item => Item.Text == Title && Item.Visible);
+            try { Inspect(Dialog); }
+            catch (Exception Failure) { Error = System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(Failure); }
+            finally { if (Dialog.DialogResult == DialogResult.None) Dialog.DialogResult = DialogResult.Cancel; }
+        });
+        Open();
+        Error?.Throw();
     }
 
     private static void VerifyRefreshDuringStoreLock(FormationPage Page, string Root, FormationCard Card)

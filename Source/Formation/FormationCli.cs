@@ -6,7 +6,7 @@ public static class FormationCli
 {
     public const string Help = """
         formation <action> [--json-file <UTF-8 JSON>] [--operator true]
-        action: list create show task-show template-save templates member task activate dispatch native-bind native-report submit review reconcile takeover pause resume context complete open lifecycle-preview archive unarchive delete
+        action: list create show task-show templates template-save template-delete member task activate dispatch native-bind native-report submit review reconcile takeover pause resume context complete open lifecycle-preview archive unarchive delete
         写入请求提供 operation_id 同一请求重试须保留原 ID 和内容
         人工调用使用 --operator true 自动读取当前 Windows 用户的本机凭据 可用 MMCODEX_FORMATION_OPERATOR_TOKEN 显式覆盖
         角色调用使用当前 CODEX_HOME CODEX_THREAD_ID 及 MMCODEX_FORMATION_MEMBER_TOKEN
@@ -20,6 +20,7 @@ public static class FormationCli
                   effort 为拟推理强度 独立 Codex 派发选择模型支持的最近档位 档位未知时沿用默认
                   席位 dispatch_mode=Session|Native 审核/外援可用 Native follow_coordinator=true 时继承统筹模型与拟推理强度
                   各席位可设 subagent_max=1..4 不含本体 原生叶子与不支持委派的执行端实际为 0
+        template-delete template_id version operation_id  仅人工删除已保存的模板 version 取自 templates
         context   run_id operation_id requirement [context] 统筹或人工保存已确认需求
         task-show run_id task_id 返回任务和最近记录摘要
         task      run_id operation_id title instructions acceptance executor_id [reviewer_id] workspace={access:"read_only"} 或 {access:"write",write_paths:[绝对路径]}

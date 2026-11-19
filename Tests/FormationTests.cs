@@ -775,6 +775,28 @@ internal static class FormationTests
             Require(ExitCode == 0, "从 CLI 命名管道读取编队 " + Error);
             using var Response = JsonDocument.Parse(Output.ToArray());
             Require(Response.RootElement.GetProperty("id").GetString() == RunId, "CLI 返回实际编队 ID");
+
+            var Template = (FormationTemplate)await Formation.ExecuteAsync("template-save", JsonSerializer.SerializeToElement(new
+            {
+                operation_id = "cli-template", template = new { name = "CLI 删除回归", member_list = new[]
+                {
+                    new { role = "Coordinator", instance_id = "main" }, new { role = "Executor", instance_id = "worker1" }
+                } }
+            }), FormationCaller.Operator(), CancellationToken.None);
+            async Task<int> Delete(int Version, string OperationId)
+            {
+                Output.SetLength(0);
+                Error.GetStringBuilder().Clear();
+                File.WriteAllText(RequestPath, JsonSerializer.Serialize(new { template_id = Template.Id, version = Version, operation_id = OperationId }));
+                return await AgentCli.RunAsync(new[] { "formation", "template-delete", "--operator", "true", "--json-file", RequestPath },
+                    Stream.Null, Output, Error, Environment.ProcessPath!, CancellationToken.None, PipeName, () => Settings);
+            }
+            Require(await Delete(Template.Version + 1, "stale") == 1, "CLI 拒绝版本不一致的模板删除");
+            using var StaleResponse = JsonDocument.Parse(Error.ToString());
+            Require(StaleResponse.RootElement.GetProperty("error").GetString()!.Contains("模板版本已更新"), "CLI 提示重新读取模板版本");
+            Require(await Delete(Template.Version, "delete") == 0 && await Delete(Template.Version, "delete") == 0, "CLI 删除成功且同一操作可重试");
+            var Remaining = (List<FormationTemplate>)await Formation.ExecuteAsync("templates", JsonSerializer.SerializeToElement(new { }), FormationCaller.Operator(), CancellationToken.None);
+            Require(Remaining.All(Item => Item.Id != Template.Id), "CLI 删除从持久化模板列表移除目标");
         }
         finally { Environment.SetEnvironmentVariable("MMCODEX_FORMATION_OPERATOR_TOKEN", Previous); }
     }
