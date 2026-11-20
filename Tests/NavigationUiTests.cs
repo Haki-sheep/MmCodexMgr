@@ -24,10 +24,18 @@ internal static class NavigationUiTests
                 };
                 using var Form = new MainForm(Settings, true) { Size = new Size(1160, 800) };
                 Console.WriteLine("Navigation fixture created " + Dark);
-                Form.Show();
+                IntPtr StartupHandle = Form.Handle;
+                if (Form.Visible || IsWindowVisible(StartupHandle)) throw new Exception("后台创建句柄时窗口必须隐藏");
+                Form.ShowAgentPage();
+                Form.HandleCommandAsync("show").GetAwaiter().GetResult();
                 Console.WriteLine("Navigation fixture shown");
                 Application.DoEvents();
                 var Navigation = Form.Controls.OfType<ThemeTabControl>().Single();
+                var Agents = Navigation.SelectedTab!.Controls.OfType<AgentPage>().Single();
+                var AgentList = Descendants(Agents).OfType<ListBox>().Single();
+                if (!Agents.Visible || !AgentList.Visible || AgentList.Width == 0 || AgentList.Items.Count == 0 || Form.Handle != StartupHandle)
+                    throw new Exception("从后台首次打开时必须用现有句柄显示已布局的 Agent 列表");
+                Count += 2;
                 NavigationPage Previous = Navigation.SelectedTab!;
                 int Prepared = 0;
                 Navigation.SelectedIndexChanged += (_, _) =>

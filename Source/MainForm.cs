@@ -87,7 +87,6 @@ public sealed class MainForm : Form
             if (!AllowExit && Event.CloseReason == CloseReason.UserClosing) { Event.Cancel = true; Hide(); return; }
             if (!PreviewOnly && !Event.Cancel) TaskCoordinator?.BeginShutdown();
         };
-        if (!PreviewOnly) Shown += async (_, _) => { SafeAction(ActivityMonitor.Enable); await RefreshRunningAsync(); };
         ResumeLayout(false);
         PerformAutoScale();
         PerformLayout();
@@ -203,7 +202,23 @@ public sealed class MainForm : Form
         await RefreshRunningAsync();
     }
 
-    private void ShowManager() { Show(); WindowState = FormWindowState.Normal; Activate(); }
+    internal void StartInstanceMonitoring()
+    {
+        SafeAction(ActivityMonitor.Enable);
+        QueueInstanceRefresh();
+    }
+
+    private void ShowManager()
+    {
+        if (WindowState == FormWindowState.Minimized) WindowState = FormWindowState.Normal;
+        if (!Visible)
+        {
+            Show();
+            MainTabs.PerformLayout();
+            MainTabs.Invalidate(true);
+        }
+        Activate();
+    }
 
     private async Task RefreshRunningAsync(AgentIconSettings? Configuration = null)
     {

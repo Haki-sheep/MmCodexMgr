@@ -250,6 +250,8 @@ Codex 实例通过本机 Responses 适配器接入服务商时 若 `mmcodex-resp
 
 管理器的“设置”页提供开机自启开关 默认关闭 开启后通过当前用户的 Windows 启动项登记完整程序路径 登录 Windows 时使用 `--background` 在托盘后台运行 已运行时不会重复启动或弹出窗口 关闭仅移除本管理器的启动项 不影响其他软件 移动管理器目录后需重新开启以更新登记路径
 
+托盘后台启动时，管理器等用户打开后再显示主界面。
+
 “Rule + Skill”页显示 Skill 源目录与规则源文件所在目录，可打开对应目录，并查看 Skill 名称、描述及规则目标。全局 Rule 以配置的唯一源 Markdown 为准。WorkBuddy 等仅提供手动导入的工具使用“复制源规则”。
 
 “Rule + Skill”的一键同步对应 `mmcodex library-sync-all [--source primary|library] [--scope codex|all]`。默认 `primary` 从主实例取 Skill，`library` 从本机配置的维护库取 Skill，规则始终从已配置的 Markdown 文件读取。默认 `all` 包括已登记 Codex、已安装的 Cursor、DSH、Claude Code、Antigravity，以及符合发现条件的现有共享目录。`codex` 只处理已登记 Codex 实例。

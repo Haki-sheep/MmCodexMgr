@@ -105,21 +105,23 @@ public static class Program
                 Activate: (Run, Prompt, Token) => SendFormationMessageAsync(DesktopBridge, Run, Prompt, true, Token));
             FormationOperatorCredential.Save(Formation.IssueOperatorCredential());
             using var Form = new MainForm(SettingsStore.Load(), false, TaskStore, Coordinator, Formation, FormationStore);
-            if (Background) { Form.WindowState = FormWindowState.Minimized; Form.ShowInTaskbar = false; }
+            _ = Form.Handle;
+            using var Context = new ApplicationContext();
+            Form.FormClosed += (_, _) => Context.ExitThread();
             using var Relay = new RelayHost(Coordinator, AgentService: AgentService, Formation: Formation);
             Relay.Failed += Error => { if (!Form.IsDisposed && Form.IsHandleCreated) Form.BeginInvoke(() => MessageBox.Show(Form, Error.Message, "联调服务不可用")); };
             void ScheduleFormation() => _ = Task.Run(() => ProcessFormationAsync(Formation, RecoveryCancellation), RecoveryCancellation);
             Coordinator.Changed += ScheduleFormation;
             Formation.Changed += ScheduleFormation;
-            Form.Shown += async (_, _) =>
+            Form.BeginInvoke(async () =>
             {
-                if (Background) { Form.Hide(); Form.ShowInTaskbar = true; }
-                else if (Command != "show") { Form.Hide(); await Form.HandleCommandAsync(Command); }
+                Form.StartInstanceMonitoring();
                 _ = Task.Run(() => RecoverReportsAsync(Coordinator, Form, RecoveryCancellation));
                 ScheduleFormation();
-            };
+                if (!Background) await HandleCommandAsync(Form, Command);
+            });
             _ = ListenAsync(Form, Cancellation.Token);
-            Application.Run(Form);
+            Application.Run(Context);
             Coordinator.Changed -= ScheduleFormation;
             Formation.Changed -= ScheduleFormation;
             Cancellation.Cancel();
@@ -158,11 +160,17 @@ public static class Program
                 await Server.WaitForConnectionAsync(Cancellation);
                 using var Reader = new StreamReader(Server, Encoding.UTF8);
                 string? Command = await Reader.ReadLineAsync(Cancellation);
-                if (Command is not null) Form.BeginInvoke(async () => { try { await Form.HandleCommandAsync(Command); } catch (Exception Error) { LogError(Error); MessageBox.Show(Form, Error.Message, "实例操作失败"); } });
+                if (Command is not null) Form.BeginInvoke(async () => await HandleCommandAsync(Form, Command));
             }
             catch (OperationCanceledException) when (Cancellation.IsCancellationRequested) { return; }
             catch (Exception Error) { LogError(Error); return; }
         }
+    }
+
+    private static async Task HandleCommandAsync(MainForm Form, string Command)
+    {
+        try { await Form.HandleCommandAsync(Command); }
+        catch (Exception Error) { LogError(Error); MessageBox.Show(Form, Error.Message, "实例操作失败"); }
     }
 
     public static void LogError(Exception Error)
