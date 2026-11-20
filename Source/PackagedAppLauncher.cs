@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO.Pipes;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using System.Xml.Linq;
@@ -12,7 +13,7 @@ internal static class PackagedAppLauncher
 
     public static bool IsPackaged(string AppPath) => File.Exists(ManifestPath(AppPath));
 
-    public static int Launch(string AppPath, InstanceProfile Profile)
+    private static (string Family, string AppId) GetApplication(string AppPath)
     {
         var Manifest = XDocument.Load(ManifestPath(AppPath));
         var Package = Manifest.Root ?? throw new InvalidDataException("应用包清单为空");
@@ -21,7 +22,25 @@ internal static class PackagedAppLauncher
         string PackageFamily = Identity.Attribute("Name")!.Value + "_" + Path.GetFileName(PackageRoot).Split('_')[^1];
         var Application = Package.Descendants().Single(Item => Item.Name.LocalName == "Application" &&
             string.Equals(Path.GetFullPath(Path.Combine(PackageRoot, Item.Attribute("Executable")!.Value)), AppPath, StringComparison.OrdinalIgnoreCase));
-        string AppId = Application.Attribute("Id")!.Value;
+        return (PackageFamily, Application.Attribute("Id")!.Value);
+    }
+
+    public static int ActivateDefault(string AppPath)
+    {
+        var (Family, AppId) = GetApplication(AppPath);
+        var ActivationType = Type.GetTypeFromCLSID(new Guid("45BA127D-10A8-46EA-8AB7-56EA9078943C"), throwOnError: true)!;
+        var Activation = (IApplicationActivationManager)Activator.CreateInstance(ActivationType)!;
+        try
+        {
+            Marshal.ThrowExceptionForHR(Activation.ActivateApplication(Family + "!" + AppId, null, 0, out int ProcessId));
+            return ProcessId;
+        }
+        finally { Marshal.ReleaseComObject(Activation); }
+    }
+
+    public static int Launch(string AppPath, InstanceProfile Profile)
+    {
+        var (PackageFamily, AppId) = GetApplication(AppPath);
         string PipeName = @"LOCAL\MmCodexLaunch-" + Guid.NewGuid().ToString("N");
         using var Receipt = new NamedPipeServerStream(PipeName, PipeDirection.In, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
         if (!Profile.IsPrimary) Directory.CreateDirectory(Profile.DataPath);
@@ -87,4 +106,12 @@ internal static class PackagedAppLauncher
     private static string Quote(string Text) => "'" + Text.Replace("'", "''") + "'";
 
     private static string Encode(string Text) => Convert.ToBase64String(Encoding.Unicode.GetBytes(Text));
+
+    [ComImport, Guid("2E941141-7F97-4756-BA1D-9DECDE894A3D"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IApplicationActivationManager
+    {
+        [PreserveSig]
+        int ActivateApplication([MarshalAs(UnmanagedType.LPWStr)] string AppUserModelId,
+            [MarshalAs(UnmanagedType.LPWStr)] string? Arguments, uint Options, out int ProcessId);
+    }
 }

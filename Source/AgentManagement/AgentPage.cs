@@ -472,6 +472,7 @@ public sealed class AgentPage : UserControl
         AgentList.SelectedItem = AgentList.Items.Cast<AgentEntry>().Single(Item => Item.Profile == Profile);
         SaveSelected();
         if (PreviewOnly) throw new InvalidOperationException("预览模式不启动实例");
+        SetStatus("正在启动 / 显示 " + Profile.Name + "…");
         int ProcessId = await Task.Run(() => InstanceService.Launch(Profile));
         SetStatus($"{Profile.Name} 已启动 / 显示  ·  进程 {ProcessId}");
         UpdateRunning(await Task.Run(InstanceService.ListRunning));

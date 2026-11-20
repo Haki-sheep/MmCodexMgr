@@ -79,6 +79,12 @@ public static class InstanceService
     private static int LaunchOrShow(InstanceProfile Profile)
     {
         ResponsesCompatProfile.EnsureRunning(Profile, AgentCliDeployment.LoadPath());
+        string? AppPath = null;
+        if (Profile.IsPrimary && ManagerPaths.Same(Profile.HomePath, ManagerPaths.DefaultHome))
+        {
+            AppPath = ResolveAppPath();
+            if (PackagedAppLauncher.IsPackaged(AppPath)) return ActivatePrimary(Profile, AppPath);
+        }
         var Existing = Find(Profile, ListRunning());
         if (Existing is not null)
         {
@@ -86,7 +92,7 @@ public static class InstanceService
             return Existing.ProcessId;
         }
         Directory.CreateDirectory(Profile.HomePath);
-        string AppPath = ResolveAppPath();
+        AppPath ??= ResolveAppPath();
         if (PackagedAppLauncher.IsPackaged(AppPath)) return PackagedAppLauncher.Launch(AppPath, Profile);
         var Info = new ProcessStartInfo(AppPath) { UseShellExecute = false };
         Info.WorkingDirectory = Path.GetDirectoryName(Info.FileName)!;
@@ -101,6 +107,20 @@ public static class InstanceService
         }
         using var DesktopProcess = Process.Start(Info) ?? throw new IOException("Codex 桌面应用启动失败");
         return DesktopProcess.Id;
+    }
+
+    private static int ActivatePrimary(InstanceProfile Profile, string AppPath)
+    {
+        int ActivationProcessId = PackagedAppLauncher.ActivateDefault(AppPath);
+        var Wait = Stopwatch.StartNew();
+        do
+        {
+            var Running = Find(Profile, ListRunning());
+            if (Running is not null && InstanceWindowService.IsPresentedMainWindow(Running.ProcessId, Running.Window)) return Running.ProcessId;
+            Thread.Sleep(250);
+        }
+        while (Wait.Elapsed < TimeSpan.FromSeconds(15));
+        throw new TimeoutException($"{Profile.Name} 已请求打开 但主窗口尚未就绪 激活进程 {ActivationProcessId}");
     }
 
     /// <summary>

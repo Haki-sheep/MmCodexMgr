@@ -74,6 +74,10 @@ public static class InstanceWindowService
     /// </summary>
     public static bool IsVisible(IntPtr Window) => IsWindowVisible(Window);
 
+    internal static bool IsPresentedMainWindow(int ProcessId, IntPtr Window)
+        => IsMainWindow(ProcessId, Window) && GetWindowTextLength(Window) != 0 && IsWindowVisible(Window) && !IsIconic(Window) &&
+            SendMessageTimeout(Window, NullMessage, UIntPtr.Zero, IntPtr.Zero, AbortIfHung | ErrorOnExit, ResponseTimeoutMilliseconds, out _) != IntPtr.Zero;
+
     /// <summary>
     /// 恢复指定进程的主窗口并请求前台激活 无主窗口或恢复失败时抛出异常
     /// </summary>

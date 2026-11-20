@@ -28,6 +28,7 @@ internal static class Tests
         if (ArgumentList.Contains("--cursor-live")) { Task.Run(() => CursorRelayTests.RunAsync(true)).GetAwaiter().GetResult(); return 0; }
         if (ArgumentList.Contains("--claude-live")) { Task.Run(ClaudeRelayTests.RunAsync).GetAwaiter().GetResult(); return 0; }
         if (ArgumentList.Contains("--app-path")) return AppPathTests.Run(ArgumentList.Contains("--app-launch"));
+        if (ArgumentList.Contains("--app-show-primary")) return AppPathTests.ShowRunningPrimary();
         if (ArgumentList.Contains("--formation-avatar-ui")) return FormationAvatarUiTests.Run();
         if (ArgumentList.Contains("--formation-lifecycle")) { Task.Run(FormationLifecycleTests.RunAsync).GetAwaiter().GetResult(); return 0; }
         if (ArgumentList.Contains("--formation-lifecycle-preview")) { Task.Run(FormationLifecycleTests.PreviewLiveAsync).GetAwaiter().GetResult(); return 0; }

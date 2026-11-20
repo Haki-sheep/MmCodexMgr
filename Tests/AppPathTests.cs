@@ -27,6 +27,19 @@ internal static class AppPathTests
         catch (Exception Error) { Console.Error.WriteLine(Error); return 1; }
     }
 
+    public static int ShowRunningPrimary()
+    {
+        var Profile = SettingsStore.Load().InstanceList.Single(Item => Item.IsPrimary);
+        if (!ManagerPaths.Same(Profile.HomePath, ManagerPaths.DefaultHome)) throw new InvalidOperationException("主实例未使用默认目录");
+        var Before = InstanceService.Find(Profile, InstanceService.ListRunning()) ?? throw new InvalidOperationException("测试要求主实例已运行");
+        int ProcessId = InstanceService.Launch(Profile);
+        var After = InstanceService.Find(Profile, InstanceService.ListRunning());
+        if (ProcessId != Before.ProcessId || After?.ProcessId != Before.ProcessId || !InstanceWindowService.IsVisible(After.Window))
+            throw new InvalidOperationException("原生激活未显示原主实例窗口");
+        Console.WriteLine($"PASS native activation displayed the existing primary PID={ProcessId}");
+        return 0;
+    }
+
     private static void VerifyFreshLaunch()
     {
         string Root = Path.Combine(Path.GetTempPath(), "CodexAppLaunchTests-" + Guid.NewGuid().ToString("N"));
